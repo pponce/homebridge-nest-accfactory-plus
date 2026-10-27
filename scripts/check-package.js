@@ -10,7 +10,7 @@ const packed = JSON.parse(execFileSync(npm, ['pack', '--ignore-scripts', '--json
 const tarball = path.resolve(packed.filename);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-plus-package-'));
 try {
-  for (const required of ['dist/index.js', 'dist/identity.js', 'dist/HomeKitDevice.js', 'dist/auth.js', 'config.schema.json', 'MIGRATION.md']) {
+  for (const required of ['dist/index.js', 'dist/identity.js', 'dist/HomeKitDevice.js', 'dist/auth.js', 'config.schema.json', 'MIGRATION.md', 'dist/plugins/camera/streamer.js', 'dist/plugins/camera/talkback.js', 'dist/supportdump.js']) {
     assert.ok(packed.files.some((file) => file.path === required), 'Package missing ' + required);
   }
   fs.writeFileSync(path.join(temporary, 'package.json'), '{"private":true}');

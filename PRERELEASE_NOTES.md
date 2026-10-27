@@ -17,6 +17,93 @@ All notable pre-release changes to `homebridge-nest-accfactory` are documented h
 Entries are specific to individual alpha and beta releases and are not cumulative.  
 This project tries to adhere to [Semantic Versioning](http://semver.org/).
 
+## v0.4.4-beta.10 (2026/10/19)
+
+### Changed
+
+- Move HomeKit return-audio RTP/RTCP socket routing into the camera Talkback module, preserving packet forwarding and FFmpeg process ownership
+
+- Group camera streaming, transport, codec and FFmpeg modules under `plugins/camera/`, retaining the camera plugin entry point and existing media behaviour
+- Replace `rimraf` and `copyfiles` with native Node.js clean and build scripts
+- Consolidate FFmpeg process control into `start()`, exact process handles and terminal instance shutdown; attach media pipes at startup and publish lifecycle notifications through EventEmitter
+- Track retained media payload bytes in MediaTimeline statistics without changing buffering or output behaviour
+- Consolidate H264 byte parsing and RTP payload reconstruction in the shared H264 module, preserving WebRTC receive behaviour
+
+### Fixed
+
+- Fix a regression introduced by a protobuf library update that caused NexusTalk to reconnect when talking stopped, restoring explicit end-of-talk payload and SPEEX codec fields
+- Ignore delayed WebRTC stream-extension failures from retired sessions so they cannot close replacement streams
+- Keep retired HKSV generators tied to their original FFmpeg process when session keys are reused
+- Release failed recording input setups automatically and prevent delayed process completion from stopping replacement recordings
+- Avoid repeated forced FFmpeg termination signals and bound binary capability probes with timeouts
+- Include retained FFmpeg diagnostics when talkback stops unexpectedly, including exits with code zero
+- Keep the HomeKit talkback receiver waiting while the microphone is idle instead of timing out and closing live view
+
+## v0.4.4-beta.9 (2026/10/18)
+
+### Changed
+
+- Updated HomeKitDevice to `2026.10.18`, HomeKitHistory to `2026.10.18`, fetchWrapper to `2026.10.17`, `eslint` to `10.13.0`, and `werift` to `0.25.1`
+- Expand device, cloud-to-HomeKit and streaming regression tests; measure every source module and enforce per-module coverage floors during checks and publishing
+
+### Fixed
+
+- Run accessory and platform tests with the HAP dependency supplied by either Homebridge 1.x or 2.x
+
+- Keep thermostat humidity state reads consistent with published Inactive updates when humidification and dehumidification are off
+
+- Ignore track and RTP callbacks from retired WebRTC peers so replacement sessions keep their own audio and decoder state
+
+- Settle pending NexusTalk connection attempts when the socket closes before the TLS handshake
+
+- Prevent late WebRTC talkback START responses from sending old audio or deferred STOP requests into replacement sessions
+
+- Preserve NexusTalk Google authentication mode across partial identity or host updates without new credentials
+
+- Preserve WebRTC media readiness when ICE connection events arrive after the first decodable keyframe
+
+- Prevent late WebRTC device lookup and SDP completion from reopening stopped streams or installing duplicate timers on replacement sessions
+- Honour full Nest data refreshes after topology changes instead of overwriting them with incremental subscriptions
+- Reauthorise Google accounts when Observe reports expired credentials, and prevent retired Observe transports from publishing stale data, removing accessories, restarting loops or invalidating refreshed credentials
+
+- Treat the default NexusTalk playback-end reason as a normal stop instead of reconnecting as though playback failed
+
+- Allow WebRTC sources to reopen after a requested close while live or recording outputs remain attached
+- Restore `.js` fallback when a thermostat external-control module is configured without a file extension
+- Respect live and recording output backpressure across scheduler ticks so blocked pipes do not keep accumulating media
+- Reflect thermostat Off changes from the Nest app in HomeKit while retaining heating and cooling capabilities
+- Prevent failed Nest REST and Google commands from committing requested device values; reject SET requests when the connection or Google command transport is unavailable
+- Return asynchronous thermostat setter results to HomeKit so command failures reach its error handling
+- Refresh camera, doorbell and floodlight credentials only from the account owning their selected Nest/Google resource
+- Discover Home/Away, thermostats, Heat Links, Protects, locks and camera-family accessories from cached fields when required data or parent resources arrive separately
+- Initialise thermostat and Heat Link characteristic values within their device ranges without changing shared HAP defaults for other accessories
+
+## v0.4.4-beta.8 (2026/10/16)
+
+### Changed
+
+- Stop requesting retired thermostat, sensor and Heat Link REST buckets and ignore unrequested REST updates
+- Removed Nest REST API support for thermostats, temperature sensors and Heat Links; these devices now require the Google API
+- Log Home/Away state changes as Home or Away
+- Weather accessories now use protobuf structure discovery only, preserving existing serial identities and retaining Nest REST forecast polling
+- Home/Away accessories now use protobuf structure data only; REST-only connections no longer provide Home/Away updates
+- Preserve Home/Away occupancy until a recognised protobuf structure mode is available
+- Moved Nest/Google API support-dump formatting and redaction into `supportdump.js`
+- Exclude shared submodules from `npm run format`, while retaining their lint and test coverage
+- Flatten project tests into `test/` and update test and coverage discovery
+- Use the `globals` development dependency for ESLint's Node.js ES module globals
+
+### Security
+
+- Redact credentials and personal details from API support dumps, retain consistent aliases for device/home references, and bound diagnostic collection and output
+
+### Fixed
+
+- Refresh temperature sensor active status when its associated thermostat changes sensor selection
+- Initialise weather accessories when protobuf identity, location and forecast data arrive separately, and retain identity on weather-only updates
+- Retain Home/Away identity on protobuf mode-only updates so HomeKit receives occupancy changes
+- Keep known protobuf structure-mode, reason and actor-method enums readable in support dumps while retaining identifier redaction
+
 ## v0.4.4-beta.7 (2026/10/14)
 
 ### Changed

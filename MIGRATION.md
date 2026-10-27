@@ -1,6 +1,6 @@
 # Migrating to Nest Accfactory Plus
 
-The first Plus release is 0.4.4-beta.7, based on upstream 0.4.4-beta.7. It retains legacy Google refresh-token authentication.
+Plus 0.4.4 incorporates upstream 0.4.4. It retains legacy Google refresh-token authentication.
 
 ## Identity compatibility
 
@@ -15,10 +15,10 @@ Wait until the Plus npm version is available before uninstalling.
 1. Download a fresh backup from **Backup & Restore → Backup Now**. Keep it private. GitHub-installed plugin code is not restored automatically by a UI backup; retain your old Git installation reference as well.
 2. Enable **Settings → Startup & Environment → Keep Accessories Of Uninstalled Plugins**, save and restart to apply it.
 3. On the Plugins page, uninstall `homebridge-nest-accfactory`. Leave **Remove plugin config?** unchecked.
-4. Install `homebridge-nest-accfactory-plus` before restarting again. For this first prerelease, select `0.4.4-beta.7`/`beta` if the UI offers version selection, or use:
+4. Install `homebridge-nest-accfactory-plus` before restarting again. For this release, select `0.4.4` if the UI offers version selection, or use:
 
    ```sh
-   sudo hb-service add homebridge-nest-accfactory-plus@0.4.4-beta.7
+   sudo hb-service add homebridge-nest-accfactory-plus@0.4.4
    ```
 
 5. Keep the existing `NestAccfactory` configuration and accounts. Do not add a second platform or generate a new child bridge. Restart Homebridge.
@@ -30,6 +30,6 @@ If your configuration explicitly lists the old package under a top-level `plugin
 
 ## Validation and recovery
 
-Automated tests cover legacy UUID equivalence, cached accessory/service reuse, new registration and external publication identity. A packaged-install check verifies the actual tarball loads and registers. These checks do not prove live Google authentication, physical camera behavior or preservation of an individual Apple Home installation. This is a beta pending live migration confirmation.
+Automated tests cover legacy UUID equivalence, cached accessory/service reuse, new registration and external publication identity. A packaged-install check verifies the actual tarball loads and registers. These checks do not prove live Google authentication, physical camera behavior or preservation of an individual Apple Home installation. Verify your installation after migration.
 
 If migration fails, retain your cache and pairing records. Stop and inspect logs before resetting anything. Restore the backup if needed and reinstall the previous package/branch. Do not run the old and Plus packages together.

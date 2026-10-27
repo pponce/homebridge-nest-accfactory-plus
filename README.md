@@ -19,13 +19,11 @@ The original Nest Accfactory plugin and its Nest/HomeKit integration, including 
 
 **This is compatibility support for existing credentials, not a way to create a new legacy Google login.** The historical enrollment flow is deprecated; this plugin does not restore it or generate new refresh tokens. An existing token must still be accepted by Google, and continued operation is not guaranteed. See [Using a legacy Google OAuth refresh token](#using-a-legacy-google-oauth-refresh-token) for setup and limitations.
 
-### First Plus release and migration
+### Installation and migration
 
-**0.4.4-beta.7** is the first Plus prerelease, based on upstream **0.4.4-beta.7**. The package is named `homebridge-nest-accfactory-plus`; the Homebridge platform remains `NestAccfactory`, and existing accessory UUIDs retain their original namespace.
+Plus **0.4.4** incorporates upstream **0.4.4** and retains the additional legacy Google refresh-token authentication method. Install the published package with `sudo hb-service add homebridge-nest-accfactory-plus@0.4.4`.
 
-Follow [the migration guide](MIGRATION.md) to replace the old package through Homebridge UI while keeping configuration, cached accessories and pairing data. Live migration confirmation is still required; this beta is not a guarantee that every installation has been tested.
-
-After npm publication, install the beta with `sudo hb-service add homebridge-nest-accfactory-plus@0.4.4-beta.7`. Check npm availability before uninstalling your existing plugin.
+When replacing the original package, follow [the migration guide](MIGRATION.md) to retain configuration, accessory cache and pairing data. The platform remains `NestAccfactory`, and device UUIDs retain their original namespace. Existing Plus installations can update normally without uninstalling or changing their configuration.
 
 ## Supported Devices
 
@@ -43,6 +41,8 @@ The following Nest devices are known to be supported by this Homebridge plugin:
 Based on this, these models are expected to stop functioning with this Homebridge plugin.
 
 The accessory supports connections using a Nest account AND/OR a Google (migrated Nest account) account.
+
+Thermostats, temperature sensors and Heat Links require the Google API (protobuf) to be enabled. Nest REST API support for these devices has been removed in v0.4.4.
 
 ## Configuration
 
@@ -68,7 +68,7 @@ For the browser-based authentication method, Google Accounts require an **"issue
 1. Open Safari in a **Private Window**  
 2. Enable the **Develop Menu** (Safari ▸ Settings ▸ Advanced ▸ check *Show features for web developers*)  
 3. Open **Develop ▸ Show Web Inspector**, then select the **Network** tab  
-4. Ensure **Preserve Log** is checked  
+4. Ensure **Preserve Log** or **Preserve Requests** is checked  
 5. In the filter box, type **issueToken**  
 6. Go to [home.nest.com](https://home.nest.com) and click **Sign in with Google**  
 7. After login, click the **iframerpc** network request  
@@ -194,7 +194,9 @@ The following options are available in the `config.json` `"options"` object. The
 | ffmpegTranscode    | Enable video transcoding for camera(s) and doorbell(s) (higher CPU usage)                    | false          |
 | logMotionEvents    | Enable logging of motion events for camera(s), doorbell(s) and Nest Protect device(s)        | true           |
 | maxStreams         | Maximum simultaneous live view streams per camera (integer from 1 to 4)                       | 2              |
-| supportDump        | Enable Support Dump logging of raw Nest and Google API data                                  | false          |
+| supportDump        | Enable redacted Nest/Google API support dumps and streaming diagnostics                      | false          |
+
+API support-dump blocks redact credentials, personal details, network addresses and camera URLs. Device and home identifiers use consistent aliases within a plugin run. Collection and output are bounded; empty delta updates produce no dump. Normal plugin logs and streaming debug messages can still contain device names and identifiers.
 
 #### devices
 
