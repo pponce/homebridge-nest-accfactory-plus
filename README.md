@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://homebridge.io"><img src="https://raw.githubusercontent.com/homebridge/branding/latest/logos/homebridge-color-round-stylized.png" height="140"></a>
+  <img src="https://raw.githubusercontent.com/pponce/homebridge-nest-accfactory-plus/main/maintenance/branding/nest-accfactory-plus-icon-100.png" alt="Nest Accfactory Plus icon" width="100" height="100">
 </p>
 <span align="center">
 
