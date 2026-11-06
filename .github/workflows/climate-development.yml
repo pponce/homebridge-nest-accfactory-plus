@@ -4,6 +4,9 @@ on:
     branches: [feature/thermostat-dashboard]
 permissions:
   contents: write
+defaults:
+  run:
+    shell: bash
 jobs:
   validate:
     runs-on: ubuntu-latest

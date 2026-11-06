@@ -7,6 +7,29 @@ import { ClimateDashboard, RuntimeLedger } from '../src/climate-dashboard.js';
 import { nextSetpoint, editableConfig } from '../homebridge-ui/public/climate-utils.js';
 
 const start = Date.parse('2026-11-06T23:59:30Z');
+test('runtime prunes old days and periodic sampling persists observed time', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const f = await fixture(t);
+  f.dashboard.ledger.days['T/2020-01-01'] = { date: '2020-01-01', heating: 10, cooling: 0, observed: 10 };
+  const previous = f.dashboard.ledger.previous.get('T');
+  previous.time -= 30000;
+  t.mock.timers.tick(30000);
+  await f.dashboard.saving;
+  assert.equal(f.dashboard.ledger.days['T/2020-01-01'], undefined);
+  const saved = JSON.parse(await fs.readFile(path.join(f.storage, 'nest-climate/runtime.json')));
+  assert.ok(Object.values(saved).some((day) => day.observed >= 30));
+});
+test('dashboard isolates non-climate resources and clears native sensor selection', async (t) => {
+  const f = await fixture(t);
+  f.dashboard.update('C', 'Camera', { online: true }, 'A');
+  assert.equal(f.dashboard.devices.has('C'), false);
+  f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 20 }, 'A');
+  assert.equal(f.dashboard.ledger.previous.has('S'), false);
+  f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: 'S' }, 'A');
+  assert.equal(f.dashboard.snapshot().devices.find((d) => d.serial === 'T').data.active_rcs_sensor, 'S');
+  f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: undefined }, 'A');
+  assert.equal(f.dashboard.snapshot().devices.find((d) => d.serial === 'T').data.active_rcs_sensor, '');
+});
 test('configuration editor preserves legacy credentials, overrides and unknown fields', () => {
   const original = {
     google: { issuetoken: 'fixture-url', cookie: 'fixture-cookie' },
@@ -170,3 +193,4 @@ test('saved history survives restart without counting the stopped interval', asy
   assert.equal(second.ledger.previous.size, 0);
   await second.stop();
 });
+

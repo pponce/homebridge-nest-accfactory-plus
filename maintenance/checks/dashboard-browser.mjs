@@ -8,8 +8,8 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = new URL('../../homebridge-ui/public/', import.meta.url);
 const server = http.createServer(async (request, response) => {
   const name = request.url === '/' ? 'index.html' : request.url.slice(1);
-  if (!['index.html', 'index.js', 'climate-utils.js', 'styles.css'].includes(name)) { response.writeHead(404).end(); return; }
-  response.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html');
+  if (!['index.html', 'index.js', 'climate-utils.js', 'styles.css', 'nest-climate-cntrl-icon-512.png'].includes(name)) { response.writeHead(404).end(); return; }
+  response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html');
   response.end(await fs.readFile(new URL(name, root)));
 });
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -40,7 +40,7 @@ try {
   });
   await page.goto('http://127.0.0.1:' + server.address().port);
   await page.getByText('Bridge connected', { exact: true }).waitFor();
-  assert.equal(await page.getByLabel('Legacy refresh token').getAttribute('type'), 'password');
+  assert.equal(await page.getByRole('textbox', { name: 'Legacy refresh token', exact: true }).getAttribute('type'), 'password');
   await page.getByLabel('Eco switch in Apple Home').check();
   await page.waitForFunction(() => window.saved.length > 0);
   const config = await page.evaluate(() => window.saved.at(-1)[0]);

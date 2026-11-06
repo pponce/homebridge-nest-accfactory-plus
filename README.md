@@ -1,3 +1,5 @@
+<p align="center"><img src="homebridge-ui/public/nest-climate-cntrl-icon-512.png" alt="Nest Climate Cntrl" width="160" height="160"></p>
+
 # Nest Climate Cntrl
 
 Nest Climate Cntrl brings Nest thermostats, room sensors and Heat Link controls to Apple Home, with a live dashboard inside Homebridge Settings. It is independently maintained by [pponce](https://github.com/pponce), based on [Nest Accfactory by n0rt0nthec4t and its contributors](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory).
