@@ -1,4 +1,4 @@
-name: Release Plus
+name: Release Climate Cntrl
 on:
   push:
     branches: [main]
@@ -9,12 +9,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: plus-release
+  group: climate-release
   cancel-in-progress: false
 
 jobs:
   test:
-    if: github.repository == 'pponce/homebridge-nest-accfactory-plus' && github.ref == 'refs/heads/main'
+    if: github.repository == 'pponce/homebridge-nest-climate-cntrl' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -40,8 +40,19 @@ jobs:
       - run: npm ci
       - run: npm install --no-save --package-lock=false homebridge@${{ matrix.homebridge }}
       - run: npm run check
+  dashboard-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Check dashboard behavior
+        run: |
+          npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright" CHROMIUM_PATH="$(command -v google-chrome)" node maintenance/checks/dashboard-browser.mjs
   release:
-    needs: test
+    needs: [test, dashboard-browser]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -61,7 +72,7 @@ jobs:
           import fs from 'node:fs';
           import assert from 'node:assert/strict';
           const pkg = JSON.parse(fs.readFileSync('package.json'));
-          assert.equal(pkg.name, 'homebridge-nest-accfactory-plus');
+          assert.equal(pkg.name, 'homebridge-nest-climate-cntrl');
           assert.equal(fs.readFileSync('.github/release-version', 'utf8').trim(), pkg.version);
           const source = fs.readFileSync(pkg.version.includes('-') ? 'PRERELEASE_NOTES.md' : 'CHANGELOG.md', 'utf8');
           const section = source.split('## v' + pkg.version + '\n')[1]?.split('\n## ')[0]?.trim();
@@ -70,6 +81,11 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, 'VERSION=' + pkg.version + '\n');
           NODE
       - run: node scripts/check-package.js
+      - name: Prepare migration helper and checksums
+        run: |
+          cp scripts/migration-preflight.mjs nest-climate-migration-preflight.mjs
+          cp maintenance/publish-beta-and-inspect.sh publish-beta-and-inspect.sh
+          sha256sum "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs publish-beta-and-inspect.sh > SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -79,8 +95,9 @@ jobs:
             echo "Release already exists; leaving it unchanged."
           else
             flags=()
-            if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease); fi
-            gh release create "v$VERSION" "homebridge-nest-accfactory-plus-$VERSION.tgz" \
-              --target "$GITHUB_SHA" --title "Nest Accfactory Plus v$VERSION" \
+            if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease --latest=false); fi
+            gh release create "v$VERSION" "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs publish-beta-and-inspect.sh SHA256SUMS \
+              --target "$GITHUB_SHA" --title "Nest Climate Cntrl v$VERSION" \
               --notes-file RELEASE_NOTES.md "${flags[@]}"
           fi
+

@@ -24,8 +24,8 @@ for (let api of [undefined, null, {}, { registerPlatform: true }]) {
 test('entry registers the real platform and shared Eve metadata', () => {
   let calls = [];
   registerPlatform({ registerPlatform: (...args) => calls.push(args) });
-  assert.deepEqual(calls, [['homebridge-nest-accfactory-plus', 'NestClimateCntrl', Platform]]);
-  assert.equal(HomeKitDevice.PLUGIN_NAME, 'homebridge-nest-accfactory-plus');
+  assert.deepEqual(calls, [['homebridge-nest-climate-cntrl', 'NestClimateCntrl', Platform]]);
+  assert.equal(HomeKitDevice.PLUGIN_NAME, 'homebridge-nest-climate-cntrl');
   assert.equal(typeof HomeKitDevice.EVEHOME, 'function');
 });
 
@@ -95,7 +95,7 @@ test('platform restores valid cached identity, removes stale cache and shuts dow
   );
   let stale = { displayName: 'Stale', getService() {} };
   platform.configureAccessory(stale);
-  assert.deepEqual(removed, [['homebridge-nest-accfactory-plus', 'NestClimateCntrl', [stale]]]);
+  assert.deepEqual(removed, [['homebridge-nest-climate-cntrl', 'NestClimateCntrl', [stale]]]);
   assert.deepEqual(platform.cachedAccessories, [accessory]);
   await callbacks.get('didFinishLaunching')();
   assert.equal(

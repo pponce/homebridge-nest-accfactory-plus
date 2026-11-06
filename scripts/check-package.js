@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const packed = JSON.parse(execFileSync(npm, ['pack', '--ignore-scripts', '--json'], { encoding: 'utf8' }))[0];
 const tarball = path.resolve(packed.filename);
-const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-plus-package-'));
+const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-climate-package-'));
 try {
   for (const required of [
     'dist/index.js',
@@ -17,6 +17,12 @@ try {
     'dist/auth.js',
     'config.schema.json',
     'MIGRATION.md',
+    'AUTHENTICATION.md',
+    'scripts/migration-preflight.mjs',
+    'homebridge-ui/server.js',
+    'homebridge-ui/bridge-discovery.js',
+    'homebridge-ui/public/index.html',
+    'homebridge-ui/public/nest-climate-cntrl-icon-512.png',
     'dist/plugins/camera/streamer.js',
     'dist/plugins/camera/talkback.js',
     'dist/supportdump.js',
@@ -28,7 +34,7 @@ try {
   }
   fs.writeFileSync(path.join(temporary, 'package.json'), '{"private":true}');
   execFileSync(npm, ['install', '--omit=dev', '--no-audit', '--no-fund', tarball], { cwd: temporary, stdio: 'inherit' });
-  const entry = path.join(temporary, 'node_modules/homebridge-nest-accfactory-plus/dist/index.js');
+  const entry = path.join(temporary, 'node_modules/homebridge-nest-climate-cntrl/dist/index.js');
   const plugin = await import(pathToFileURL(entry).href);
   let registered;
   plugin.default({
@@ -36,9 +42,16 @@ try {
       registered = args;
     },
   });
-  assert.equal(registered[0], 'homebridge-nest-accfactory-plus');
+  assert.equal(registered[0], 'homebridge-nest-climate-cntrl');
   assert.equal(registered[1], 'NestClimateCntrl');
   assert.equal(typeof registered[2], 'function');
+  const root = path.join(temporary, 'node_modules/homebridge-nest-climate-cntrl');
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json')));
+  const schema = JSON.parse(fs.readFileSync(path.join(root, 'config.schema.json')));
+  assert.equal(pkg.name, registered[0]);
+  assert.equal(schema.pluginAlias, registered[1]);
+  const preflight = await import(pathToFileURL(path.join(root, 'scripts/migration-preflight.mjs')).href);
+  assert.equal(typeof preflight.inspectInstallation, 'function');
   console.log('Production tarball installs and registers successfully:', packed.filename);
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });

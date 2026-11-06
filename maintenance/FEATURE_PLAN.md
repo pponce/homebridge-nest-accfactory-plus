@@ -2,7 +2,7 @@
 
 Updated: 2026-11-06
 
-This file tracks maintainer planning for the thermostat and heating direction of `pponce/homebridge-nest-accfactory-plus`. It is not a list of released features. The selected product name is **Nest Climate Cntrl**; package/repository migration is a separate workstream.
+This file tracks maintainer planning for the thermostat and heating direction of `pponce/homebridge-nest-climate-cntrl`. It is not a list of released features. The selected product name is **Nest Climate Cntrl**; repository rename is complete; the first climate beta uses the new package name.
 
 ## Feature roadmap
 
@@ -205,7 +205,7 @@ Use deterministic control tests and a read-only preview before a hardware trial.
 ## Continuation checkpoint
 
 - **Objective:** develop Nest Climate Cntrl with mixed room sensors, room-fan coordination and safe coexistence with upstream camera/doorbell support.
-- **Repository/branch:** `pponce/homebridge-nest-accfactory-plus`, `feature/thermostat-dashboard`.
+- **Repository/branch:** `pponce/homebridge-nest-climate-cntrl`, `feature/thermostat-dashboard`.
 - **Planning files:** `maintenance/FEATURE_PLAN.md` and `maintenance/CLIMATE_HANDOFF.md`.
 - **Decisions recorded:** no weather; platform alias `NestClimateCntrl`; new Climate namespace for new devices, legacy cache identity reuse for migration where feasible; guide the installed-version migration after feature completion and validation.
 - **Approved feature recorded:** optional combined Climate Home/Away occupancy sensor using Google status plus user-selected Homebridge motion/occupancy sensors, a searchable main/child-bridge picker, configurable rules/holds/Away delay, preview and manual overrides. Google whole-home writes remain outside the initial scope.

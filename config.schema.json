@@ -34,19 +34,19 @@
               "type": "string",
               "minLength": 1,
               "pattern": "\\S",
-              "placeholder": "See https://github.com/pponce/homebridge-nest-accfactory-plus#configuration"
+              "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
             },
             "issueToken": {
               "type": "string",
               "minLength": 1,
               "pattern": "\\S",
-              "placeholder": "See https://github.com/pponce/homebridge-nest-accfactory-plus#configuration"
+              "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
             },
             "cookie": {
               "type": "string",
               "minLength": 1,
               "pattern": "\\S",
-              "placeholder": "See https://github.com/pponce/homebridge-nest-accfactory-plus#configuration"
+              "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
             },
             "authMethod": {
               "type": "string",
@@ -161,12 +161,6 @@
           },
           "exclude": {
             "type": "boolean"
-          },
-          "maxStreams": {
-            "type": "integer",
-            "default": 2,
-            "minimum": 1,
-            "maximum": 4
           },
           "supportDump": {
             "type": "boolean",
@@ -445,10 +439,6 @@
       "expandable": true,
       "expanded": true,
       "items": [
-        {
-          "key": "options.maxStreams",
-          "title": "Simultaneous Live Viewers per Camera"
-        },
         {
           "key": "options.debug",
           "title": "Enable Verbose Logging"

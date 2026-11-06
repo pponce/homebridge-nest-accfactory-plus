@@ -4,12 +4,12 @@ Updated: 2026-11-06
 
 ## Objective and review location
 
-Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `feature/thermostat-dashboard`.
-Draft PR: https://github.com/pponce/homebridge-nest-accfactory-plus/pull/12
+Develop Nest Climate Cntrl in `pponce/homebridge-nest-climate-cntrl`, branch `feature/thermostat-dashboard`.
+Draft PR: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/12
 
-Platform alias: `NestClimateCntrl`. Current npm package: `homebridge-nest-accfactory-plus`.
-Planned package/repository name: `homebridge-nest-climate-cntrl`.
-No npm publication, live installation or thermostat hardware commands have been performed.
+Platform alias: `NestClimateCntrl`. Beta npm package: `homebridge-nest-climate-cntrl@0.5.0-beta.1`.
+Repository renamed to `homebridge-nest-climate-cntrl`.
+GitHub beta release and npm publication are authorized. Workspace npm authentication is unavailable; the release helper publishes the checked tarball from the maintainer’s authenticated terminal. No live installation or thermostat hardware commands have been performed.
 
 ## Implemented
 
@@ -66,3 +66,14 @@ Other chats have modified the same branch's maintenance plan; inspect concurrent
 Shared submodules were fetched at pinned revisions for local testing; never replace remote gitlinks with those source copies.
 Source snapshots may have an extra trailing newline; compare normalized content when inspecting differences.
 Local Chromium cannot launch under the execution restrictions; use the GitHub browser job.
+
+## Beta release preparation
+
+- Target: `v0.5.0-beta.1`, GitHub prerelease and npm `beta` tag.
+- README rewritten for new users: climate scope, beta status, working controls versus read-only previews, legacy refresh-token support, and an upstream link for removed capabilities. Account setup moved to AUTHENTICATION.md.
+- Release notes lead with `NestAccfactory` → `NestClimateCntrl` and link to tagged migration/coexistence instructions.
+- Package registration renamed; legacy and Climate UUID namespaces remain unchanged by the package rename.
+- Release workflow validates matrix, browser and production tarball, and attaches checksummed publishing/inspection helpers. npm workflow remains manually triggered.
+- `scripts/migration-preflight.mjs` only reads installation files and outputs counts/status; privacy/no-mutation tests added. No cache-preserving migration implementation is claimed.
+- `maintenance/publish-beta-and-inspect.sh` keeps assets/reports in the existing project folder, requests npm login locally, verifies the published tarball, and prints an rsync command for the redacted preflight report. It creates no backup and does not install or change Homebridge.
+- After receiving that report, choose/test the migration for the actual bridge layout. Obtain approval before creating any backup or applying a custom cache patch.

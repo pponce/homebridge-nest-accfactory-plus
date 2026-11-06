@@ -1,3 +1,21 @@
+## v0.5.0-beta.1
+
+**Platform name change: `NestAccfactory` → `NestClimateCntrl`.** The npm package is now `homebridge-nest-climate-cntrl`. Read the [migration instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.1/MIGRATION.md) **before updating an existing installation**. Changing the platform field alone does not migrate cached accessories or Apple Home assignments.
+
+This is the first **Nest Climate Cntrl public beta**, under active testing on real equipment.
+
+- Focuses on Nest thermostats, native room sensors and Heat Links, including supported hot-water controls.
+- Removes camera, doorbell, floodlight-camera, Nest × Yale lock and weather exposure. Protect and Nest Home/Away remain available.
+- For those removed capabilities, use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). Both plugins can coexist when each device is assigned to one plugin; see the [coexistence instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.1/MIGRATION.md#running-alongside-upstream).
+- Adds a custom Homebridge climate dashboard with account setup, device status, schedules, observed runtime and diagnostics.
+- Adds optional Eco switches and 15/30/60-minute HVAC fan-preset switches, disabled by default.
+- Adds native Nest temperature-source selection and configurable fan duration.
+- Adds a **read-only** mixed Google/non-Google temperature-sensor preview, plus discovery of accessible Homebridge room fans and presence sensors.
+- Uses a new Climate Cntrl UUID namespace for new accessories and reuses matching legacy UUIDs when their cache entries are restored to this platform.
+- **Retains legacy Google refresh-token authentication for users who already have a compatible, still-valid token.** The plugin cannot issue new legacy tokens. Google issue-token/cookie authentication is also available; no SDM project is required.
+
+Automatic room-temperature compensation, room-fan rules and combined Home/Away are not enabled in this beta. The complete cache-preserving migration is still under validation; a separate beta child bridge creates new Apple Home accessories. Runtime covers observed periods only. Live thermostat, Heat Link and migration behavior need further hardware testing.
+
 ## v0.4.4-beta.7
 
 First Nest Accfactory Plus prerelease, based on upstream 0.4.4-beta.7.
@@ -723,4 +741,5 @@ Due to the volume of changes in this release, versioning has been reverted to al
 
 - Main changes are around the video/audio pipelines in `webrtc.js` and `streamer.js` to improve stability and recovery from packet loss, especially for video streams
 - Added logging and cleanup around talkback stream handling
+
 

@@ -1,5 +1,5 @@
 // Registration follows the npm name; identity namespaces remain stable across renames.
-export const PLUGIN_NAME = 'homebridge-nest-accfactory-plus';
+export const PLUGIN_NAME = 'homebridge-nest-climate-cntrl';
 export const PLATFORM_NAME = 'NestClimateCntrl';
 export const IDENTITY_NAMESPACE = 'homebridge-nest-climate-cntrl';
 export const LEGACY_IDENTITY_NAMESPACE = 'homebridge-nest-accfactory';
