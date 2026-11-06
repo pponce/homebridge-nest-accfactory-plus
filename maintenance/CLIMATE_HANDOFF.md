@@ -4,8 +4,7 @@ Updated: 2026-11-06
 
 ## Objective and review location
 
-Develop Nest Climate Cntrl in `pponce/homebridge-nest-climate-cntrl`, branch `feature/thermostat-dashboard`.
-Draft PR: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/12
+Develop Nest Climate Cntrl in `pponce/homebridge-nest-climate-cntrl`. The thermostat dashboard work is merged into `main`; PR #12 is closed. The feature branch remains at the released beta checkpoint.
 
 Platform alias: `NestClimateCntrl`. Beta npm package: `homebridge-nest-climate-cntrl@0.5.0-beta.1`.
 Repository renamed to `homebridge-nest-climate-cntrl`.
@@ -83,3 +82,12 @@ Local Chromium cannot launch under the execution restrictions; use the GitHub br
 - `da0b4c2c88498585bddf0473b9385c57a7936d1c`: 1,621 tests and coverage floors passed, Chromium behavior passed, production tarball installed and registered as `homebridge-nest-climate-cntrl` / `NestClimateCntrl`.
 - Beta publishing and migration helpers are ready; no npm authentication exists in the workspace. The maintainer must run the checked helper and complete npm login/2FA locally.
 - Release preparation includes all requested callouts: platform-name change plus migration link, upstream for removed capabilities, legacy Google token support for existing token holders, and clear beta/read-only feature boundaries.
+
+## Accepted npm upload and checkout rename recovery
+
+- GitHub prerelease `v0.5.0-beta.1` is published from `0bebdac1caae68fefe5ff27acb3d0bb00ce4350c`. Release and main compatibility/browser workflows passed.
+- The maintainer's npm terminal reported an accepted upload for `homebridge-nest-climate-cntrl@0.5.0-beta.1`, followed by an immediate registry E404. Public availability, beta tag and tarball integrity still need verification. Do not upload this accepted version again.
+- The existing development checkout is named `homebridge-nest-accfactory-plus`; the requested name is `homebridge-nest-climate-cntrl`. `maintenance/rename-checkout-and-verify-beta.sh` checks the origin, renames the existing folder, updates origin, retries read-only npm verification, and prints the existing preflight report's rsync command. Actual execution on the development host is pending.
+- The publishing helper now retries registry verification and records accepted uploads to prevent repeated publication on a later invocation. Downloaded release assets and migration reports are ignored by Git. Published beta assets remain unchanged.
+- Validation: Bash syntax and whitespace checks; isolated fixtures verified local changes/history retention, repeated runs, destination collision, delayed registry visibility, unresolved registry visibility and integrity mismatch. Publishing-helper fixtures verified exactly one mock upload across repeated runs after acceptance, including when verification remains pending. No real npm upload occurred in these tests.
+- Next: run the rename/recovery helper, return the existing redacted preflight report, then select and test a migration procedure for that bridge layout. No live Homebridge changes or backups have been made.

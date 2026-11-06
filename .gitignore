@@ -12,3 +12,6 @@ dist*
 *.aac
 *.mp4
 coverage/
+/maintenance/releases/
+/maintenance/migration/
+
