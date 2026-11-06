@@ -193,4 +193,3 @@ test('saved history survives restart without counting the stopped interval', asy
   assert.equal(second.ledger.previous.size, 0);
   await second.stop();
 });
-
