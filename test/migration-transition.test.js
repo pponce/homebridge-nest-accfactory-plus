@@ -36,13 +36,27 @@ function fixture(t, withFallback = true) {
     UUID: randomUUID(), plugin: old, platform: 'NestAccfactory', context: { value: 'PRIVATE-CONTEXT' },
     displayName: 'PRIVATE-ROOM', services: [
       { UUID: uuid('3E'), characteristics: [{ UUID: uuid('20'), value: 'PRIVATE-MODEL' }] },
-      { UUID: uuid(id), subtype: '1', characteristics: [{ value: 21 }] },
+      { UUID: uuid(id), subtype: '1', characteristics: [{ UUID: uuid('11'), value: 21 }] },
     ],
   }));
+  const identifierData = {};
+  for (const [index, entry] of entries.entries()) {
+    identifierData[entry.UUID] = index + 2;
+    let iid = 2;
+    for (const service of entry.services) {
+      const key = entry.UUID + '|' + service.UUID + (service.subtype ? '|' + service.subtype : '');
+      if (service.UUID !== uuid('3E')) {
+        identifierData[key] = iid++;
+      }
+      for (const characteristic of service.characteristics) {
+        identifierData[key + '|' + characteristic.UUID] = iid++;
+      }
+    }
+  }
   const files = {
     'config.json': config, [cache]: entries,
     'persist/AccessoryInfo.AABBCCDDEEFF.json': { pairedClients: { 'PRIVATE-CLIENT': { publicKey: 'PRIVATE-KEY' } } },
-    'persist/IdentifierCache.AABBCCDDEEFF.json': { cache: { 'PRIVATE-UUID|AID': 2 } },
+    'persist/IdentifierCache.AABBCCDDEEFF.json': { cache: identifierData },
   };
   if (withFallback) {
     files[fallback] = entries;
@@ -139,6 +153,41 @@ test('migration rejects stale snapshots, corrupt backup artifacts and later conf
   assert.throws(() => rollbackSnapshot(snapshot), /later edits/);
   fs.appendFileSync(path.join(snapshot, '1-before'), ' ');
   assert.throws(() => applySnapshot(snapshot), /integrity check failed/);
+});
+
+test('rollback write failure restores its starting files and requires Homebridge to remain stopped', (t) => {
+  const state = fixture(t, false);
+  const snapshot = createSnapshot(prepareMigration(state.storage, 7), state.project);
+  applySnapshot(snapshot);
+  const before = ['config.json', cache, fallback].map((name) => fs.readFileSync(path.join(state.storage, name)));
+  let writes = 0;
+  assert.throws(() => rollbackSnapshot(snapshot, {
+    write(storage, record, bytes) {
+      if (++writes === 2) {
+        throw new Error('injected rollback failure');
+      }
+      fs.writeFileSync(path.join(storage, record.relative), bytes);
+    },
+  }), (error) => error.exitCode === 2 && /Leave Homebridge stopped/.test(error.message));
+  for (const [index, name] of ['config.json', cache, fallback].entries()) {
+    assert.deepEqual(fs.readFileSync(path.join(state.storage, name)), before[index]);
+  }
+});
+
+test('migration requires complete, distinct accessory and characteristic identifier records', (t) => {
+  const state = fixture(t);
+  const name = 'persist/IdentifierCache.AABBCCDDEEFF.json';
+  const original = state.files[name];
+  const first = state.entries[0].UUID;
+  const second = state.entries[1].UUID;
+  for (const data of [
+    { cache: {} },
+    { cache: { ...original.cache, [second]: original.cache[first] } },
+    { cache: { ...original.cache, [first + '|' + uuid('4A') + '|1']: 1 } },
+  ]) {
+    fs.writeFileSync(path.join(state.storage, name), JSON.stringify(data));
+    assert.throws(() => prepareMigration(state.storage, 7), /records are missing or inconsistent/);
+  }
 });
 
 test('migration refuses unsupported accessories, mixed ownership and changed inventory', (t) => {

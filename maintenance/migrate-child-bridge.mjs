@@ -76,8 +76,32 @@ export function prepareMigration(storage, expectedCount) {
   const identifiers = readRecord(storage, 'persist/IdentifierCache.' + suffix + '.json');
   const pairedClients = JSON.parse(pairing.bytes)?.pairedClients;
   const identifierData = JSON.parse(identifiers.bytes)?.cache;
-  if (!pairedClients || typeof pairedClients !== 'object' || !Object.keys(pairedClients).length || !identifierData || typeof identifierData !== 'object') {
+  if (!pairedClients || typeof pairedClients !== 'object' || Array.isArray(pairedClients) || !Object.keys(pairedClients).length
+    || !identifierData || typeof identifierData !== 'object' || Array.isArray(identifierData)) {
     fail('Pairing or accessory identifier records are incomplete.');
+  }
+  const aids = new Set();
+  for (const accessory of entries) {
+    const aid = identifierData[accessory.UUID];
+    if (!Number.isSafeInteger(aid) || aid < 2 || aids.has(aid)) fail('Accessory AID records are missing or inconsistent.');
+    aids.add(aid);
+    const iids = new Set([1]);
+    for (const service of accessory.services) {
+      const serviceUUID = service.UUID ?? service.type;
+      const key = accessory.UUID + '|' + serviceUUID + (service.subtype ? '|' + service.subtype : '');
+      const keys = type(serviceUUID) === '3E' ? [] : [key];
+      if (!Array.isArray(service.characteristics)) fail('Cached characteristic records are incomplete.');
+      for (const characteristic of service.characteristics) {
+        const characteristicUUID = characteristic?.UUID ?? characteristic?.type;
+        if (typeof characteristicUUID !== 'string' || !characteristicUUID) fail('Cached characteristic identities are missing.');
+        keys.push(key + '|' + characteristicUUID);
+      }
+      for (const lookup of keys) {
+        const iid = identifierData[lookup];
+        if (!Number.isSafeInteger(iid) || iid < 2 || iids.has(iid)) fail('Service or characteristic IID records are missing or inconsistent.');
+        iids.add(iid);
+      }
+    }
   }
   const nextConfig = structuredClone(config);
   nextConfig.platforms[index].platform = 'NestClimateCntrl';
@@ -97,25 +121,47 @@ function sameCurrent(storage, record) {
   return current.bytes === null ? record.bytes === null : record.bytes !== null && current.bytes.equals(record.bytes);
 }
 
+function syncDirectory(directory) {
+  const fd = fs.openSync(directory, 'r');
+  try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+
+function writeSnapshotFile(file, bytes) {
+  const fd = fs.openSync(file, 'wx', 0o600);
+  try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+
 export function createSnapshot(plan, project) {
   project = fs.realpathSync(project);
   if (!fs.existsSync(path.join(project, '.git'))) fail('Expected the existing project checkout.');
   for (const record of plan.files) if (!sameCurrent(plan.storage, record)) fail('Installation changed after inspection; run inspection again.');
-  const parent = path.join(project, 'maintenance/migration/backups');
-  fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
-  if (fs.realpathSync(parent) !== parent) fail('Refusing a redirected backup directory.');
+  let parent = project;
+  for (const name of ['maintenance', 'migration', 'backups']) {
+    const next = path.join(parent, name);
+    try {
+      const stat = fs.lstatSync(next);
+      if (!stat.isDirectory() || stat.isSymbolicLink()) fail('Refusing a redirected backup directory.');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      fs.mkdirSync(next, { mode: 0o700 });
+      syncDirectory(parent);
+    }
+    parent = next;
+  }
   const backup = path.join(parent, new Date().toISOString().replaceAll(':', '-') + '-' + randomUUID());
   fs.mkdirSync(backup, { mode: 0o700 });
   const records = plan.files.map((record, index) => {
     const before = record.bytes === null ? null : index + '-before';
     const after = plan.after[index] === null ? null : index + '-after';
-    if (before) fs.writeFileSync(path.join(backup, before), record.bytes, { flag: 'wx', mode: 0o600 });
-    if (after) fs.writeFileSync(path.join(backup, after), plan.after[index], { flag: 'wx', mode: 0o600 });
+    if (before) writeSnapshotFile(path.join(backup, before), record.bytes);
+    if (after) writeSnapshotFile(path.join(backup, after), plan.after[index]);
     return { relative: record.relative, mode: record.mode ?? plan.files[1].mode, uid: record.uid ?? plan.files[1].uid,
       gid: record.gid ?? plan.files[1].gid, before, after, beforeHash: before ? hash(record.bytes) : null,
       afterHash: after ? hash(plan.after[index]) : null };
   });
-  fs.writeFileSync(path.join(backup, 'manifest.json'), encode({ schema: 1, storage: plan.storage, records, summary: plan.summary }), { flag: 'wx', mode: 0o600 });
+  writeSnapshotFile(path.join(backup, 'manifest.json'), encode({ schema: 1, storage: plan.storage, records, summary: plan.summary }));
+  syncDirectory(backup);
+  syncDirectory(parent);
   return backup;
 }
 
@@ -143,7 +189,7 @@ function loadSnapshot(backup) {
 function atomicWrite(storage, record, bytes) {
   const target = path.join(storage, record.relative);
   if (fs.realpathSync(path.dirname(target)) !== path.dirname(target)) fail('Refusing a redirected storage directory.');
-  if (bytes === null) { fs.rmSync(target, { force: true }); return; }
+  if (bytes === null) { fs.rmSync(target, { force: true }); syncDirectory(path.dirname(target)); return; }
   const temporary = target + '.climate-' + randomUUID();
   let fd;
   try {
@@ -154,6 +200,7 @@ function atomicWrite(storage, record, bytes) {
     fs.fsyncSync(fd);
     fs.closeSync(fd); fd = undefined;
     fs.renameSync(temporary, target);
+    syncDirectory(path.dirname(target));
   } finally {
     if (fd !== undefined) fs.closeSync(fd);
     fs.rmSync(temporary, { force: true });
@@ -186,13 +233,28 @@ export function applySnapshot(backup, { write = atomicWrite } = {}) {
   return { status: 'migrated', ...manifest.summary };
 }
 
-export function rollbackSnapshot(backup) {
+export function rollbackSnapshot(backup, { write = atomicWrite } = {}) {
   const manifest = loadSnapshot(backup);
   const config = manifest.records[0];
   if (!sameCurrent(manifest.storage, { ...config, bytes: config.afterBytes }) && !sameCurrent(manifest.storage, { ...config, bytes: config.beforeBytes })) {
     fail('Configuration changed since migration; refusing to overwrite later edits.');
   }
-  for (const record of manifest.records.slice(0, 3)) atomicWrite(manifest.storage, record, record.beforeBytes);
+  const starting = manifest.records.slice(0, 3).map((record) => readRecord(manifest.storage, record.relative, true));
+  try {
+    for (const record of [...manifest.records.slice(1, 3), manifest.records[0]]) write(manifest.storage, record, record.beforeBytes);
+    for (const record of manifest.records.slice(0, 3)) {
+      if (!sameCurrent(manifest.storage, { ...record, bytes: record.beforeBytes })) fail('Rollback verification failed.');
+    }
+  } catch {
+    let recovered = true;
+    try {
+      for (const record of [...starting.slice(1), starting[0]]) atomicWrite(manifest.storage, record, record.bytes);
+    } catch { recovered = false; }
+    const error = new Error(recovered ? 'Rollback failed; its starting files were restored. Leave Homebridge stopped.'
+      : 'Rollback recovery failed. Leave Homebridge stopped and retain the snapshot.');
+    error.exitCode = 2;
+    throw error;
+  }
   return { status: 'rolled-back', pairingAndIdentifiers: 'left in place' };
 }
 

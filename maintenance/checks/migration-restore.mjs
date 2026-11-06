@@ -19,7 +19,10 @@ const homebridgeRequire = createRequire(homebridgeEntry);
 let hapEntry;
 try { hapEntry = homebridgeRequire.resolve('@homebridge/hap-nodejs'); }
 catch { hapEntry = homebridgeRequire.resolve('hap-nodejs'); }
-const { IdentifierCache } = await import(pathToFileURL(path.join(path.dirname(hapEntry), 'model/IdentifierCache.js')));
+const identifierModule = ['lib/model/IdentifierCache.js', 'model/IdentifierCache.js']
+  .map((relative) => path.join(path.dirname(hapEntry), relative)).find((file) => fs.existsSync(file));
+assert.ok(identifierModule, 'Cannot locate the Homebridge-owned IdentifierCache module');
+const { IdentifierCache } = await import(pathToFileURL(identifierModule));
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'climate-hap-migration-'));
 const storage = path.join(root, 'storage');
 const project = path.join(root, 'project');
