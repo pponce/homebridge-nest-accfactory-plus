@@ -278,8 +278,11 @@ for (let enabled of [false, true]) {
       audio_enabled: enabled,
     });
     let operating = flow.device.controller.recordingManagement.operatingModeService;
+    // HAP 2.3 uses UINT8 for this characteristic; older supported releases use BOOL.
+    let indicatorFormat = operating.getCharacteristic(C.CameraOperatingModeIndicator).props.format;
+    assert.ok(['bool', 'uint8'].includes(indicatorFormat));
     for (let [type, expected] of [
-      [C.CameraOperatingModeIndicator, enabled],
+      [C.CameraOperatingModeIndicator, indicatorFormat === 'uint8' ? Number(enabled) : enabled],
       [C.NightVision, enabled],
       [C.ImageRotation, enabled === true ? 180 : 0],
     ]) {
@@ -331,3 +334,4 @@ test('camera battery transitions distinguish charging and preserve the same serv
     assert.equal(flow.device.batteryService, service);
   }
 });
+

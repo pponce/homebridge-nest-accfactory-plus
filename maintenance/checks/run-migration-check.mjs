@@ -11,8 +11,11 @@ try {
 } catch (error) {
   const output = String(error.stdout || '') + '\n' + String(error.stderr || error.message);
   process.stderr.write(output);
-  detail = output.split('\n').filter((line) => /✖|Error|Cannot|Assertion|actual:|expected:|error:|code:|migration-restore\.mjs:\d/.test(line))
-    .join(' ').slice(0, 480) || 'Migration restoration failed; inspect the job log';
+  const failureStart = output.lastIndexOf('✖ failing tests:');
+  const lines = (failureStart >= 0 ? output.slice(failureStart) : output).split('\n');
+  const errorStart = lines.findIndex((line) => /AssertionError|Error \[|Error:|Cannot find/.test(line));
+  detail = (errorStart >= 0 ? lines.slice(errorStart, errorStart + 18).join(' ') : lines.filter((line) => /✖|error:|code:/.test(line)).join(' '))
+    .replaceAll(process.cwd(), '').replace(/\s+/g, ' ').slice(0, 480) || 'Validation failed; inspect the job log';
   process.exitCode = 1;
 }
 if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'detail=' + detail.replace(/[\r\n]/g, ' ') + '\n');
