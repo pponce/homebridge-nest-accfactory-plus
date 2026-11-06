@@ -2,55 +2,67 @@
 
 Updated: 2026-11-06
 
-## Objective and identity
+## Objective and review location
 
-Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `feature/thermostat-dashboard`. Target platform alias is `NestClimateCntrl`; alias implementation is present; tested cache migration from `NestAccfactory` remains pending. Preserve existing accessory UUID namespace and bridge pairing during the transition; package identity remains unchanged until its separate migration. Future repository/package name: `homebridge-nest-climate-cntrl`. No npm publication or live installation performed.
+Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `feature/thermostat-dashboard`.
+Draft PR: https://github.com/pponce/homebridge-nest-accfactory-plus/pull/12
+
+Platform alias: `NestClimateCntrl`. Current npm package: `homebridge-nest-accfactory-plus`.
+Planned package/repository name: `homebridge-nest-climate-cntrl`.
+No npm publication, live installation or thermostat hardware commands have been performed.
 
 ## Implemented
 
-- Current discovery is restricted to thermostat, Temperature Sensor, Heat Link, Protect, Home/Away and weather modules (weather is now excluded from the agreed product scope and still needs removal); bypass video capability probes. Camera source/dependencies are still present pending final package cleanup.
-- Custom Homebridge settings UI with accounts, thermostat status/actions, associated native sensor selection, optional HomeKit features, schedules, runtime coverage and redacted diagnostics.
-- Optional Eco and 15/30/60-minute HVAC fan-preset switches, disabled by default. Presets do not replace the default duration.
-- Authenticated loopback dashboard, restricted endpoint-file permissions, serialized UI commands, runtime persistence without extrapolating outages.
-- Reconnect ownership guard, failed-start listener cleanup and legacy configuration editing.
+- Climate discovery loads thermostats, native temperature sensors, Heat Links, Protect and Home/Away. Cameras, doorbells, floodlights, Yale locks and weather are excluded; video capability probes are bypassed. Legacy source and camera dependencies remain pending distribution cleanup.
+- Custom Homebridge settings dashboard: account setup, thermostat status/actions, associated native sensor selection, optional Apple Home features, schedules, runtime totals/coverage and redacted diagnostics.
+- Optional Eco and 15/30/60-minute HVAC fan-preset switches, disabled by default. HVAC presets do not control room/ceiling fans.
+- Authenticated loopback dashboard with private endpoint file, serialized UI commands and runtime persistence that does not extrapolate stopped/offline periods.
+- Read-only discovery of configured main/child-bridge temperature sensors, fans, motion and occupancy services. The server uses fresh HAP GET reads; no write endpoint exists. Bridge PINs are not sent to the browser.
+- Mixed Nest/non-Google sensor selection, single/equal-average temperature preview and bounded illustrative target. Per-thermostat selections persist through Homebridge Save. Missing sources stay visible; malformed preview settings are normalized on edit.
+- Separate physical thermostat temperature captured before active Nest-sensor display normalization. Provider read time is explicitly distinct from physical measurement age.
+- Fan and presence source lists report current readable state. No automatic room-fan or combined presence behavior is enabled.
+- Partial bridge-read failures invalidate all that bridge's candidates without duplicating identities; faults, invalid values, stale reads and source/Eco changes prevent an eligible compensation preview.
+- Approved plum icon applied to README/UI; exports: `maintenance/branding/nest-climate-cntrl-icon-100.png` and `homebridge-ui/public/nest-climate-cntrl-icon-512.png`.
+
+## Identity decision and implementation
+
+The maintainer allows UUID changes when needed. Preserve existing identities for migration where feasible; new installs and newly added devices use the plugin's own identity namespace.
+
+- New devices: `homebridge-nest-climate-cntrl`.
+- Migrated devices: retain the expected `homebridge-nest-accfactory` UUID if Homebridge restores it to this platform.
+- Cache identities are recorded per runtime API, not globally across plugins. Unrelated cached UUIDs are ignored. If both expected identities exist, the Climate identity takes precedence.
+- The shared HomeKitDevice submodule is unchanged; the existing identity adapter covers construction and platform lookups.
+- UUID reuse is tested through the real device lifecycle and platform cache callback.
+- **The alias/cache-association transition remains unimplemented and unverified for rollout.** Homebridge resolves cached `_associatedPlugin`/`_associatedPlatform` before calling `configureAccessory`. Changing the config alias alone can orphan accessories and is not a migration procedure.
+- Prefer retaining the bridge username/pairing and service identities. If a particular installation needs recreation, identify its affected Apple Home assignments and guide that transition explicitly.
+- Keep upstream/climate accessory ownership disjoint, regardless of namespaces.
 
 ## Validation
 
-- 17 focused tests pass under Node 24.22.1.
-- Dashboard module coverage: 100% lines, 96.26% branches, 93.55% functions.
-- `npm run build` and build verification pass.
-- GitHub Node 24 validation passed lint, 1,608 regression tests, all module coverage floors and build. Final PR matrix validates Node 22/24/26 with supported Homebridge versions.
-- Chromium behavior tests passed in GitHub: masked credentials, saved config preservation, sensor command, offline controls, 375px layout and schema fallback. Local Chromium cannot launch because of execution restrictions. Full visual inspection and live Homebridge integration remain pending.
-- Real thermostat Eco, sensor selection and HVAC fan behavior are not hardware verified.
+- Node 24 GitHub validation passes lint (14 existing warnings, zero errors), all **1,617 tests**, every production-module coverage floor and build verification.
+- Chromium behavior checks pass: masked credentials, config preservation, mixed sensor preview without writes, invalid preview settings, native sensor command, offline control disabling, 375px layout and schema fallback.
+- 28 focused control/dashboard/source/identity tests pass locally under Node 24.22.1.
+- Final compatibility validation is the PR workflow: Node 22/24 with Homebridge 1.11.4 and 2.4.0; Node 26 with Homebridge 2.4.0; separate dashboard browser job. Check the latest PR head's result.
+- Validated development checkpoint: `762065f2006e15cf98da40efcf640f0f41d94bea`; code change: `13337e412c7aff64a41415b683ed6c009070b483`, formatting: `070e7c3e3b621114649cbe7a544b18523b161270`.
+- Full visual inspection and real Homebridge integration, Eco, native sensor selection, HVAC fan, Heat Link, external sources and Apple Home migration are **not hardware verified**.
 
-## Remaining work
+## Remaining work and exact next steps
 
-1. Run GitHub validation, resolve lint/regression/coverage failures without lowering existing floors. Temporary formatting/diagnostic workflow removed. Browser checks now run in the normal PR workflow.
-2. Run browser checks and inspect desktop/mobile light/dark UI. Validate real Homebridge UI lifecycle/API integration, config save and restart.
-3. Verify protocol commands against physical thermostat, associated sensors and Heat Link. Confirm no accessory duplication and camera/lock cache cleanup behavior.
-4. Finish removal of camera-specific distribution/dependencies while retaining upstream provenance and existing tests as appropriate.
-5. Approved plum icon exported at 100px and 512px and applied to README/UI.
-6. Room/ceiling-fan coordination remains unimplemented. Investigate reusable accessible main/child bridge discovery from the Harmony Home Control project; do not confuse this with Nest HVAC blower presets.
-7. Preserve and follow `maintenance/FEATURE_PLAN.md` for mixed native/external temperature sensors. Begin with read-only discovery and compensation preview. No external-sensor thermostat writes are enabled.
-8. Implement target alias `NestClimateCntrl` with a tested config/cache transition, preserving the existing UUID prefix and bridge pairing. Guide the maintainer's current-install migration after feature completion and validation; do not assume changing config alone is sufficient. Plan package/repository rename and Homebridge verification updates separately. Ask before publishing npm.
-9. Remove weather from discovery and UI/configuration; account for owned cached weather accessories. Configure upstream and the climate plugin to own disjoint device sets when both are installed.
-10. Optional combined **Climate Home/Away** occupancy sensor is approved for the feature plan, not implemented. Combine Google's raw reported home state with user-selected accessible Homebridge motion/occupancy sensors. Include a searchable main/child-bridge picker, any/all rule groups, motion holds, Away delay, preview and dashboard manual overrides. Keep raw Google state separate; the combined sensor does not itself write Google mode or thermostat settings. Follow the recommended Google-plus-sensors preset, fault/restart behavior and validation sequence in `maintenance/FEATURE_PLAN.md`.
+1. Finish the final PR matrix; remove temporary development validation workflow/result artifacts once no longer needed. Do not lower coverage floors.
+2. Verify read-only discovery on an actual Homebridge installation, including child bridges, Google/external sensor deduplication and freshness/health reporting. Inspect desktop/mobile light/dark dashboard, Save and restart behavior.
+3. Confirm native Nest physical-source semantics and the ability to hold/detect that source before enabling room-temperature compensation. Implement the heating pilot with bounded updates, manual/schedule/Eco precedence, acknowledgment tracking and restart/failure recovery described in `maintenance/FEATURE_PLAN.md`.
+4. Add optional room-fan selection and coordination rules using the shared source adapter. Keep room/ceiling fans distinct from Nest's HVAC blower. No fan writes are implemented yet.
+5. Build the combined Climate Home/Away rule editor and preview: searchable main/child-bridge motion/occupancy picker, Google baseline, any/all groups, holds, Away delay and manual overrides. Then add the optional derived occupancy accessory. No Google whole-home writes.
+6. Add weighted/scheduled temperature groups after the single/equal-average heating controller is verified. Cooling and heat/cool ranges need separate validation.
+7. Design/test cache association migration across supported Homebridge versions and with upstream installed. Verify rooms/scenes/automations on hardware; handle owned cached weather/camera/lock accessories. No blanket cache clearing or default re-pairing.
+8. Finish camera-specific distribution/dependency cleanup while retaining provenance. Complete package/repository rename, public documentation and verification updates at feature completion. Ask before npm publication.
 
-## Review location
+## Workspace continuation
 
-Draft PR: https://github.com/pponce/homebridge-nest-accfactory-plus/pull/12
-
-## Continuation details
-
-Local repository was initialized from a source snapshot rather than a full remote clone. Do not push its synthetic history. Use remote GitHub commits/trees based on inspected remote main and preserve unrelated newer files. Local source snapshots have one extra trailing newline compared with fetched content; compare normalized content when checking upstream changes. Shared submodule files were fetched at pinned revisions for local validation; never replace remote gitlinks with those copies.
-
-
-## Mixed-source discovery milestone
-
-- Alias changed to `NestClimateCntrl`; UUID namespace remains `homebridge-nest-accfactory` as required for existing accessories. Package/repository rename is still pending. Cache association migration remains unverified; no cache or live config has been edited.
-- Weather discovery and ingestion fetches removed; legacy implementation remains in source for now.
-- Server-side HAP discovery adapted from Harmony Home Control, restricted to configured main/child bridges; fresh GET reads, no write endpoint, PINs withheld from browser/diagnostics.
-- UI provides native and external temperature selection, equal-average preview, bounded target estimate and a read-only fan list. Group settings persist through Homebridge Save.
-- Raw thermostat temperature is preserved before applying active Nest sensor display normalization.
-- 22 focused tests and local build pass; new full CI results pending at this checkpoint.
-- Still not implemented: autonomous room-sensor compensation, fan control rules, weighted/scheduled groups, motion-driven Home/Away, final camera dependency cleanup. Real Nest physical-source semantics must be verified before enabling compensation.
+Local repository: `/workspace/scratch/3557d984da62/homebridge-nest-accfactory-plus`.
+It was initialized from a source snapshot, not a full remote clone. Do not push synthetic local history.
+Use remote GitHub trees/commits based on the inspected current branch and expected-SHA ref updates.
+Other chats have modified the same branch's maintenance plan; inspect concurrent commits and preserve their changes.
+Shared submodules were fetched at pinned revisions for local testing; never replace remote gitlinks with those source copies.
+Source snapshots may have an extra trailing newline; compare normalized content when inspecting differences.
+Local Chromium cannot launch under the execution restrictions; use the GitHub browser job.
