@@ -60,6 +60,9 @@ export class BridgeDiscovery extends EventEmitter {
   }
 
   destroy() {
+    if (this.closed) {
+      return;
+    }
     this.closed = true;
     this.stopDiscovery();
     this.bonjour.destroy();

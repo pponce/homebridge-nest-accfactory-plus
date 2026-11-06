@@ -216,6 +216,7 @@ test('passive discovery resolves shared hosts and ignores stale lookups after st
     client.startDiscovery();
     found({ txt: { id: bridge }, host: 'shared.local', port: 123 });
     client.destroy();
+    client.destroy();
     resolvePending([{ address: '127.0.0.3' }]);
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(instances.length, 1);

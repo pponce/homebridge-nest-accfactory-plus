@@ -17,7 +17,7 @@ No npm publication, live installation or thermostat hardware commands have been 
 - Custom Homebridge settings dashboard: account setup, thermostat status/actions, associated native sensor selection, optional Apple Home features, schedules, runtime totals/coverage and redacted diagnostics.
 - Optional Eco and 15/30/60-minute HVAC fan-preset switches, disabled by default. HVAC presets do not control room/ceiling fans.
 - Authenticated loopback dashboard with private endpoint file, serialized UI commands and runtime persistence that does not extrapolate stopped/offline periods.
-- Read-only discovery of configured main/child-bridge temperature sensors, fans, motion and occupancy services. The server uses fresh HAP GET reads; no write endpoint exists. Bridge PINs are not sent to the browser.
+- Read-only discovery of configured main/child-bridge temperature sensors, fans, motion and occupancy services. Discovery uses mDNS directly without authentication probes; the server uses fresh HAP GET reads and has no write endpoint. Discovery receives no PINs. Bridge PINs are not sent to the browser.
 - Mixed Nest/non-Google sensor selection, single/equal-average temperature preview and bounded illustrative target. Per-thermostat selections persist through Homebridge Save. Missing sources stay visible; malformed preview settings are normalized on edit.
 - Separate physical thermostat temperature captured before active Nest-sensor display normalization. Provider read time is explicitly distinct from physical measurement age.
 - Fan and presence source lists report current readable state. No automatic room-fan or combined presence behavior is enabled.
@@ -39,16 +39,16 @@ The maintainer allows UUID changes when needed. Preserve existing identities for
 
 ## Validation
 
-- Node 24 GitHub validation passes lint (14 existing warnings, zero errors), all **1,617 tests**, every production-module coverage floor and build verification.
+- Node 24 GitHub validation passes lint (14 existing warnings, zero errors), all **1,619 tests**, every production-module coverage floor and build verification.
 - Chromium behavior checks pass: masked credentials, config preservation, mixed sensor preview without writes, invalid preview settings, native sensor command, offline control disabling, 375px layout and schema fallback.
-- 28 focused control/dashboard/source/identity tests pass locally under Node 24.22.1.
+- 30 focused control/dashboard/source/identity tests pass locally under Node 24.22.1.
 - Final compatibility validation is the PR workflow: Node 22/24 with Homebridge 1.11.4 and 2.4.0; Node 26 with Homebridge 2.4.0; separate dashboard browser job. Check the latest PR head's result.
-- Validated development checkpoint: `762065f2006e15cf98da40efcf640f0f41d94bea`; code change: `13337e412c7aff64a41415b683ed6c009070b483`, formatting: `070e7c3e3b621114649cbe7a544b18523b161270`.
+- Validated development checkpoint: `9d08653169df21ce0a436fe93ddc5156a5ba548d`; source-discovery correction: `5dbc8b2b90f32c7544bd3d9da1eb30d00183ac27`, formatting/lock: `b571d4740827a8ffc68d2846bc21db6a70bbb104`.
 - Full visual inspection and real Homebridge integration, Eco, native sensor selection, HVAC fan, Heat Link, external sources and Apple Home migration are **not hardware verified**.
 
 ## Remaining work and exact next steps
 
-1. Finish the final PR matrix; remove temporary development validation workflow/result artifacts once no longer needed. Do not lower coverage floors.
+1. Check the final PR matrix. Temporary development workflow/results have been removed; normal compatibility/browser jobs remain. Do not lower coverage floors.
 2. Verify read-only discovery on an actual Homebridge installation, including child bridges, Google/external sensor deduplication and freshness/health reporting. Inspect desktop/mobile light/dark dashboard, Save and restart behavior.
 3. Confirm native Nest physical-source semantics and the ability to hold/detect that source before enabling room-temperature compensation. Implement the heating pilot with bounded updates, manual/schedule/Eco precedence, acknowledgment tracking and restart/failure recovery described in `maintenance/FEATURE_PLAN.md`.
 4. Add optional room-fan selection and coordination rules using the shared source adapter. Keep room/ceiling fans distinct from Nest's HVAC blower. No fan writes are implemented yet.
