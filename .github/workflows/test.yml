@@ -22,6 +22,8 @@ jobs:
             homebridge: 2.4.0
           - node: 26
             homebridge: 2.4.0
+          - node: 24
+            homebridge: 2.5.0
 
     steps:
       - uses: actions/checkout@v5
@@ -36,6 +38,8 @@ jobs:
       - run: npm ci
       - run: npm install --no-save --package-lock=false homebridge@${{ matrix.homebridge }}
       - run: npm run check
+      - name: Verify migration through Homebridge cache restoration
+        run: node maintenance/checks/migration-restore.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
