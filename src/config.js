@@ -134,64 +134,63 @@ function processConfig(config, log, api, capabilities = { video: true }) {
   };
 
   if (capabilities.video === true) {
-  let ffmpegPath = (config?.options?.ffmpegPath?.trim?.() ?? '') !== '' ? config.options.ffmpegPath.trim() : undefined;
+    let ffmpegPath = (config?.options?.ffmpegPath?.trim?.() ?? '') !== '' ? config.options.ffmpegPath.trim() : undefined;
 
-  // Create FFmpeg probe
-  let ffmpeg = new FFmpeg(ffmpegPath);
+    // Create FFmpeg probe
+    let ffmpeg = new FFmpeg(ffmpegPath);
 
-  if (typeof ffmpeg.version !== 'string') {
-    log?.warn?.('ffmpeg binary "%s" not found or not executable, camera/doorbell streaming will be unavailable', ffmpeg.binary);
-  } else {
-    // Proceed with compatibility checks
-    options.ffmpeg.valid = ffmpeg.hasMinimumSupport({
-      version: FFMPEG_VERSION,
-      encoders: ['libx264', 'libfdk_aac', 'libopus'],
-      decoders: ['libspeex'],
-    });
-    if (options.ffmpeg.valid === false) {
-      log?.warn?.('ffmpeg binary "%s" does not meet the minimum support requirements', ffmpeg.binary);
-      log?.warn?.('Stream video/recording from camera/doorbells will be unavailable');
-      if (
-        ffmpeg.version?.localeCompare(FFMPEG_VERSION, undefined, {
-          numeric: true,
-          sensitivity: 'case',
-          caseFirst: 'upper',
-        }) === -1
-      ) {
-        log?.warn?.('Minimum binary version is "%s", however the installed version is "%s"', FFMPEG_VERSION, ffmpeg.version);
+    if (typeof ffmpeg.version !== 'string') {
+      log?.warn?.('ffmpeg binary "%s" not found or not executable, camera/doorbell streaming will be unavailable', ffmpeg.binary);
+    } else {
+      // Proceed with compatibility checks
+      options.ffmpeg.valid = ffmpeg.hasMinimumSupport({
+        version: FFMPEG_VERSION,
+        encoders: ['libx264', 'libfdk_aac', 'libopus'],
+        decoders: ['libspeex'],
+      });
+      if (options.ffmpeg.valid === false) {
+        log?.warn?.('ffmpeg binary "%s" does not meet the minimum support requirements', ffmpeg.binary);
+        log?.warn?.('Stream video/recording from camera/doorbells will be unavailable');
+        if (
+          ffmpeg.version?.localeCompare(FFMPEG_VERSION, undefined, {
+            numeric: true,
+            sensitivity: 'case',
+            caseFirst: 'upper',
+          }) === -1
+        ) {
+          log?.warn?.('Minimum binary version is "%s", however the installed version is "%s"', FFMPEG_VERSION, ffmpeg.version);
+        }
+
+        if (ffmpeg.supportsDecoder('libspeex') === false) {
+          log?.warn?.('Missing speex decoder in ffmpeg');
+        }
+
+        if (ffmpeg.supportsEncoder('libfdk_aac') === false) {
+          log?.warn?.('Missing fdk_aac encoder in ffmpeg');
+        }
+
+        if (ffmpeg.supportsEncoder('libopus') === false) {
+          log?.warn?.('Missing opus encoder in ffmpeg');
+        }
+
+        if (ffmpeg.supportsEncoder('libx264') === false) {
+          log?.warn?.('Missing libx264 encoder in ffmpeg');
+        }
       }
 
-      if (ffmpeg.supportsDecoder('libspeex') === false) {
-        log?.warn?.('Missing speex decoder in ffmpeg');
-      }
+      if (options.ffmpeg.valid === true) {
+        log?.debug?.(
+          'FFmpeg: v%s "%s" (hwaccel: %s)',
+          ffmpeg.version,
+          ffmpeg.binary,
+          ffmpeg.supportsHardwareH264 === true ? ffmpeg.hardwareH264Codec : 'none',
+        );
 
-      if (ffmpeg.supportsEncoder('libfdk_aac') === false) {
-        log?.warn?.('Missing fdk_aac encoder in ffmpeg');
-      }
-
-      if (ffmpeg.supportsEncoder('libopus') === false) {
-        log?.warn?.('Missing opus encoder in ffmpeg');
-      }
-
-      if (ffmpeg.supportsEncoder('libx264') === false) {
-        log?.warn?.('Missing libx264 encoder in ffmpeg');
+        options.ffmpeg.binary = ffmpeg.binary;
+        options.ffmpeg.version = ffmpeg.version;
+        options.ffmpeg.hwaccel = ffmpeg.supportsHardwareH264 === true;
       }
     }
-
-    if (options.ffmpeg.valid === true) {
-      log?.debug?.(
-        'FFmpeg: v%s "%s" (hwaccel: %s)',
-        ffmpeg.version,
-        ffmpeg.binary,
-        ffmpeg.supportsHardwareH264 === true ? ffmpeg.hardwareH264Codec : 'none',
-      );
-
-      options.ffmpeg.binary = ffmpeg.binary;
-      options.ffmpeg.version = ffmpeg.version;
-      options.ffmpeg.hwaccel = ffmpeg.supportsHardwareH264 === true;
-    }
-  }
-
   }
 
   // Process per device configuration(s)
@@ -391,4 +390,3 @@ function persistMigratedConfig(config, log, api) {
 
 // Define exports
 export { processConfig };
-

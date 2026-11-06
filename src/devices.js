@@ -103,4 +103,3 @@ function getDeviceHKCategory(type) {
 
 // Define exports
 export { loadDeviceModules, getDeviceHKCategory };
-

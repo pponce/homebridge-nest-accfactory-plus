@@ -23,10 +23,14 @@ class ClimateUi extends HomebridgePluginUiServer {
         signal: AbortSignal.timeout(15000),
       });
       const data = await response.json();
-      if (!response.ok) { throw new RequestError(data.error || 'Climate request failed.', { status: response.status }); }
+      if (!response.ok) {
+        throw new RequestError(data.error || 'Climate request failed.', { status: response.status });
+      }
       return data;
     } catch (error) {
-      if (error instanceof RequestError) { throw error; }
+      if (error instanceof RequestError) {
+        throw error;
+      }
       throw new RequestError('Live dashboard unavailable. Start or restart the Nest child bridge, then refresh.', { status: 503 });
     }
   }

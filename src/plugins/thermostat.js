@@ -304,7 +304,9 @@ export default class NestThermostat extends HomeKitDevice {
 
   setupClimateSwitches(data = this.deviceData) {
     const ecoEnabled = data.ecoSwitch === true && typeof data.eco_mode === 'boolean';
-    if (!this.accessory?.getServiceById) { return; }
+    if (!this.accessory?.getServiceById) {
+      return;
+    }
     const existingEco = this.accessory.getServiceById(this.hap.Service.Switch, 'climate-eco');
     if (ecoEnabled) {
       this.ecoService = this.addService(this.hap.Service.Switch, this.deviceData.description + ' Eco', 'climate-eco');
@@ -326,7 +328,9 @@ export default class NestThermostat extends HomeKitDevice {
         clearTimeout(this.presetTimers.get(minutes));
         this.presetTimers.delete(minutes);
         this.presetServices.delete(minutes);
-        if (existing) { this.removeService(existing); }
+        if (existing) {
+          this.removeService(existing);
+        }
         continue;
       }
       const service = this.addService(this.hap.Service.Switch, this.deviceData.description + ' Fan ' + minutes + ' min', subtype);
@@ -335,7 +339,9 @@ export default class NestThermostat extends HomeKitDevice {
         initialValue: false,
         onGet: () => false,
         onSet: async (value) => {
-          if (!value) { return; }
+          if (!value) {
+            return;
+          }
           await this.runFanPreset(minutes);
           clearTimeout(this.presetTimers.get(minutes));
           const timer = setTimeout(() => {
@@ -354,16 +360,22 @@ export default class NestThermostat extends HomeKitDevice {
       throw new Error('Fan preset unavailable');
     }
     // Always write a new timer, including when the fan is already running.
-    await this.set({ uuid: this.deviceData.nest_google_device_uuid,
-      fan_state: true, fan_preset_duration: minutes * 60,
+    await this.set({
+      uuid: this.deviceData.nest_google_device_uuid,
+      fan_state: true,
+      fan_preset_duration: minutes * 60,
       fan_timer_speed: Math.max(1, this.deviceData.fan_timer_speed || 1),
     });
   }
 
   onRemove() {
-    for (const timer of this.presetTimers.values()) { clearTimeout(timer); }
+    for (const timer of this.presetTimers.values()) {
+      clearTimeout(timer);
+    }
     this.presetTimers.clear();
-    for (const service of this.presetServices.values()) { this.removeService(service); }
+    for (const service of this.presetServices.values()) {
+      this.removeService(service);
+    }
     this.presetServices.clear();
     this.removeService(this.ecoService);
     this.ecoService = undefined;
@@ -390,8 +402,10 @@ export default class NestThermostat extends HomeKitDevice {
       return;
     }
 
-    if (['has_fan', 'ecoSwitch', 'fanPresetSwitches'].some((key) => deviceData[key] !== this.deviceData[key]) ||
-      typeof deviceData.eco_mode !== typeof this.deviceData.eco_mode) {
+    if (
+      ['has_fan', 'ecoSwitch', 'fanPresetSwitches'].some((key) => deviceData[key] !== this.deviceData[key]) ||
+      typeof deviceData.eco_mode !== typeof this.deviceData.eco_mode
+    ) {
       this.setupClimateSwitches(deviceData);
     }
     if (this.ecoService && typeof deviceData.eco_mode === 'boolean') {
@@ -2118,8 +2132,7 @@ const THERMOSTAT_FIELD_MAP = {
       fields: ['eco_mode_state'],
       translate: ({ raw }) => {
         const mode = raw?.value?.eco_mode_state?.ecoMode;
-        return ['ECO_MODE_INACTIVE', 'ECO_MODE_MANUAL_ECO', 'ECO_MODE_AUTO_ECO'].includes(mode)
-          ? mode !== 'ECO_MODE_INACTIVE' : undefined;
+        return ['ECO_MODE_INACTIVE', 'ECO_MODE_MANUAL_ECO', 'ECO_MODE_AUTO_ECO'].includes(mode) ? mode !== 'ECO_MODE_INACTIVE' : undefined;
       },
     },
   },
@@ -2161,7 +2174,9 @@ const THERMOSTAT_FIELD_MAP = {
       translate: ({ raw }) =>
         raw?.value?.remote_comfort_sensing_settings?.activeRcsSelection?.activeRcsSensor !== undefined
           ? raw.value.remote_comfort_sensing_settings.activeRcsSelection.activeRcsSensor.resourceId
-          : raw?.value?.remote_comfort_sensing_settings?.activeRcsSelection?.rcsSourceType === 'RCS_SOURCE_TYPE_BACKPLATE' ? '' : undefined,
+          : raw?.value?.remote_comfort_sensing_settings?.activeRcsSelection?.rcsSourceType === 'RCS_SOURCE_TYPE_BACKPLATE'
+            ? ''
+            : undefined,
     },
   },
 
@@ -2403,4 +2418,3 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
   return devices;
 }
-

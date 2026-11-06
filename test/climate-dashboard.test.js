@@ -8,8 +8,11 @@ import { nextSetpoint, editableConfig } from '../homebridge-ui/public/climate-ut
 
 const start = Date.parse('2026-11-06T23:59:30Z');
 test('configuration editor preserves legacy credentials, overrides and unknown fields', () => {
-  const original = { google: { issuetoken: 'fixture-url', cookie: 'fixture-cookie' },
-    devices: { T: { fanDuration: '1h', custom: true } }, custom: { retain: true } };
+  const original = {
+    google: { issuetoken: 'fixture-url', cookie: 'fixture-cookie' },
+    devices: { T: { fanDuration: '1h', custom: true } },
+    custom: { retain: true },
+  };
   const config = editableConfig(original);
   assert.equal(config.accounts[0].issueToken, 'fixture-url');
   assert.deepEqual(config.devices, [{ serialNumber: 'T', fanDuration: '1h', custom: true }]);
@@ -23,7 +26,9 @@ test('dashboard closes its listener if endpoint persistence fails', async (t) =>
   const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'climate-start-'));
   t.after(() => fs.rm(storage, { recursive: true, force: true }));
   const dashboard = new ClimateDashboard(storage, { accounts: () => [], command: async () => {} });
-  dashboard.write = async () => { throw new Error('Fixture disk failure'); };
+  dashboard.write = async () => {
+    throw new Error('Fixture disk failure');
+  };
   await assert.rejects(dashboard.start(), /Fixture disk failure/);
   assert.equal(dashboard.server.listening, false);
   assert.equal(dashboard.timer, undefined);
@@ -52,7 +57,11 @@ test('runtime never fills downtime, offline intervals, or backward time', () => 
   assert.equal(restored.summary('T', start).length, 7);
 });
 test('next schedule uses specified timezone and wraps week, ignores invalid entries', () => {
-  const entries = [{ day: 0, time: 8 * 3600 }, { day: 6, time: 20 * 3600 }, { day: 9, time: 0 }];
+  const entries = [
+    { day: 0, time: 8 * 3600 },
+    { day: 6, time: 20 * 3600 },
+    { day: 9, time: 0 },
+  ];
   assert.equal(nextSetpoint(entries, 'America/Los_Angeles', new Date('2026-11-09T03:00Z')).day, 6);
   assert.equal(nextSetpoint(entries, 'America/Los_Angeles', new Date('2026-11-09T05:00Z')).day, 0);
   assert.equal(nextSetpoint(entries, 'invalid'), null);
@@ -62,17 +71,38 @@ async function fixture(t) {
   const storage = await fs.mkdtemp(path.join(os.tmpdir(), 'nest-climate-test-'));
   const requests = [];
   const accounts = [{ id: 'A', name: 'Home', authorised: true, observing: true }];
-  const dashboard = new ClimateDashboard(storage, { accounts: () => accounts,
-    command: async (...args) => requests.push(args), log: {} });
+  const dashboard = new ClimateDashboard(storage, { accounts: () => accounts, command: async (...args) => requests.push(args), log: {} });
   await dashboard.start();
-  t.after(async () => { await dashboard.stop(); await fs.rm(storage, { recursive: true, force: true }); });
-  dashboard.update('T', 'Thermostat', { nest_google_device_uuid: 'DEVICE_T', description: 'Living room',
-    online: true, hvac_state: 'heating', eco_mode: false, has_fan: true, linked_rcs_sensors: ['SENSOR'],
-    cookie: 'NEVER EXPORT', refreshToken: 'NEVER EXPORT', }, 'A');
+  t.after(async () => {
+    await dashboard.stop();
+    await fs.rm(storage, { recursive: true, force: true });
+  });
+  dashboard.update(
+    'T',
+    'Thermostat',
+    {
+      nest_google_device_uuid: 'DEVICE_T',
+      description: 'Living room',
+      online: true,
+      hvac_state: 'heating',
+      eco_mode: false,
+      has_fan: true,
+      linked_rcs_sensors: ['SENSOR'],
+      cookie: 'NEVER EXPORT',
+      refreshToken: 'NEVER EXPORT',
+    },
+    'A',
+  );
   const endpoint = JSON.parse(await fs.readFile(path.join(storage, 'nest-climate/endpoint.json')));
-  return { dashboard, requests, accounts, storage, endpoint,
+  return {
+    dashboard,
+    requests,
+    accounts,
+    storage,
+    endpoint,
     url: 'http://127.0.0.1:' + endpoint.port,
-    headers: { Authorization: 'Bearer ' + endpoint.token }, };
+    headers: { Authorization: 'Bearer ' + endpoint.token },
+  };
 }
 test('local dashboard rejects unauthenticated/browser-origin requests and redacts runtime fields', async (t) => {
   const f = await fixture(t);
@@ -92,7 +122,12 @@ test('commands validate association, capability and connectivity; failures remai
   const f = await fixture(t);
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'sensor', value: 'FOREIGN' }));
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'fan', value: 999 }));
-  for (const [action, value] of [['eco', true], ['sensor', 'SENSOR'], ['sensor', ''], ['fan', 30]]) {
+  for (const [action, value] of [
+    ['eco', true],
+    ['sensor', 'SENSOR'],
+    ['sensor', ''],
+    ['fan', 30],
+  ]) {
     assert.equal((await f.dashboard.control({ serial: 'T', action, value })).accepted, true);
   }
   assert.deepEqual(f.requests[1], ['DEVICE_T', { temperature_sensor: 'SENSOR' }]);
@@ -101,7 +136,9 @@ test('commands validate association, capability and connectivity; failures remai
   f.accounts[0].observing = false;
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'eco', value: true }));
   f.accounts[0].observing = true;
-  f.dashboard.command = async () => { throw new Error('secret token'); };
+  f.dashboard.command = async () => {
+    throw new Error('secret token');
+  };
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'eco', value: true }), (e) => !e.message.includes('secret'));
   assert.equal(f.dashboard.lastCommand.accepted, false);
   f.dashboard.invalidate('A');
@@ -109,14 +146,18 @@ test('commands validate association, capability and connectivity; failures remai
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'eco', value: true }));
   f.dashboard.update('T', 'Thermostat', { hvac_state: 'off' }, 'A');
   assert.equal(f.dashboard.devices.get('T').needsUpdate, false);
-  f.dashboard.remove('T'); assert.equal(f.dashboard.snapshot().devices.length, 0);
+  f.dashboard.remove('T');
+  assert.equal(f.dashboard.snapshot().devices.length, 0);
 });
 test('dashboard serializes commands and does not report acceptance early', async (t) => {
   const f = await fixture(t);
-  const pending = Promise.withResolvers(); f.dashboard.command = () => pending.promise;
+  const pending = Promise.withResolvers();
+  f.dashboard.command = () => pending.promise;
   const first = f.dashboard.control({ serial: 'T', action: 'eco', value: true });
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'eco', value: false }), /progress/);
-  assert.equal(f.dashboard.lastCommand, null); pending.resolve(); await first;
+  assert.equal(f.dashboard.lastCommand, null);
+  pending.resolve();
+  await first;
 });
 test('saved history survives restart without counting the stopped interval', async (t) => {
   const f = await fixture(t);
