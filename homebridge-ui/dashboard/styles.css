@@ -5,16 +5,16 @@
   --surface: #fff;
   --surface-soft: #faf9fc;
   --text: #292331;
-  --muted: #777080;
+  --muted: #6d6575;
   --line: #e9e5ed;
   --accent: #77618e;
   --accent-deep: #624b7a;
   --accent-wash: #efebf4;
   --green: #457765;
   --green-wash: #edf5f0;
-  --orange: #a56a38;
+  --orange: #945c2c;
   --orange-wash: #fbf0e5;
-  --blue: #5c86a5;
+  --blue: #4b718e;
   --blue-wash: #edf3f8;
   --red: #a44251;
   --red-wash: #f9edf0;
@@ -98,9 +98,9 @@ svg { display: block; }
 .draft-chip .icon { width: 15px; height: 15px; }
 .overview-top { display: grid; grid-template-columns: 1.7fr 1fr; gap: 22px; margin-bottom: 35px; }
 .welcome-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: linear-gradient(110deg, #ece7f2, #f2eef6 70%, #eee8f3); border: 1px solid #e6dfed; padding: 31px 33px; border-radius: var(--radius); }
-.welcome-card .eyebrow { color: #7c688f; font-size: 9px; }
+.welcome-card .eyebrow { color: #74617f; font-size: 9px; }
 .welcome-card h2 { font-size: clamp(20px, 2.1vw, 27px); max-width: 330px; margin-bottom: 10px; color: #493954; }
-.welcome-card p { color: #82708e; font-size: 12px; margin: 0; max-width: 300px; }
+.welcome-card p { color: #74617f; font-size: 12px; margin: 0; max-width: 300px; }
 .home-mark { opacity: .78; flex-shrink: 0; }
 .home-mark img { width: 110px; height: 110px; border-radius: 27px; mix-blend-mode: multiply; }
 .quick-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 23px 26px; }
@@ -295,10 +295,10 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
 .login-intro { background: #eee8f4; display: flex; flex-direction: column; padding: 47px clamp(35px, 6vw, 105px); }
 .login-intro .brand { color: #493954; }
 .login-copy { margin: auto 0; padding: 60px 0; }
-.login-copy .eyebrow { color: #8c759c; }
+.login-copy .eyebrow { color: #74617f; }
 .login-copy h1 { font-size: clamp(34px, 4vw, 60px); letter-spacing: -2px; color: #53415f; line-height: 1.14; font-weight: 520; }
-.login-copy p { max-width: 340px; font-size: 14px; line-height: 1.8; color: #897895; margin-top: 24px; }
-.login-footer { color: #96859f; font-size: 10px; }
+.login-copy p { max-width: 340px; font-size: 14px; line-height: 1.8; color: #74617f; margin-top: 24px; }
+.login-footer { color: #74617f; font-size: 10px; }
 .login-main { display: flex; align-items: center; justify-content: center; padding: 40px; }
 .login-card { width: 100%; max-width: 340px; }
 .login-card h2 { font-size: 35px; font-weight: 550; letter-spacing: -1px; margin-bottom: 12px; }
@@ -339,6 +339,7 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
 }
 @media (max-width: 760px) {
   .workspace { margin-left: 0; padding: 26px 20px 155px; }
+  .workspace:has(#save-bar:not([hidden])) { padding-bottom: calc(220px + env(safe-area-inset-bottom)); }
   .sidebar { width: 100%; inset: auto 0 0; height: auto; padding: 0 12px env(safe-area-inset-bottom); border-right: 0; border-top: 1px solid var(--line); }
   .sidebar > .brand, .nav-caption, .sidebar-note, .sidebar-footer { display: none; }
   .navigation { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
@@ -352,17 +353,18 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .page-header .eyebrow { font-size: 8px; letter-spacing: 1.1px; }
   .header-actions { gap: 8px; }
   .header-actions .status-pill { font-size: 8px; padding: 5px 7px; }
-  .header-actions .icon-button { height: 34px; width: 34px; }
-  .overview-top { grid-template-columns: 1fr; gap: 13px; margin-bottom: 25px; }
-  .welcome-card { padding: 26px; min-height: 157px; }
-  .welcome-card h2 { font-size: 25px; max-width: 290px; }
+  .icon-button, .icon-button.outlined, .header-actions .icon-button, .rule-collection .icon-button { height: 44px; width: 44px; }
+  .overview-top { grid-template-columns: 1fr; gap: 12px; margin-bottom: 22px; }
+  .welcome-card { padding: 16px 18px; gap: 14px; }
+  .welcome-card .eyebrow { display: none; }
+  .welcome-card h2 { font-size: 18px; max-width: none; margin-bottom: 5px; }
+  .welcome-card p { font-size: 11px; }
   .home-mark { display: block; }
-  .home-mark img { height: 88px; width: 88px; border-radius: 22px; }
-  .quick-card { padding: 17px 22px; }
-  .quick-card .card-label { display: none; }
-  .quick-card h2 { font-size: 15px; margin-top: 0; }
-  .quick-card .draft-chip { display: inline-flex; margin: 0 0 0 12px; }
-  .quick-card p { font-size: 11px; margin-bottom: 8px; }
+  .home-mark img { height: 46px; width: 46px; border-radius: 12px; }
+  .quick-card { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 0 2px; border: 0; border-radius: 0; background: transparent; }
+  .quick-card .card-label, .quick-card h2, .quick-card p { display: none; }
+  .quick-card .text-link { min-height: 44px; }
+  .quick-card .draft-chip { display: inline-flex; margin: 0; }
   .section-heading { margin-top: 25px; gap: 12px; align-items: flex-start; }
   .section-heading h2 { font-size: 17px; }
   .section-heading p { font-size: 11px; }
@@ -377,6 +379,7 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .card-top { flex-wrap: wrap; }
   .temperature-target strong { font-size: 17px; }
   .control-row { flex-wrap: wrap; }
+  .eco-button, .timer-buttons button, .source-control .button, .source-control select, .save-actions .button { min-height: 44px; }
   .compact-label { font-size: 0; gap: 0; }
   .compact-label select { font-size: 10px; max-width: 140px; }
   .panel { padding: 20px; }
@@ -424,12 +427,6 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .page-header h1 { font-size: 25px; }
   .header-actions .status-pill { font-size: 0; padding: 8px; gap: 0; }
   .header-actions .status-pill::before { width: 6px; height: 6px; }
-  .welcome-card { padding: 23px; gap: 8px; }
-  .welcome-card h2 { font-size: 22px; }
-  .home-mark img { width: 70px; height: 70px; border-radius: 19px; }
-  .welcome-card p { font-size: 11px; }
-  .quick-card { padding-inline: 20px; }
-  .quick-card .draft-chip { margin-top: 10px; margin-left: 0; display: table; }
   .thermostat-grid { grid-template-columns: 1fr; }
   .thermostat-main { padding: 22px; }
   .thermostat-controls { padding: 15px 22px; }

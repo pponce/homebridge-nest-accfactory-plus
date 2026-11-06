@@ -99,16 +99,52 @@ try {
   const errors = []; const cspErrors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error' && /Content Security Policy|Refused to/.test(message.text())) cspErrors.push(message.text()); });
+  const capture = async (name) => {
+    await page.waitForFunction(() => document.getElementById('toast').hidden);
+    await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
+    await page.waitForFunction(() => window.scrollY === 0);
+    await page.screenshot({ path: path.join(output, name), fullPage: true });
+  };
+  const checkTextContrast = async () => {
+    const results = await page.evaluate(() => {
+      const luminance = (color) => color.match(/[\d.]+/g).slice(0, 3).map(Number).map((channel) => {
+        const value = channel / 255;
+        return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4;
+      }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+      const contrast = (text, background) => {
+        const first = luminance(text); const second = luminance(background);
+        return (Math.max(first, second) + .05) / (Math.min(first, second) + .05);
+      };
+      const checks = [];
+      for (const status of ['neutral', 'good', 'heating', 'warn', 'cooling']) {
+        const badge = document.createElement('span'); badge.className = 'status-pill ' + status; document.body.append(badge);
+        const style = getComputedStyle(badge);
+        checks.push({ name: status + ' status', ratio: contrast(style.color, style.backgroundColor) }); badge.remove();
+      }
+      for (const [selector, backgroundSelector] of [
+        ['.welcome-card p', '.welcome-card'], ['.welcome-card .eyebrow', '.welcome-card'],
+        ['.login-copy p', '.login-intro'], ['.login-copy .eyebrow', '.login-intro'], ['.login-footer', '.login-intro'],
+      ]) {
+        const text = getComputedStyle(document.querySelector(selector));
+        const background = getComputedStyle(document.querySelector(backgroundSelector));
+        const colors = background.backgroundImage.match(/rgba?\([^)]+\)/g) || [background.backgroundColor];
+        checks.push({ name: selector, ratio: Math.min(...colors.map((color) => contrast(text.color, color))) });
+      }
+      return checks;
+    });
+    for (const result of results) assert.ok(result.ratio >= 4.5, result.name + ' text contrast must reach 4.5:1; received ' + result.ratio.toFixed(2));
+  };
   const base = 'http://127.0.0.1:' + server.address().port;
   await page.goto(base);
   await page.getByRole('heading', { name: 'Welcome home.' }).waitFor();
-  await page.screenshot({ path: path.join(output, 'login-desktop.png'), fullPage: true });
+  await capture('login-desktop.png');
   await page.getByLabel('Username', { exact: true }).fill('admin');
   await page.getByLabel('Password', { exact: true }).fill('fixture-password');
   await page.getByRole('button', { name: 'Sign in', exact: false }).click();
   await page.getByText('Connected', { exact: true }).waitFor();
   await page.getByRole('heading', { name: 'Living room', exact: true }).waitFor();
-  await page.screenshot({ path: path.join(output, 'overview-desktop.png'), fullPage: true });
+  await checkTextContrast();
+  await capture('overview-desktop.png');
   assert.equal(await page.locator('#password').inputValue(), '');
   assert.equal(await page.getByLabel('Turn Eco on for Living room').isEnabled(), true);
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
@@ -118,7 +154,7 @@ try {
   await page.getByLabel('Desired room temperature (°C)', { exact: true }).fill('22');
   await page.getByLabel('Office sensor', { exact: false }).check();
   await page.getByText('2 sources · desired 22.0°C.', { exact: false }).waitFor();
-  await page.screenshot({ path: path.join(output, 'rules-desktop.png'), fullPage: true });
+  await capture('rules-desktop.png');
   assert.equal(commands.length, 0, 'Rule previews must never call live commands');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.getByText('Saved. Your rule drafts remain inactive.', { exact: true }).waitFor();
@@ -161,12 +197,37 @@ try {
   await page.setViewportSize({ width: 360, height: 800 });
   for (const [name, pageName] of [['Overview', 'overview'], ['Sensors & fans', 'sources'], ['Climate rules', 'rules'], ['Settings', 'settings']]) {
     await page.getByRole('link', { name, exact: pageName !== 'rules' }).click();
+    if (pageName === 'overview') {
+      const firstControl = await page.getByLabel('Turn Eco on for Living room').boundingBox();
+      const navigation = await page.locator('.sidebar').boundingBox();
+      assert.ok(firstControl.y + firstControl.height <= navigation.y, 'First thermostat controls must be visible without scrolling on a phone');
+    }
+    if (pageName === 'rules') {
+      await page.getByLabel('Rule name', { exact: true }).fill('Cooler evenings upstairs');
+      assert.equal(await page.getByRole('button', { name: 'Save changes', exact: true }).isVisible(), true);
+    }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, pageName + ' must fit at 360px');
-    await page.screenshot({ path: path.join(output, pageName + '-mobile.png'), fullPage: true });
+    const undersizedTargets = await page.locator('button.icon-button').evaluateAll((buttons) => buttons.filter((button) => button.getClientRects().length && getComputedStyle(button).visibility !== 'hidden').map((button) => ({ name: button.getAttribute('aria-label'), width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })).filter((button) => button.width < 44 || button.height < 44));
+    assert.deepEqual(undersizedTargets, [], pageName + ' phone icon buttons must have 44px hit targets');
+    const bottomContentVisible = await page.evaluate(() => {
+      document.activeElement?.blur(); window.scrollTo(0, document.documentElement.scrollHeight);
+      const bottom = document.querySelector('[data-section]:not([hidden])').getBoundingClientRect().bottom;
+      const navigationTop = document.querySelector('.sidebar').getBoundingClientRect().top;
+      const saveBar = document.getElementById('save-bar');
+      const unobscuredBottom = saveBar.hidden ? navigationTop : Math.min(navigationTop, saveBar.getBoundingClientRect().top);
+      return bottom <= unobscuredBottom;
+    });
+    assert.equal(bottomContentVisible, true, pageName + ' final content must clear navigation and the save bar');
+    await capture(pageName + '-mobile.png');
+    if (pageName === 'rules') {
+      await page.getByRole('button', { name: 'Discard', exact: true }).click();
+      await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+    }
   }
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await page.screenshot({ path: path.join(output, 'overview-mobile-dark.png'), fullPage: true });
+  await checkTextContrast();
+  await capture('overview-mobile-dark.png');
   const manifest = await (await page.request.get(base + '/manifest.webmanifest')).json();
   assert.equal(manifest.display, 'standalone');
   for (const asset of ['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png']) assert.equal((await page.request.get(base + '/' + asset)).status(), 200);
@@ -175,7 +236,7 @@ try {
   assert.equal(apple.readUInt32BE(20), 180);
   assert.deepEqual(errors, []);
   assert.deepEqual(cspErrors, []);
-  console.log('PASS standalone dashboard: login, live controls, draft-only previews, durable config payload, preserved custom durations, revision conflicts, offline controls, 360px layout, dark mode, CSP, iOS icons');
+  console.log('PASS standalone dashboard: login, live controls, draft-only previews, durable config payload, preserved custom durations, revision conflicts, offline controls, 360px layout, mobile save workflow, text contrast, phone hit targets, dark mode, CSP, iOS icons');
   console.log('Screenshots:', output);
 } finally {
   await browser?.close();

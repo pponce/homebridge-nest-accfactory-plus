@@ -42,15 +42,20 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Check browser behavior and responsive layout
+      - name: Prepare browser checks
         shell: bash
         run: |
           npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
-          export PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright"
-          export CHROMIUM_PATH="$(command -v google-chrome)"
-          export REVIEW_OUTPUT_DIR="$RUNNER_TEMP/climate-dashboard-review"
-          node maintenance/checks/dashboard-browser.mjs
-          node maintenance/checks/dashboard-web-browser.mjs
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/climate-browser/node_modules/playwright" >> "$GITHUB_ENV"
+          echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          echo "REVIEW_OUTPUT_DIR=$RUNNER_TEMP/climate-dashboard-review" >> "$GITHUB_ENV"
+      - name: Check browser behavior and responsive layout
+        id: browser
+        continue-on-error: true
+        run: node maintenance/checks/run-dashboard-browser.mjs
+      - name: "${{ steps.browser.outputs.detail }}"
+        if: always() && steps.browser.outcome != 'skipped'
+        run: test '${{ steps.browser.outcome }}' = 'success'
       - uses: actions/upload-artifact@v4
         if: always()
         with:

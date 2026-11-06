@@ -11,6 +11,7 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 - Repository: `pponce/homebridge-nest-climate-cntrl`.
 - Feature branch: `feature/standalone-dashboard`, implementation based on main `32abeaf07fca58fc30512f2551457cd18d143752`.
 - Draft pull request: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/13.
+- Fresh-install documentation from main `3552339eacf7a15172d2a5ee354a5fb2875f3511` is merged into the feature. Nest Accfactory/Plus users need a fresh child bridge and Apple Home setup; existing Climate beta installations retain their bridge.
 - Migration work proceeds independently on `main`. Preserve those commits and concurrent README edits when preparing the feature tree.
 - Local workspace is a source snapshot with synthetic Git history. Do not push local history or replace remote submodule gitlinks.
 - No live installation changes, backups or npm publication are part of this work.
@@ -36,6 +37,8 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 - Successful browser CI publishes fixture-only screenshots and a source-commit report to `review/standalone-dashboard`. Write permissions exist only in that push-only visual-review job; it never updates source branches.
 - Feature commit `a91381114c9b6c8a36a859a055d7fbcf8156a99b` passed full Node 24 / Homebridge 2.5.0 checks, production tarball installation, embedded/standalone browser tests and screenshot publication in run `42306490060`.
 - GitHub's text-only connector cannot decode PNG blobs. Review publication includes base64 text companions for retrieving exact PNG bytes for visual inspection; all screenshots contain fixture data only.
+- Follow-up `afe9b1ee454a0a0ee60b681f4404dfa1756b8d94` also passed all six project matrices and standalone/package/browser workflows. Eight screenshots were retrieved and visually inspected in `maintenance/review-dashboard/`.
+- Visual review prompted stronger small-text contrast, 44px mobile controls, a compact mobile overview, a shorter fan-condition label and clean screenshot captures. Final browser assertions cover these changes and fixed navigation/save-bar clearance. `run-dashboard-browser.mjs` exposes fixture failure details in workflow metadata.
 
 ## Next steps
 

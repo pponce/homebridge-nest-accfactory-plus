@@ -11,7 +11,7 @@ This file tracks maintainer planning for the thermostat and heating direction of
 | Thermostat dashboard | Status, schedules, runtime and diagnostics inside the plugin's Homebridge settings. Verify completion against the active implementation branch. |
 | Native thermostat controls | Eco controls, a “Temperature controlled by” selector for native sources, and optional HVAC fan-timer controls disabled by default. Verify completion against the active implementation branch. |
 | Room and ceiling fans | Select accessible Homebridge fans and coordinate them with heating/cooling. Keep room fans distinct from the thermostat's HVAC blower. Detailed behavior remains to be designed. |
-| Coexistence and migration | Alias `NestClimateCntrl`; no weather; new Climate UUIDs for new devices, cache-based legacy UUID reuse for migration where feasible. Validate the installed-version transition before rollout. |
+| Coexistence and migration | Alias `NestClimateCntrl`; no weather; fresh child-bridge cutover from Accfactory/Plus, new pairing and rebuilt Apple Home assignments. Existing Climate installations update normally. |
 | Combined Climate Home/Away sensor | **Approved for the feature plan; implementation pending.** Optional occupancy sensor combines Google home status with a searchable Homebridge sensor picker and configurable presence rules. |
 | Mixed room-sensor control | **Read-only discovery and single/equal-average preview implemented.** Software heating control, weighting and schedules remain pending. Combine genuine Nest sensors and other accessible Homebridge temperature sensors in one group. |
 
@@ -22,8 +22,8 @@ This file tracks maintainer planning for the thermostat and heating direction of
 - The climate plugin will not expose weather accessories. Discovery, ingestion fetches and UI/schema options are removed. Verify owned cached weather cleanup during migration; legacy source remains pending distribution cleanup.
 - Target Homebridge platform alias: **`NestClimateCntrl`**.
 - Upstream may run alongside this plugin for cameras and doorbells. Keep each physical or virtual accessory assigned to one plugin, including Nest Home/Away and Protect when enabled.
-- Prefer separate child bridges for new dual-plugin setups. For an existing installation, preserve its current bridge pairing/username during the alias migration; moving accessories to a different bridge is a separate operation.
-- Guide the maintainer through the existing-install migration after the feature work and migration validation are ready. No live installation change or npm publication is authorized by this planning update.
+- Prefer separate child bridges for new dual-plugin setups. Accfactory/Plus users make a fresh cutover with a new Climate child bridge, pairing and Apple Home assignments.
+- Guide the maintainer through the fresh cutover described in `MIGRATION.md`. No live change has been performed. Warn older-package users in setup and the next beta release notes; no new npm publication is authorized yet.
 
 ### Identity contract
 
@@ -35,9 +35,9 @@ api.hap.uuid.generate(identityNamespace + '_' + serialNumber.toUpperCase())
 
 It also supports equivalent runtime UUID APIs for the other supported backends. Upstream uses its developer-chosen plugin identifier, `homebridge-nest-accfactory`, as that prefix. It is not a Google-assigned namespace.
 
-Latest product decision: preserving existing UUIDs is useful for migration but is not a permanent constraint on the new plugin. `IDENTITY_NAMESPACE = 'homebridge-nest-climate-cntrl'` applies to new devices. `LEGACY_IDENTITY_NAMESPACE = 'homebridge-nest-accfactory'` applies only when that matching UUID was restored to this platform. Cache restoration is recorded per runtime API; it does not inspect or claim another plugin's accessories. If both expected UUIDs exist, the current Climate identity takes precedence. Package/display renames do not change either fixed namespace.
+Latest product decision: fresh cutover from Accfactory/Plus is the supported setup. Do not run the offline ownership migration helper. `IDENTITY_NAMESPACE = 'homebridge-nest-climate-cntrl'` applies to new devices. `LEGACY_IDENTITY_NAMESPACE = 'homebridge-nest-accfactory'` applies only when that matching UUID was restored to this platform. Cache restoration is recorded per runtime API; it does not inspect or claim another plugin's accessories. If both expected UUIDs exist, the current Climate identity takes precedence. Package/display renames do not change either fixed namespace.
 
-Migrated legacy UUIDs remain stable on subsequent cache restoration. Newly added devices use the Climate namespace even in migrated installations. Publishing the same device from both plugins still creates duplicate ownership; use device exclusions regardless of namespace. If preservation cannot be supported for an installation, a guided transition may recreate affected accessories, with the impact made explicit.
+Migrated legacy UUIDs remain stable on subsequent cache restoration. Newly added devices use the Climate namespace even in migrated installations. Publishing the same device from both plugins still creates duplicate ownership; use device exclusions regardless of namespace. The public setup requires new pairing and rebuilt Apple Home assignments for Accfactory/Plus users. Existing Climate installations retain their identities.
 
 New software-generated climate-presence accessories need a stable purpose-specific identity, distinct from the existing Google Home/Away indicator.
 
@@ -47,7 +47,7 @@ Update platform registration, schema alias, dashboard/config selection, examples
 
 Homebridge caches both plugin and platform associations. UUID preservation alone does not establish safe alias migration. Design and test the transition before rollout, including old cached platform associations, restarts, supported Homebridge versions and both plugins installed. Any compatibility alias must not reintroduce ambiguous `NestAccfactory` routing with upstream installed.
 
-Prefer preserving bridge identity and accessory/service identities during migration; avoid blanket cache clearing or removal/re-pairing as the default procedure. Verify existing thermostat rooms, scenes and automations on hardware before claiming those survive. UUID reuse is tested in the device/cache lifecycle; the platform-association migration is still pending.
+Use a new Climate child bridge for the cutover. Keep the existing compatibility adapter for installations whose identities were already restored, but do not offer cache ownership rewriting in public setup. Remove only old Nest entries; never clear unrelated caches or reset a shared bridge. The experimental offline helper passed software tests but is not the selected migration path.
 
 ## Combined Climate Home/Away sensor — approved feature scope
 
@@ -207,8 +207,8 @@ Use deterministic control tests and a read-only preview before a hardware trial.
 - **Objective:** develop Nest Climate Cntrl with mixed room sensors, room-fan coordination and safe coexistence with upstream camera/doorbell support.
 - **Repository/branch:** `pponce/homebridge-nest-climate-cntrl`, `feature/thermostat-dashboard`.
 - **Planning files:** `maintenance/FEATURE_PLAN.md` and `maintenance/CLIMATE_HANDOFF.md`.
-- **Decisions recorded:** no weather; platform alias `NestClimateCntrl`; new Climate namespace for new devices, legacy cache identity reuse for migration where feasible; guide the installed-version migration after feature completion and validation.
+- **Decisions recorded:** no weather; platform alias `NestClimateCntrl`; new Climate namespace for new devices; fresh cutover from Accfactory/Plus with new pairing and rebuilt Apple Home assignments; existing Climate installations retain their bridge.
 - **Approved feature recorded:** optional combined Climate Home/Away occupancy sensor using Google status plus user-selected Homebridge motion/occupancy sensors, a searchable main/child-bridge picker, configurable rules/holds/Away delay, preview and manual overrides. Google whole-home writes remain outside the initial scope.
 - **Existing implementation/testing:** see `maintenance/CLIMATE_HANDOFF.md`. Alias, weather discovery removal, configured main/child-bridge temperature/fan/presence discovery, mixed temperature preview and cache-aware identity selection are implemented. Automatic sensor, room-fan and combined-presence control remain pending.
-- **Open decisions:** source-control commands and hardware verification; source health/measurement-age policy; manual override/schedule precedence; climate action defaults; Apple Home target/presence representation; migration of cached platform associations.
-- **Next steps:** validate real read-only sensor discovery and native physical-source semantics; develop the presence-rule preview and fan behavior design; test alias/cache migration before rollout. Enable thermostat compensation only after its source, manual-override and recovery behavior are verified.
+- **Open decisions:** source-control commands and hardware verification; source health/measurement-age policy; manual override/schedule precedence; climate action defaults; Apple Home target/presence representation.
+- **Next steps:** validate real read-only sensor discovery and native physical-source semantics; develop the presence-rule preview and fan behavior design; guide the fresh cutover and verify normal live thermostat behavior. Enable thermostat compensation only after its source, manual-override and recovery behavior are verified.

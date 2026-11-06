@@ -2,8 +2,9 @@
 
 - Add a custom settings dashboard with thermostat status, native sensor selection, schedules, runtime coverage and diagnostics.
 - Add optional Eco and momentary HVAC fan-preset switches, disabled by default.
-- Focus discovery on thermostats, sensors and heating; retain Protect, Home/Away and weather support.
-- Preserve package and accessory identity during development.
+- Focus discovery on thermostats, sensors and Heat Links; retain Protect and Nest Home/Away. Camera, doorbell, floodlight-camera, Yale lock and weather exposure are removed; use upstream Nest Accfactory for those capabilities.
+- Change the package to `homebridge-nest-climate-cntrl` and platform to `NestClimateCntrl`. Moving from Nest Accfactory or Plus requires a fresh child bridge, Apple Home pairing and recreated accessory assignments; see [cutover instructions](MIGRATION.md). Existing Climate installations can update normally.
+- Retain compatible existing legacy Google refresh-token authentication.
 
 # Nest Accfactory Plus changelog
 

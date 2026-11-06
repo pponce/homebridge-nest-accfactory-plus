@@ -453,7 +453,7 @@ function renderRuleEditor() {
   } else {
     const outputs = editorSection(host, '01', 'Choose your room fans', 'These are ceiling or room fans exposed by Homebridge. Nest’s HVAC blower has its own controls on Overview.'); picker(outputs, rule, 'targetIds', ['fan']);
     const behavior = editorSection(host, '02', 'Plan when the fans would run', 'Use temperature or the heating/cooling activity reported by a Nest thermostat.');
-    inputField(behavior, 'Run condition', rule.action || 'temperature', (value) => { rule.action = value; renderRuleEditor(); }, { choices: [['temperature', 'Selected room temperature is above a threshold'], ['heating', 'Thermostat reports heating'], ['cooling', 'Thermostat reports cooling']] });
+    inputField(behavior, 'Run condition', rule.action || 'temperature', (value) => { rule.action = value; renderRuleEditor(); }, { choices: [['temperature', 'Temperature above threshold'], ['heating', 'Thermostat is heating'], ['cooling', 'Thermostat is cooling']] });
     if (rule.action === 'heating' || rule.action === 'cooling') thermostatSelect(behavior, rule);
     else { const fields = el('div', undefined, 'form-grid'); inputField(fields, 'Above temperature (°C)', rule.threshold ?? 24, (value) => { rule.threshold = value; }, { type: 'number', min: 5, max: 35, step: .5 }); inputField(fields, 'Turn-off gap (°C)', rule.hysteresis ?? 1, (value) => { rule.hysteresis = value; }, { type: 'number', min: .1, max: 10, step: .1 }); behavior.append(fields); picker(behavior, rule, 'sourceIds', ['temperature']); }
   }

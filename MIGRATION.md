@@ -1,51 +1,42 @@
-# Moving to Nest Climate Cntrl beta
+# Moving to Nest Climate Cntrl
 
-**The Homebridge platform name changes from `NestAccfactory` to `NestClimateCntrl`.** The npm package changes from `homebridge-nest-accfactory-plus` to `homebridge-nest-climate-cntrl`.
+**Moving from Nest Accfactory or Nest Accfactory Plus requires a fresh installation and Apple Home pairing.** This is a hard cutover: existing accessory room assignments, scenes and automations do not transfer. Recreate the affected setup using the new accessories.
 
-This is a separate beta package, not an automatic update of the old package. Installing it does not migrate your existing configuration or Apple Home accessories.
+The package is `homebridge-nest-climate-cntrl` and the Homebridge platform is **`NestClimateCntrl`**. Changing the old `NestAccfactory` platform name alone is not a supported upgrade.
 
-## Before changing an existing installation
+Already using `NestClimateCntrl`, including 0.5.0-beta.1? Keep your existing Climate child bridge and update normally. This cutover applies to the older Nest Accfactory packages; it is not a reset required for every beta.
 
-1. Record the installed plugin version and whether it uses the main bridge or a child bridge.
-2. Run the read-only migration preflight supplied with the [beta release](https://github.com/pponce/homebridge-nest-climate-cntrl/releases). It reports configuration/cache structure without exporting credentials, pairing keys, device names or serial numbers.
-3. Choose whether to keep the current Apple Home accessories or create a separate beta bridge.
-4. Create a Homebridge backup before applying the chosen migration.
+## Before starting
 
-**Do not change only the platform field and restart.** Homebridge stores plugin and platform ownership in its accessory cache. An unhandled change can orphan accessories and affect room assignments, scenes and automations.
+- Keep your working account credentials available privately before uninstalling the old plugin. Compatible existing legacy Google refresh tokens remain supported; a new token cannot be issued by this plugin.
+- Note the rooms, scenes and automations that use the old Nest accessories so you can recreate their assignments.
+- Identify the old Nest child bridge. If Nest shares the main bridge with other plugins, remove only its accessories during cleanup; do not remove or reset the shared bridge.
+- This is a public beta. Verify normal thermostat operation before enabling optional controls.
 
-## Option A: preserve existing Apple Home accessories
+## Fresh cutover
 
-An offline migration helper is available for **`homebridge-nest-accfactory-plus` on a dedicated Linux `hb-service` child bridge**. It updates plugin/platform ownership while keeping credentials, the bridge identity, pairing records, accessory UUIDs and service/characteristic IDs. Other layouts need separate review.
+1. Disable the old Nest plugin or its dedicated child bridge in Homebridge. Do this before the new plugin starts controlling the same devices.
+2. Install **`homebridge-nest-climate-cntrl@beta`** through Homebridge's plugin installer.
+3. Open **Plugins → Nest Climate Cntrl → Settings** and configure your account using the same working credentials. Choose the devices and optional features you want. Use [account setup](AUTHENTICATION.md) for authentication guidance.
+4. Enable a **new child bridge** through Homebridge's UI. Let Homebridge generate its identity; do not copy the old bridge's username or pairing data.
+5. Save and restart, then pair the new child bridge with Apple Home using its QR code.
+6. Check device discovery, temperatures, heating/cooling modes and normal manual control. Assign the new accessories to rooms and rebuild affected scenes and automations.
+7. Remove the old **dedicated Nest bridge** from Apple Home after the new devices work. Uninstall the old plugin and remove its unused configuration in Homebridge. Use Homebridge's accessory cleanup controls for any remaining old Nest entries, selecting only those entries.
 
-The helper has passed real Homebridge cache-restoration tests on 1.11.4, 2.4.0 and 2.5.0, including a second restart. Apple Home room assignments, scenes and live Nest operation still require verification on your equipment.
+For an `hb-service` installation, use **stop → add the plugin → start**. Keep the old Nest platform disabled while setting up the new one. Do not clear Homebridge's entire accessory cache or reset unrelated bridges.
 
-Before using it, review the preflight inventory and the exact accessory count. The helper refuses unsupported devices, mixed ownership, missing identifiers, changed configuration or an unverified beta package. It creates a private rollback snapshot in the existing checkout under `maintenance/migration/backups`, then follows **stop → snapshot → add the exact beta → migrate → start**. The original package stays installed for rollback.
+## Keep Accessories Of Uninstalled Plugins
 
-See [the migration runner](maintenance/migrate-to-beta.sh) and [the offline migration utility](maintenance/migrate-child-bridge.mjs). The runner takes the reviewed accessory count as its argument. Snapshot files contain credentials and pairing material: keep them private on the Homebridge host. Share only the generated redacted migration report.
-
-Retain the existing bridge username, pairing and service identities. Do not clear the shared accessory cache or remove the bridge from Apple Home to attempt a preserving migration.
-
-## Option B: separate beta child bridge
-
-This is the supported starting point for testing as a new installation. It creates **new Apple Home accessories**; room assignments, scenes and automations are not transferred.
-
-1. In Homebridge, disable the old Nest child bridge before allowing the beta to control the same devices. Keep its configuration and Apple Home pairing for rollback. If Nest runs on the main bridge, review that layout before changing it.
-2. Install `homebridge-nest-climate-cntrl@beta` using the Homebridge plugin installer.
-3. Open its settings and configure the same account credentials privately. Set only the climate devices it should own.
-4. Enable a **new child bridge** through Homebridge's UI. Use its newly generated identity and pair that bridge with Apple Home.
-5. Confirm temperature readings, modes and normal manual control before enabling optional Eco or HVAC fan switches.
-6. Assign the new accessories to rooms and rebuild any desired scenes/automations.
-
-For an `hb-service` installation, the installation sequence is **stop → add the plugin → start**. The release helper performs inspection and npm publication only; it does not install the beta or edit live configuration.
-
-To roll back a separate-bridge trial, disable the beta child bridge, then re-enable the original child bridge. Do not leave both controlling the same thermostat.
+This setting may stay enabled. It retains old cached accessories when a plugin is uninstalled; it does not transfer them to `NestClimateCntrl` or make them work with the new plugin. Remove the old Nest bridge and any remaining old Nest cached entries as described above. Turning this setting off globally is not required.
 
 ## Running alongside upstream
 
-Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) for cameras, doorbells, floodlight cameras, Yale locks or weather. Give every physical or virtual accessory one owner: exclude climate devices managed here from upstream, and avoid duplicate Protect or Home/Away accessories. Separate child bridges are recommended for a new dual-plugin installation.
+Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) for cameras, doorbells, floodlight cameras, Yale locks or weather. Keep it installed if you need those capabilities, and exclude the climate devices managed here.
 
-## Identity and preview behavior
+Give each physical or virtual accessory one owner, including Protect and Nest Home/Away. Separate child bridges are recommended. When upstream retains other devices on its bridge, keep that bridge paired and remove only the accessories transferred to Climate Cntrl.
 
-New accessories use the stable `homebridge-nest-climate-cntrl` UUID namespace. A matching legacy UUID restored to this platform retains its `homebridge-nest-accfactory` identity. Without a restored cache entry, the device is treated as new.
+## What carries forward
 
-Mixed Google/non-Google temperature groups, room-fan discovery and presence-sensor discovery are read-only previews. They do not enable automatic temperature compensation, room-fan actions or combined Home/Away rules.
+Working account credentials can be reused, including compatible existing legacy Google refresh tokens. Newly paired Climate accessories use this plugin's own stable identities. Rooms, scenes and automations associated with the old bridge need to be recreated.
+
+Mixed Google/non-Google temperature groups, room-fan discovery and presence-sensor discovery remain previews. Automatic temperature compensation, room-fan actions and combined Home/Away execution are not enabled.
