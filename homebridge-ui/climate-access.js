@@ -109,6 +109,7 @@ export class ClimateAccess {
         });
         continue;
       }
+      const bridgeSources = [];
       try {
         const payload = await this.get(instance, '/accessories');
         if (!Array.isArray(payload.accessories)) {
@@ -164,7 +165,7 @@ export class ClimateAccess {
             const temperature = type === '8A' && reading.unit === 'fahrenheit' ? (sample?.value - 32) / 1.8 : sample?.value;
             const sensor = type === '8A';
             const unitSupported = !sensor || [undefined, 'celsius', 'fahrenheit'].includes(reading.unit);
-            sources.push({
+            bridgeSources.push({
               id: 'hap:' + id + '/' + accessory.aid + '/' + service.iid,
               kind: { '8A': 'temperature', 40: 'fan', B7: 'fan', 85: 'motion', 86: 'occupancy' }[type],
               provider: 'homebridge',
@@ -178,7 +179,7 @@ export class ClimateAccess {
                 available &&
                 unitSupported &&
                 (sensor || [true, false, 0, 1].includes(sample?.value)) &&
-                (!sensor || (Number.isFinite(temperature) && temperature >= -100 && temperature <= 100)),
+                (!sensor || (Number.isFinite(sample?.value) && Number.isFinite(temperature) && temperature >= -100 && temperature <= 100)),
               temperature: sensor && Number.isFinite(temperature) ? temperature : null,
               running: sensor ? undefined : sample?.value === true || sample?.value === 1,
               detected: ['85', '86'].includes(type) ? sample?.value === true || sample?.value === 1 : undefined,
@@ -192,6 +193,7 @@ export class ClimateAccess {
             });
           }
         }
+        sources.push(...bridgeSources);
         bridges.push({ id, name: configured.name, kind: configured.kind, available: true });
       } catch (error) {
         bridges.push({
@@ -202,7 +204,8 @@ export class ClimateAccess {
           error: error.message.startsWith('Enable Homebridge') ? error.message : 'Bridge unavailable or returned invalid data.',
         });
         // Retain identity so configured selections remain visible, but never reuse stale values as eligible input.
-        sources.push(...this.sources.filter((source) => source.bridge === id).map((source) => ({ ...source, available: false })));
+        const known = new Map([...this.sources.filter((source) => source.bridge === id), ...bridgeSources].map((source) => [source.id, source]));
+        sources.push(...[...known.values()].map((source) => ({ ...source, available: false })));
       }
     }
     if (this.closed) {

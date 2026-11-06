@@ -71,7 +71,8 @@ export function previewGroup({ sources, selected, desired, thermostat, now = Dat
     return { ...info, state: 'paused', reason: 'Preview requires a confirmed built-in Nest temperature source.' };
   }
   const native = sources.find((source) => source.id === 'nest:' + thermostat.id);
-  if (!native?.available || now - native.lastReadAt > 90000 || thermostat.data.hvac_mode !== 'heat' || thermostat.data.eco_mode !== false) {
+  if (!native?.available || !Number.isFinite(native.lastReadAt) || now - native.lastReadAt > 90000 || native.lastReadAt > now + 1000 ||
+    thermostat.data.hvac_mode !== 'heat' || thermostat.data.eco_mode !== false) {
     return { ...info, state: 'paused', reason: 'Preview requires an available thermostat in Heat mode with Eco off.' };
   }
   const offset = Math.max(-maximumOffset, Math.min(maximumOffset, thermostat.data.physical_temperature - roomTemperature));

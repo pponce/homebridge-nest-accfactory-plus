@@ -63,6 +63,7 @@ import { adjustTemperature, scaleValue } from './utils.js';
 import { getProtoTypes } from './protobuf.js';
 import { createSupportDump } from './supportdump.js';
 import { ClimateDashboard } from './climate-dashboard.js';
+import { rememberCachedIdentity } from './identity.js';
 
 // Define constants
 import {
@@ -224,6 +225,7 @@ export default class NestAccfactory {
 
     // Accessory has the required AccessoryInformation service, so we can add the restored accessory to the accessories cache
     // This allows us to track if it has already been registered
+    rememberCachedIdentity(this.api, accessory.UUID);
     this.cachedAccessories.push(accessory);
   }
 

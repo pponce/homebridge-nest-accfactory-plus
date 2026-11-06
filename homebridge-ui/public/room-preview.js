@@ -19,6 +19,7 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
   bridgeStatus.setAttribute('role', 'status');
   const thermostatLabel = node('label', 'Preview thermostat');
   const thermostatSelect = node('select');
+  thermostatSelect.disabled = true;
   thermostatLabel.append(thermostatSelect);
   const targetLabel = node('label', 'Desired room temperature (°C)');
   const target = node('input');
@@ -26,6 +27,7 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
   target.min = '5';
   target.max = '35';
   target.step = '0.5';
+  target.disabled = true;
   targetLabel.append(target);
   const list = node('div');
   const result = node('p');
@@ -48,15 +50,20 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
   );
   function options(create = false) {
     const config = getConfig();
-    let device = config.devices.find((entry) => entry.serialNumber === selectedThermostat);
-    if (!device && create) {
+    let device = config?.devices?.find((entry) => entry.serialNumber === selectedThermostat);
+    if (!device && create && selectedThermostat && config) {
       device = { serialNumber: selectedThermostat };
       config.devices.push(device);
     }
-    if (create) {
-      device.sensorPreview ??= { selected: [], desired: 21 };
+    const saved = device?.sensorPreview;
+    const normalized = {
+      selected: Array.isArray(saved?.selected) ? [...new Set(saved.selected.filter((id) => typeof id === 'string' && id !== ''))] : [],
+      desired: Number.isFinite(saved?.desired) && saved.desired >= 5 && saved.desired <= 35 ? saved.desired : 21,
+    };
+    if (create && device) {
+      device.sensorPreview = normalized;
     }
-    return device?.sensorPreview ?? { selected: [], desired: 21 };
+    return normalized;
   }
   function calculate() {
     const snapshot = getStatus();

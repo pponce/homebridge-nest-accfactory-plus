@@ -28,7 +28,7 @@ try {
       { serial: 'S', id: 'S', type: 'TemperatureSensor', account: 'A', data: { description: 'Bedroom', current_temperature: 20 } },
     ] };
     window.homebridge = {
-      getPluginConfig: async () => [{ platform: 'NestClimateCntrl', accounts: [{ name: 'Google', type: 'google', refreshToken: 'fixture-secret', authMethod: 'refreshToken' }], devices: { T: { fanDuration: '30m', custom: 'preserved' } }, custom: 'untouched' }],
+      getPluginConfig: async () => [{ platform: 'NestClimateCntrl', accounts: [{ name: 'Google', type: 'google', refreshToken: 'fixture-secret', authMethod: 'refreshToken' }], devices: { T: { fanDuration: '30m', custom: 'preserved', sensorPreview: { selected: {}, desired: 'invalid' } } }, custom: 'untouched' }],
       updatePluginConfig: async (data) => window.saved.push(data),
       showSchemaForm: () => { window.schemaShown = true; },
       request: async (path, data) => {
@@ -52,6 +52,8 @@ try {
   await page.getByRole('button', { name: 'Discover / refresh Homebridge sources' }).click();
   await page.getByLabel('Office sensor', { exact: false }).check();
   await page.getByText('Illustrative Nest target:', { exact: false }).waitFor();
+  assert.equal(await page.getByLabel('Desired room temperature (°C)').inputValue(), '21');
+  assert.deepEqual(await page.evaluate(() => window.saved.at(-1)[0].devices[0].sensorPreview), { selected: ['external'], desired: 21 });
   assert.equal(await page.evaluate(() => window.commands.length), 0);
   await page.getByLabel('Temperature controlled by').selectOption('S');
   await page.getByRole('button', { name: 'Use selected sensor' }).click();
@@ -67,7 +69,7 @@ try {
   await page.getByRole('button', { name: 'Open full configuration form' }).click();
   assert.equal(await page.evaluate(() => window.schemaShown), true);
   assert.deepEqual(errors, []);
-  console.log('PASS dashboard: masked credentials, preserved config, sensor command, stale-state controls, mobile layout, schema fallback');
+  console.log('PASS dashboard: masked credentials, preserved config, mixed sensor preview without writes, invalid preview settings, native sensor command, stale-state controls, mobile layout, schema fallback');
 } finally {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));

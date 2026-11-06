@@ -138,6 +138,42 @@ test('sensor faults and bridge failures invalidate input instead of reusing cach
   assert.deepEqual(await f.access.refresh(), { sources: [], bridges: [] });
 });
 
+test('failure in a later read batch invalidates the whole bridge without duplicate source identities', async (t) => {
+  const f = await fixture(t);
+  let fail = false;
+  const services = Array.from({ length: 33 }, (_, index) => ({
+    iid: index + 1, type: '8A', characteristics: [{ iid: 100 + index, type: '11', perms: ['pr'], unit: 'celsius' }],
+  }));
+  f.access.request = async (url) => {
+    if (fail && url.endsWith('2.132')) { throw new Error('Disconnected during read'); }
+    const payload = url.endsWith('/accessories') ? { accessories: [{ aid: 2, services }] } : {
+      characteristics: new URL(url).searchParams.get('id').split(',').map((id) => ({
+        aid: Number(id.split('.')[0]), iid: Number(id.split('.')[1]), value: 20,
+      })),
+    };
+    return { ok: true, status: 200, json: async () => payload };
+  };
+  assert.equal((await f.access.refresh()).sources.filter((source) => source.available).length, 33);
+  fail = true;
+  const result = await f.access.refresh();
+  assert.equal(result.sources.length, 33);
+  assert.equal(new Set(result.sources.map((source) => source.id)).size, 33);
+  assert.ok(result.sources.every((source) => !source.available));
+  assert.equal(result.bridges[0].available, false);
+});
+
+test('temperature readings must be numbers even when unit conversion could coerce them', async (t) => {
+  const f = await fixture(t);
+  const request = f.access.request;
+  f.access.request = async (...args) => {
+    const response = await request(...args);
+    const payload = await response.json();
+    if (payload.characteristics) { payload.characteristics[0].value = '68'; }
+    return { ...response, json: async () => payload };
+  };
+  assert.equal((await f.access.refresh()).sources[0].available, false);
+});
+
 function model() {
   const now = Date.now();
   const thermostat = {
@@ -186,4 +222,9 @@ test('preview refuses missing, stale and invalid inputs and pauses for native so
   f.thermostat.data.active_rcs_sensor = '';
   f.thermostat.data.eco_mode = true;
   assert.equal(previewGroup(args).state, 'paused');
+  f.thermostat.data.eco_mode = false;
+  for (const lastReadAt of [undefined, NaN, f.now + 10000, f.now - 100000]) {
+    f.sources[0].lastReadAt = lastReadAt;
+    assert.equal(previewGroup(args).state, 'paused');
+  }
 });
