@@ -8,7 +8,7 @@ The first climate beta is `0.5.0-beta.1`, published with the npm `beta` tag. Do 
 
 Update package.json and package-lock.json, write the exact version section in PRERELEASE_NOTES.md, and set `.github/release-version` to that version. The marker triggers release validation on main. The release workflow checks all five supported Node/Homebridge combinations, dashboard behavior and a production-only tarball installation before creating a prerelease.
 
-Release assets include the tested npm tarball, a read-only migration preflight, a publishing/inspection helper, and SHA256SUMS. The prerelease notes must call out the platform-name change and link to MIGRATION.md.
+Release assets include the tested npm tarball, a read-only migration preflight, a publishing/inspection helper, and SHA256SUMS. The next beta prerelease notes must lead with the required fresh cutover from Nest Accfactory/Plus, name the `NestClimateCntrl` platform, and link to MIGRATION.md. Explicitly state that affected Apple Home assignments, scenes and automations must be recreated; existing Climate beta.1 installations can update normally. Keep the legacy Google authentication and upstream capability callouts.
 
 ## npm
 
@@ -28,4 +28,4 @@ Run **Publish Climate Cntrl to npm** manually for an existing release tag. It do
 
 ## Migration checkpoint
 
-Review the read-only report before deciding between cache-preserving migration and a separate beta child bridge. Backups require explicit maintainer approval. Keep all downloaded assets, reports and any approved backups in the existing project folder. No runtime files are modified by the preflight.
+Accfactory/Plus users follow the fresh cutover in MIGRATION.md: disable the old Nest platform, configure and pair a new Climate child bridge, verify devices, then remove the old Nest setup and rebuild affected Apple Home assignments. Do not run the experimental offline cache-ownership helper. Keep `Keep Accessories Of Uninstalled Plugins` unchanged and clean up only old Nest entries. Backups require explicit maintainer approval. Keep project files in the existing checkout. The preflight remains read-only.

@@ -1,3 +1,13 @@
+## Next beta — unreleased
+
+**Breaking change for Nest Accfactory / Nest Accfactory Plus users: fresh setup and Apple Home pairing are required.** Install `homebridge-nest-climate-cntrl` with platform **`NestClimateCntrl`** on a new child bridge. Recreate the affected room assignments, scenes and automations. Read the [cutover instructions](MIGRATION.md) before installing.
+
+This is a one-time cutover from the older packages. Existing `NestClimateCntrl` installations, including 0.5.0-beta.1, can keep their bridge and accessories when updating. `Keep Accessories Of Uninstalled Plugins` does not transfer old accessories to the new platform.
+
+Compatible existing **legacy Google refresh-token authentication remains supported**. For cameras, doorbells, floodlight cameras, Yale locks or weather, use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) with separate device ownership.
+
+This beta remains under hardware testing. Publication is pending.
+
 ## v0.5.0-beta.1
 
 **Platform name change: `NestAccfactory` → `NestClimateCntrl`.** The npm package is now `homebridge-nest-climate-cntrl`. Read the [migration instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.1/MIGRATION.md) **before updating an existing installation**. Changing the platform field alone does not migrate cached accessories or Apple Home assignments.
