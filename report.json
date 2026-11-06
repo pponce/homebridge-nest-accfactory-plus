@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "a91381114c9b6c8a36a859a055d7fbcf8156a99b",
+  "sourceCommit": "afe9b1ee454a0a0ee60b681f4404dfa1756b8d94",
   "sourceBranch": "feature/standalone-dashboard",
   "fixtureDataOnly": true,
   "checks": [
