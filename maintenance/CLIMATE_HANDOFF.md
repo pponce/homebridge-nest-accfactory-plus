@@ -32,7 +32,7 @@ The maintainer allows UUID changes when needed. Preserve existing identities for
 - Cache identities are recorded per runtime API, not globally across plugins. Unrelated cached UUIDs are ignored. If both expected identities exist, the Climate identity takes precedence.
 - The shared HomeKitDevice submodule is unchanged; the existing identity adapter covers construction and platform lookups.
 - UUID reuse is tested through the real device lifecycle and platform cache callback.
-- **The alias/cache-association transition remains unimplemented and unverified for rollout.** Homebridge resolves cached `_associatedPlugin`/`_associatedPlatform` before calling `configureAccessory`. Changing the config alias alone can orphan accessories and is not a migration procedure.
+- **An offline alias/cache-association migration is now prepared and software-validated for a dedicated legacy Plus child bridge.** Homebridge resolves cached `_associatedPlugin`/`_associatedPlatform` before calling `configureAccessory`; the helper changes both ownership fields, preserves identifiers and refuses unsupported layouts. Changing the config alias alone is not a migration procedure. Live Apple Home verification remains pending.
 - Prefer retaining the bridge username/pairing and service identities. If a particular installation needs recreation, identify its affected Apple Home assignments and guide that transition explicitly.
 - Keep upstream/climate accessory ownership disjoint, regardless of namespaces.
 
@@ -113,3 +113,13 @@ Local Chromium cannot launch under the execution restrictions; use the GitHub br
 - Published npm 0.5.0-beta.1 is unchanged. Registry visibility still must be confirmed from the installation host. A new beta is not required for the external migration helper.
 - Standalone dashboard work is proceeding separately on `feature/standalone-dashboard`, following the garage controller's opt-in HTTPS/admin-account pattern, with responsive Overview/Sources/Rules/Settings, existing plum icons and PWA metadata. The feature team owns runtime/UI/config files and its own handoff. It must not publish npm or change the live installation.
 - Next: finish final CI, then request approval for the concrete backup/cache migration before giving the execution command. Verify Apple Home rooms/scenes and live readings on hardware after execution. No live migration or backup has been approved or performed.
+
+## Validated migration milestone
+
+- Source/runner checkpoint: `561bfc574f3a71ac0387d7db8b42a0eb4988f7d9`.
+- Full Test workflow **42305559126 succeeded**: all six compatibility jobs (Node 22/24 with Homebridge 1.11.4 and 2.4.0; Node 26 with 2.4.0; Node 24 with 2.5.0), coverage/build checks, embedded dashboard browser tests and real cache restoration. The fixture retains seven accessories' UUIDs, AIDs and service/characteristic IIDs through two restores.
+- Offline utility pinned by runner: `a108c4d1d80e1d9e2a3f79aced59ba4b07aa5dc0`; SHA256 `0486420172419ded0e969df7e2bf93a82fda0ef1e35a62e7edeb045e9a2af59b`.
+- Runner `maintenance/migrate-to-beta.sh` SHA256 `239e9f15a7ee3af71209dc97686ebff16a63e4eaed232d6a919b62fa168d28b9`. Invoke with the reviewed count only after the maintainer approves both the private backup and custom cache migration.
+- Inspection identified two thermostats, four smoke/CO accessories and one occupancy accessory. No removed capability was detected. Existing Plus package 0.4.4, Homebridge 2.5.0 and UI 5.30.0 were reported. Google refresh-token credentials stay in place.
+- Live execution remains pending approval. No real backups or installation changes have occurred. The runner independently verifies npm tarball integrity before stopping Homebridge; public npm availability has not been asserted from workspace-only checks.
+- Standalone HTTPS dashboard development remains separate; it is not part of published beta.1. Its web rule editor stores drafts, while automatic mixed-sensor control, external room-fan actions and combined occupancy execution remain future work.

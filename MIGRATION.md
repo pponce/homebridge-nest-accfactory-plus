@@ -15,7 +15,13 @@ This is a separate beta package, not an automatic update of the old package. Ins
 
 ## Option A: preserve existing Apple Home accessories
 
-The plugin can reuse restored legacy accessory UUIDs, but the complete plugin/platform cache-association migration is **not yet validated for this beta**. Keep the existing installation unchanged until its configuration and cache have been inspected and a migration procedure has been tested for that layout.
+An offline migration helper is available for **`homebridge-nest-accfactory-plus` on a dedicated Linux `hb-service` child bridge**. It updates plugin/platform ownership while keeping credentials, the bridge identity, pairing records, accessory UUIDs and service/characteristic IDs. Other layouts need separate review.
+
+The helper has passed real Homebridge cache-restoration tests on 1.11.4, 2.4.0 and 2.5.0, including a second restart. Apple Home room assignments, scenes and live Nest operation still require verification on your equipment.
+
+Before using it, review the preflight inventory and the exact accessory count. The helper refuses unsupported devices, mixed ownership, missing identifiers, changed configuration or an unverified beta package. It creates a private rollback snapshot in the existing checkout under `maintenance/migration/backups`, then follows **stop → snapshot → add the exact beta → migrate → start**. The original package stays installed for rollback.
+
+See [the migration runner](maintenance/migrate-to-beta.sh) and [the offline migration utility](maintenance/migrate-child-bridge.mjs). The runner takes the reviewed accessory count as its argument. Snapshot files contain credentials and pairing material: keep them private on the Homebridge host. Share only the generated redacted migration report.
 
 Retain the existing bridge username, pairing and service identities. Do not clear the shared accessory cache or remove the bridge from Apple Home to attempt a preserving migration.
 
