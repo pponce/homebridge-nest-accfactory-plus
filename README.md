@@ -11,6 +11,8 @@
 
 The original Nest Accfactory plugin and its Nest/HomeKit integration, including HomeKit Secure Video for supported cameras and doorbells, are the work of [n0rt0nthec4t and upstream contributors](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). This fork is maintained separately by [pponce](https://github.com/pponce).
 
+**Support upstream development:** The funding links in this fork direct donations to the original author, **n0rt0nthec4t**, through [GitHub Sponsors](https://github.com/sponsors/n0rt0nthec4t) or [Buy Me a Coffee](https://buymeacoffee.com/n0rt0nthec4t). These donations support the upstream project; they do not go to the fork maintainer.
+
 ## What Plus adds
 
 - **An additional Google authentication option:** select **Legacy Refresh Token** and use an existing compatible Google OAuth refresh token without supplying browser cookies or an `issueToken` URL.
@@ -346,5 +348,5 @@ Building and running this project is done entirely at your own risk.
 
 I am not affiliated with any companies such as Google, Apple, or other related entities. The author of this project shall not be held liable for any damages or issues arising from its use.
 
-If you find this project useful, sponsorship to support ongoing development is always appreciated.
+If you find this project useful, consider supporting upstream author **n0rt0nthec4t** through [GitHub Sponsors](https://github.com/sponsors/n0rt0nthec4t) or [Buy Me a Coffee](https://buymeacoffee.com/n0rt0nthec4t).
 
