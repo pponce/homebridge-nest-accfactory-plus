@@ -27,51 +27,51 @@
 > homebridge-nest-accfactory-plus@0.4.4 test:coverage
 > node --test --experimental-test-coverage --test-coverage-include="src/**" --test-coverage-exclude="**/*.test.js" --test-reporter=spec --test-reporter=./test/coverage-reporter.js --test-reporter-destination=stdout --test-reporter-destination=stdout "test/*.test.js" "src/HomeKitDevice/*.test.js" "src/HomeKitHistory/*.test.js" "src/fetchWrapper/*.test.js"
 
-✔ generateUUID preserves one deterministic identity across supported runtimes (4.086721ms)
-✔ generateUUID prefers HAP so enabling Matter does not change identity (0.244147ms)
-✔ generateUUID fails instead of creating a transient accessory identity (0.603418ms)
-✔ Homebridge honours the explicit Matter enablement check (3.812569ms)
-✔ constructor restores declared fields from a subclass persistence namespace (1.563914ms)
-✔ constructor rejects invalid persisted device data field declarations (0.331069ms)
-✔ Homebridge honours the explicit HAP enablement check and legacy default (3.302505ms)
-✔ add requires at least one protocol API (5.561279ms)
-✔ Matter device type is required only when Matter is the sole Homebridge representation (0.743991ms)
-✔ addMatterCluster merges state and command handlers without duplicating the cluster (1.117419ms)
-✔ Homebridge exposes HAP and Matter through the existing lifecycle (12.104964ms)
-✔ Matter persisted context rolls back and retries after a cache update failure (1.281566ms)
-✔ Matter teardown still runs when HAP teardown fails (0.551391ms)
-✔ Homebridge supports Matter without creating a HAP accessory or AccessoryInformation service (1.546391ms)
-✔ setup persists restored bridged HAP metadata after onAdd without requiring another change (45.68886ms)
-✔ Homebridge add without arguments preserves the default HAP representation and persists metadata (3.224802ms)
-✔ HAP cache retries once within a message after a thrown write (3.360774ms)
-✔ HAP cache retries once within a message after a rejected write (1.229727ms)
-✔ Homebridge publishes external HAP only after onAdd completes (0.756294ms)
-✔ Homebridge requires its external publishing API before external onAdd (0.377997ms)
-✔ independent HAP publication failures use the same failure path (2.061605ms)
-✔ Homebridge does not call onAdd when HAP registration leaves no usable representation (0.41719ms)
-✔ setup logging uses the requested HAP accessory name when present (0.543276ms)
-✔ WebRTC ICE completion after the first keyframe preserves media readiness (0.88237ms)
-✔ WebRTC safely recovers from interrupted IDR within an apparently complete timestamp group (0.906054ms)
-✔ WebRTC safely recovers from empty FU payload within an apparently complete timestamp group (0.734072ms)
-✔ WebRTC source video timestamps advance monotonically across 32-bit RTP timestamp rollover (0.793212ms)
-✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=false (0.890716ms)
-✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=true (0.642201ms)
-✔ WebRTC bounds startup keyframe retries while an audio-only camera keeps the connection alive (6.871316ms)
-✔ WebRTC RTP arriving from a retired video track cannot initialise the replacement source (1.035526ms)
-✔ WebRTC a retired track event cannot reset decoder state on the replacement video track (0.905783ms)
-✔ WebRTC RTP from a retired audio track cannot enter the replacement decoder (0.73815ms)
-✔ a retired WebRTC audio track event cannot discard the current reorder queue (0.633434ms)
-✔ WebRTC ignores a track advertising an unsupported audio codec (0.524451ms)
-✔ WebRTC ignores a track advertising an unsupported video codec (0.345326ms)
-✔ WebRTC a retired extension failure cannot close its replacement peer (2.334103ms)
-ℹ tests 1613
+✔ generateUUID preserves one deterministic identity across supported runtimes (2.104572ms)
+✔ generateUUID prefers HAP so enabling Matter does not change identity (0.135816ms)
+✔ generateUUID fails instead of creating a transient accessory identity (0.446284ms)
+✔ Homebridge honours the explicit Matter enablement check (2.900084ms)
+✔ constructor restores declared fields from a subclass persistence namespace (1.075286ms)
+✔ constructor rejects invalid persisted device data field declarations (0.180413ms)
+✔ Homebridge honours the explicit HAP enablement check and legacy default (4.205026ms)
+✔ add requires at least one protocol API (1.218411ms)
+✔ Matter device type is required only when Matter is the sole Homebridge representation (1.614992ms)
+✔ addMatterCluster merges state and command handlers without duplicating the cluster (0.854031ms)
+✔ Homebridge exposes HAP and Matter through the existing lifecycle (9.692992ms)
+✔ Matter persisted context rolls back and retries after a cache update failure (1.87844ms)
+✔ Matter teardown still runs when HAP teardown fails (0.298371ms)
+✔ Homebridge supports Matter without creating a HAP accessory or AccessoryInformation service (0.999351ms)
+✔ setup persists restored bridged HAP metadata after onAdd without requiring another change (22.78269ms)
+✔ Homebridge add without arguments preserves the default HAP representation and persists metadata (0.770861ms)
+✔ HAP cache retries once within a message after a thrown write (1.818699ms)
+✔ HAP cache retries once within a message after a rejected write (0.904267ms)
+✔ Homebridge publishes external HAP only after onAdd completes (0.686678ms)
+✔ Homebridge requires its external publishing API before external onAdd (0.229316ms)
+✔ independent HAP publication failures use the same failure path (1.412586ms)
+✔ Homebridge does not call onAdd when HAP registration leaves no usable representation (0.363219ms)
+✔ setup logging uses the requested HAP accessory name when present (0.420296ms)
+✔ WebRTC ICE completion after the first keyframe preserves media readiness (0.598166ms)
+✔ WebRTC safely recovers from interrupted IDR within an apparently complete timestamp group (0.583163ms)
+✔ WebRTC safely recovers from empty FU payload within an apparently complete timestamp group (0.536212ms)
+✔ WebRTC source video timestamps advance monotonically across 32-bit RTP timestamp rollover (0.715443ms)
+✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=false (0.632988ms)
+✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=true (0.361427ms)
+✔ WebRTC bounds startup keyframe retries while an audio-only camera keeps the connection alive (4.991095ms)
+✔ WebRTC RTP arriving from a retired video track cannot initialise the replacement source (0.989889ms)
+✔ WebRTC a retired track event cannot reset decoder state on the replacement video track (0.602923ms)
+✔ WebRTC RTP from a retired audio track cannot enter the replacement decoder (0.493117ms)
+✔ a retired WebRTC audio track event cannot discard the current reorder queue (0.407436ms)
+✔ WebRTC ignores a track advertising an unsupported audio codec (0.35625ms)
+✔ WebRTC ignores a track advertising an unsupported video codec (0.204199ms)
+✔ WebRTC a retired extension failure cannot close its replacement peer (1.193287ms)
+ℹ tests 1617
 ℹ suites 0
-ℹ pass 1613
+ℹ pass 1617
 ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 7431.736574
+ℹ duration_ms 4686.759548
 ℹ start of coverage report
 ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ file                    | line % | branch % | funcs % | uncovered lines
@@ -116,11 +116,11 @@
 ℹ  protobuf.js            | 100.00 |    97.67 |  100.00 | 
 ℹ  ringbuffer.js          | 100.00 |    91.67 |  100.00 | 
 ℹ  supportdump.js         |  97.76 |    92.19 |  100.00 | 244-245 259-260 276-277 336-337 365-366
-ℹ  system.js              |  93.80 |    84.67 |   86.15 | 111-117 156-174 203-205 272-276 279-283 383-384 427 516-517 557-559 587-592 734-740 770-772 1032-1040 1043-1056 1175-1177 1180-1182 1536-1542 1555-1561 1579-1581 1605-1606 1832-1834 1861-1862 1866-1871 1884-1886 2044-2045
+ℹ  system.js              |  93.85 |    84.83 |   86.15 | 112-118 157-175 204-206 274-278 281-285 385-386 518-519 559-561 589-594 736-742 772-774 1034-1042 1045-1058 1177-1179 1182-1184 1538-1544 1557-1563 1581-1583 1607-1608 1834-1836 1863-1864 1868-1873 1886-1888 2046-2047
 ℹ  translator.js          | 100.00 |    96.00 |  100.00 | 
 ℹ  utils.js               | 100.00 |    99.06 |  100.00 | 
 ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-ℹ all files               |  96.33 |    88.54 |   96.24 | 
+ℹ all files               |  96.33 |    88.57 |   96.25 | 
 ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ end of coverage report
 
@@ -141,4 +141,4 @@ Coverage gate passed for every production module. Summary: coverage/summary.json
 > node scripts/verify-build.js
 
 === climate-browser.log ===
-PASS dashboard: masked credentials, preserved config, sensor command, stale-state controls, mobile layout, schema fallback
+PASS dashboard: masked credentials, preserved config, mixed sensor preview without writes, invalid preview settings, native sensor command, stale-state controls, mobile layout, schema fallback
