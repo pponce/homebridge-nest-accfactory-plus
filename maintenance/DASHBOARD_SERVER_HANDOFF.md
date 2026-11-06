@@ -29,6 +29,9 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 
 ## Validation state
 
+- Final production/UI source: `cfddca3fc4c8703abaac7b3164f923dc7377f17b`.
+- Final checks are green: six Node/Homebridge matrices in [run 42307764317](https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42307764317), standalone server/package/browser checks in [run 42307759115](https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42307759115), and PR checks in [run 42307764362](https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42307764362).
+- All eight final desktop/mobile screenshots were retrieved and visually reviewed. Compact mobile overview, readable status text, 44px controls, draft editing and dark mode passed review. Browser checks confirm final content clears fixed navigation and save controls. The review report names the exact source commit: https://github.com/pponce/homebridge-nest-climate-cntrl/tree/review/standalone-dashboard.
 - Embedded setup integration and all 12 `test/climate-dashboard.test.js` tests pass locally, including bearer/origin rejection for web-account provisioning and password exclusion from status.
 - All 11 backend tests pass locally, including a real HTTPS listener, multi-child credential isolation and graceful shutdown during startup/config writes.
 - Local Chromium is blocked by a platform socket restriction. Use the feature-branch GitHub browser workflow for rendered interaction/layout checks; do not claim local visual verification.
@@ -42,6 +45,9 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 
 ## Next steps
 
-1. Run package checks and the browser fixture on GitHub. Inspect mobile/desktop screenshots and address findings.
-2. Record exact commits, test outcomes and review links here.
-3. Present the feature branch for review; the released beta and the live migration remain separate.
+1. Review draft PR 13. There are no known implementation or automated-test blockers for the dashboard preview.
+2. Keep this feature separate from the published `0.5.0-beta.1` package until a release is approved. No feature merge, version bump, npm publication or live installation change has been performed.
+3. After an approved preview installation, validate HTTPS trust and Add to Home Screen on a real iPhone, native Nest commands with hardware, and external source discovery on the user's actual bridges. Automated browser review uses fixture data.
+4. Implement and test automatic mixed-temperature compensation, combined occupancy actions and room-fan controllers in a later change. Saved draft rules intentionally never execute actions in this preview.
+
+Fresh setup guidance is already on main. Users moving from Nest Accfactory or Plus create and pair a fresh child bridge, then rebuild affected Apple Home room assignments, scenes and automations. Existing Nest Climate Cntrl beta installations can keep their bridge. The dashboard does not change the UUID adapter or force a reset.
