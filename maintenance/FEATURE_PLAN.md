@@ -12,7 +12,7 @@ This file tracks maintainer planning for the thermostat and heating direction of
 | Native thermostat controls | Eco controls, a “Temperature controlled by” selector for native sources, and optional HVAC fan-timer controls disabled by default. Verify completion against the active implementation branch. |
 | Room and ceiling fans | Select accessible Homebridge fans and coordinate them with heating/cooling. Keep room fans distinct from the thermostat's HVAC blower. Detailed behavior remains to be designed. |
 | Coexistence and migration | Target alias `NestClimateCntrl`; no weather; preserve existing accessory UUIDs and guide the installed-version migration after validation. Details below. |
-| Sensor-assisted climate presence | Proposed: selected accessible Homebridge motion/occupancy inputs can inform climate presence. Existing Google Home/Away reporting stays distinct; implementation and policy decisions pending. |
+| Combined Climate Home/Away sensor | **Approved for the feature plan; implementation pending.** Optional occupancy sensor combines Google home status with a searchable Homebridge sensor picker and configurable presence rules. |
 | Mixed room-sensor control | **Approved for the feature plan; implementation pending.** Combine genuine Nest sensors and other accessible Homebridge temperature sensors in one thermostat control group. Details below. |
 
 ## Coexistence, identity and migration
@@ -49,31 +49,70 @@ Homebridge caches both plugin and platform associations. UUID preservation alone
 
 Preserve bridge identity and accessory/service identities; avoid blanket cache clearing or removal/re-pairing as the default procedure. Verify existing thermostat rooms, scenes and automations on hardware before claiming those survive.
 
-## Sensor-assisted climate presence — proposed design
+## Combined Climate Home/Away sensor — approved feature scope
 
-The maintainer asked whether motion/occupancy sensors exposed through Homebridge, including camera motion from the upstream plugin, can influence climate Home/Away behavior. Record this as a proposed feature; final behavior and implementation remain pending.
+**Approved for the feature plan; implementation pending.** Expose an optional plugin-owned **Climate Home/Away** occupancy sensor that combines Google's reported home status with configurable logic using user-selected Homebridge sensors. It is disabled by default and has its own stable identity per configured Google home.
 
-### Current behavior and intended boundary
+### Output and Google input
 
-The existing Nest Home/Away accessory is a read-only HomeKit occupancy sensor reporting Google's structure mode. Updating its displayed occupancy alone does not change Google's Home/Away state or thermostat behavior.
+Use a standard HomeKit OccupancySensor: Home maps to occupancy detected, Away to occupancy not detected. It reports the combined result and is read-only in HomeKit. Manual overrides belong in the dashboard or a separately designed, accurately represented control; do not make the occupancy characteristic writable.
 
-Add a separate, accurately labeled **Climate presence** state, or an explicitly selected presence-source mode, for software-managed climate decisions. Keep Google's reported home state visible as its own factual value. Do not silently change the meaning or identity of the existing Nest status accessory.
+Use the real Google Home/Away/structure status already read by the plugin as the default baseline. This is the home's reported presence state, not evidence inferred from the thermostat heating, cooling or blower activity.
 
-The initial proposal influences only this plugin's configured climate actions. Writing Google's whole-home Home/Away mode requires separate protocol/capability verification and an explicit opt-in design: it could affect other Google Home behavior and cameras handled by upstream.
+Keep Google's raw reported status available in the dashboard. The combined accessory may coexist with a clearly named raw Google Home/Away accessory because they represent different facts and have distinct identities. Expose the same raw Google accessory from only one plugin when upstream is also installed.
 
-### Inputs and behavior
+Enabling or updating this sensor does not itself write Google's whole-home mode or change thermostat settings. Let users optionally use the combined state for configured climate actions, selected thermostats/room fans, or Apple Home automations. Those actions require their own explicit enablement and tested precedence with native Eco, schedules and manual changes.
 
-- Reuse planned authenticated main/child-bridge discovery for readable standard MotionSensor and OccupancySensor services. A camera must expose a usable motion/occupancy characteristic; video or an Apple Home-only notification is not sufficient.
-- Sensors visible only in Apple Home require an explicit automation/integration route; they are not automatically visible to another Homebridge plugin.
-- Let users select trusted indoor sensors. Any selected positive occupancy/motion event can assert or extend Home under the selected policy.
-- Start with a Home-assist policy: motion can keep or restore climate presence to Home, while departure uses a more reliable source or explicit user action.
-- Offer automatic Away after a configurable inactivity interval only as an opt-in policy. No motion does not prove an empty home, especially while sleeping.
-- Missing/unreachable/stale inputs must not count as vacancy. Define restart and unknown-age handling without inventing sensor timestamps.
-- Respect manual overrides and user-defined precedence among Google state, sensor inputs, schedules and climate actions. Avoid repeated cloud writes.
-- Exclude the controller's own derived presence state from its input picker to prevent feedback loops.
-- Show selected inputs, the reason for Home/Away, source health, any inactivity countdown and the active override in the dashboard.
+Google whole-home Home/Away writes remain a separate unverified capability, outside this feature's initial scope, because they could affect other Google Home behavior and cameras handled by upstream.
 
-Validate cross-plugin and child-bridge inputs, motion refresh, inactivity timing, unavailable inputs, restarts, manual overrides and cloud failures before enabling real climate actions.
+### Sensor picker
+
+Reuse the planned authenticated main/child-bridge discovery also needed for mixed temperature sensors and room fans, with capability-specific filters.
+
+- Provide a searchable multi-select picker for accessible standard motion and occupancy/presence sensors, including camera motion sensors exposed by upstream.
+- Show accessory name, service/sensor type, room where the provider supplies it, source plugin/bridge, current value and availability. Do not invent room metadata.
+- Distinguish multiple sensor services on one accessory and identify inputs by stable bridge/accessory/service identity, not display name.
+- Include main and child bridges that permit supported access. A camera must expose a readable motion/occupancy characteristic; video or an Apple Home-only notification is not sufficient.
+- Show selected inputs that become unavailable with their saved rule association intact, and allow users to disable/remove them.
+- Exclude this controller's combined output and other known derived feedback inputs. Deduplicate duplicate representations of the same source.
+- Devices available only in Apple Home need an explicit automation/integration route; another Homebridge plugin cannot automatically enumerate them.
+- Door/contact events may be considered later as supporting arrival hints with explicit rules; an open/closed contact alone does not establish whether someone is home.
+
+### Rule editor and recommended starting behavior
+
+Provide a visible rule builder with a simple default preset and optional advanced conditions; users should not need to edit JSON.
+
+The recommended starting preset is **Google status plus selected sensors**:
+
+1. Google Home or any selected positive occupancy signal asserts Home.
+2. A selected motion event asserts Home and starts or refreshes that input's configurable Home hold period.
+3. A sensor that reports continuous occupancy keeps Home while occupied; its occupied value must not expire merely because no new event arrives. Source health and validity are checked separately.
+4. Google Away may produce combined Away only after all selected presence conditions/holds clear and the configured Away delay has elapsed.
+5. Unavailable inputs do not count as clear or Away. Show degraded/unknown state and follow an explicit fallback policy; do not manufacture a definitive departure from missing data.
+
+Allow named rule groups with **any/all** conditions, source selection, active-state conditions appropriate to the sensor, motion hold time and Away delay. Make rule priority understandable: a positive Home condition wins over an Away condition unless an explicit manual override is active. Prevent immediate Home/Away oscillation.
+
+Use a preview to show exactly which conditions currently match, why the combined result is Home/Away, and any pending timers before the user enables the accessory or climate actions.
+
+Google's baseline is enabled by default. A sensor-only or inactivity-driven Away policy is an advanced opt-in mode that needs explicit setup and validation; lack of motion does not prove an empty home, especially while sleeping.
+
+### Manual control, failures and restart
+
+- Provide Force Home, Force Away and Resume Automatic in the dashboard, with a visible override duration/expiry policy. An active override wins over rules until released/expired.
+- Missing/unreachable/stale inputs must not count as vacancy. A successful read is not proof of a new physical observation; unchanged occupied values are not inherently stale.
+- Define startup and recovery behavior using valid current source state and valid persisted hold/override information. Do not publish a transient Away simply because initial sensor reads are incomplete.
+- If a reliable combined state is unavailable, expose supported fault/status information and dashboard uncertainty; a binary occupancy characteristic must not silently imply verified vacancy.
+- Keep the latest confirmed state and its source explanation visible during failures. Do not repeat climate/cloud writes when the result has not changed.
+- Keep Google's reported state and the combined state distinct to avoid loops or misrepresenting Google state.
+
+### Delivery and validation
+
+1. Read-only sensor discovery and picker across accessible main/child bridges.
+2. Rule editor, deterministic evaluator and preview with source health, holds and manual overrides.
+3. Optional derived occupancy accessory with a stable purpose-specific identity; validate restart/configuration changes without recreating it.
+4. Optional integration with climate actions after the sensor and precedence behavior are verified.
+
+Cover Google Home/Away plus conflicting sensor signals, any/all rules, motion refresh and hold expiry, continuously occupied sensors, Away delay, manual overrides, absent/invalid readings, restart, removed sources, duplicate sources and feedback exclusion. Validate the actual Homebridge/HomeKit accessory lifecycle and cross-plugin inputs before claiming hardware support.
 
 ## Mixed room-sensor control
 
@@ -169,7 +208,7 @@ Use deterministic control tests and a read-only preview before a hardware trial.
 - **Repository/branch:** `pponce/homebridge-nest-accfactory-plus`, `feature/thermostat-dashboard`.
 - **Planning files:** `maintenance/FEATURE_PLAN.md` and `maintenance/CLIMATE_HANDOFF.md`.
 - **Decisions recorded:** no weather; target platform alias `NestClimateCntrl`; preserve existing accessory UUID namespace; guide the installed-version migration after feature completion and migration verification.
-- **Proposal recorded:** sensor-assisted climate presence using accessible Homebridge motion/occupancy sensors; Home-assist first, automatic Away optional, Google whole-home writes a separate unverified capability.
+- **Approved feature recorded:** optional combined Climate Home/Away occupancy sensor using Google status plus user-selected Homebridge motion/occupancy sensors, a searchable main/child-bridge picker, configurable rules/holds/Away delay, preview and manual overrides. Google whole-home writes remain outside the initial scope.
 - **Existing implementation/testing:** see `maintenance/CLIMATE_HANDOFF.md`. This update changes planning documentation only; it does not implement the alias, weather removal or presence control, and adds no new runtime/hardware test results.
 - **Open decisions:** source-control commands and hardware verification; source health/measurement-age policy; manual override/schedule precedence; climate action defaults; Apple Home target/presence representation; migration of cached platform associations.
 - **Next steps:** reconcile feature implementation with these requirements; remove weather; design and test the alias transition before rollout; build read-only main/child-bridge discovery and preview for temperature and presence sources before enabling control writes.
