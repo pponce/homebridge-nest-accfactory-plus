@@ -142,15 +142,26 @@ test('failure in a later read batch invalidates the whole bridge without duplica
   const f = await fixture(t);
   let fail = false;
   const services = Array.from({ length: 33 }, (_, index) => ({
-    iid: index + 1, type: '8A', characteristics: [{ iid: 100 + index, type: '11', perms: ['pr'], unit: 'celsius' }],
+    iid: index + 1,
+    type: '8A',
+    characteristics: [{ iid: 100 + index, type: '11', perms: ['pr'], unit: 'celsius' }],
   }));
   f.access.request = async (url) => {
-    if (fail && url.endsWith('2.132')) { throw new Error('Disconnected during read'); }
-    const payload = url.endsWith('/accessories') ? { accessories: [{ aid: 2, services }] } : {
-      characteristics: new URL(url).searchParams.get('id').split(',').map((id) => ({
-        aid: Number(id.split('.')[0]), iid: Number(id.split('.')[1]), value: 20,
-      })),
-    };
+    if (fail && url.endsWith('2.132')) {
+      throw new Error('Disconnected during read');
+    }
+    const payload = url.endsWith('/accessories')
+      ? { accessories: [{ aid: 2, services }] }
+      : {
+          characteristics: new URL(url).searchParams
+            .get('id')
+            .split(',')
+            .map((id) => ({
+              aid: Number(id.split('.')[0]),
+              iid: Number(id.split('.')[1]),
+              value: 20,
+            })),
+        };
     return { ok: true, status: 200, json: async () => payload };
   };
   assert.equal((await f.access.refresh()).sources.filter((source) => source.available).length, 33);
@@ -168,7 +179,9 @@ test('temperature readings must be numbers even when unit conversion could coerc
   f.access.request = async (...args) => {
     const response = await request(...args);
     const payload = await response.json();
-    if (payload.characteristics) { payload.characteristics[0].value = '68'; }
+    if (payload.characteristics) {
+      payload.characteristics[0].value = '68';
+    }
     return { ...response, json: async () => payload };
   };
   assert.equal((await f.access.refresh()).sources[0].available, false);

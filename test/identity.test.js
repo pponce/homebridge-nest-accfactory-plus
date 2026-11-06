@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import test from 'node:test';
 import HomeKitDevice from '../src/HomeKitDevice/HomeKitDevice.js';
-import { configureIdentity, rememberCachedIdentity, PLUGIN_NAME, PLATFORM_NAME, IDENTITY_NAMESPACE, LEGACY_IDENTITY_NAMESPACE } from '../src/identity.js';
+import {
+  configureIdentity,
+  rememberCachedIdentity,
+  PLUGIN_NAME,
+  PLATFORM_NAME,
+  IDENTITY_NAMESPACE,
+  LEGACY_IDENTITY_NAMESPACE,
+} from '../src/identity.js';
 
 const generate = (value) => createHash('sha1').update(value).digest('hex');
 const api = {
@@ -36,8 +43,10 @@ test('restored identities select legacy UUIDs only for matching devices in the s
     rememberCachedIdentity(backend, legacy);
     assert.equal(HomeKitDevice.generateUUID(PLUGIN_NAME, backend, 'migrated-123'), legacy);
     assert.equal(HomeKitDevice.generateUUID(PLUGIN_NAME, backend, 'MIGRATED-123'), legacy);
-    assert.equal(HomeKitDevice.generateUUID(PLUGIN_NAME, backend, 'another-123'),
-      originalGenerate(IDENTITY_NAMESPACE, backend, 'another-123'));
+    assert.equal(
+      HomeKitDevice.generateUUID(PLUGIN_NAME, backend, 'another-123'),
+      originalGenerate(IDENTITY_NAMESPACE, backend, 'another-123'),
+    );
     const freshRuntime = { hap: api.hap };
     assert.notEqual(HomeKitDevice.generateUUID(PLUGIN_NAME, freshRuntime, 'migrated-123'), legacy);
     const current = originalGenerate(IDENTITY_NAMESPACE, backend, 'migrated-123');

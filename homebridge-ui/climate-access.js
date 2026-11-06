@@ -204,7 +204,9 @@ export class ClimateAccess {
           error: error.message.startsWith('Enable Homebridge') ? error.message : 'Bridge unavailable or returned invalid data.',
         });
         // Retain identity so configured selections remain visible, but never reuse stale values as eligible input.
-        const known = new Map([...this.sources.filter((source) => source.bridge === id), ...bridgeSources].map((source) => [source.id, source]));
+        const known = new Map(
+          [...this.sources.filter((source) => source.bridge === id), ...bridgeSources].map((source) => [source.id, source]),
+        );
         sources.push(...[...known.values()].map((source) => ({ ...source, available: false })));
       }
     }

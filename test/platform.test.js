@@ -89,8 +89,10 @@ test('platform restores valid cached identity, removes stale cache and shuts dow
   platform.configureAccessory(accessory);
   assert.equal(platform.cachedAccessories[0], accessory);
   assert.equal(HomeKitDevice.generateUUID(HomeKitDevice.PLUGIN_NAME, api, 'platform-cache'), legacyUUID);
-  assert.equal(HomeKitDevice.generateUUID(HomeKitDevice.PLUGIN_NAME, api, 'new-sensor'),
-    hap.uuid.generate('homebridge-nest-climate-cntrl_NEW-SENSOR'));
+  assert.equal(
+    HomeKitDevice.generateUUID(HomeKitDevice.PLUGIN_NAME, api, 'new-sensor'),
+    hap.uuid.generate('homebridge-nest-climate-cntrl_NEW-SENSOR'),
+  );
   let stale = { displayName: 'Stale', getService() {} };
   platform.configureAccessory(stale);
   assert.deepEqual(removed, [['homebridge-nest-accfactory-plus', 'NestClimateCntrl', [stale]]]);
