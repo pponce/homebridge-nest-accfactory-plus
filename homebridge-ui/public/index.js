@@ -1,3 +1,4 @@
+import { mountRoomPreview } from './room-preview.js';
 import { nextSetpoint, editableConfig } from './climate-utils.js';
 const hb = window.homebridge;
 const $ = (id) => document.getElementById(id);
@@ -8,6 +9,8 @@ let settingsKey = '';
 let saveQueue = Promise.resolve();
 let refreshing = false;
 let liveAvailable = false;
+const roomPreview = mountRoomPreview({ host: $('room-preview'), homebridge: hb,
+  getStatus: () => liveAvailable ? status : undefined, getConfig: () => config, changed });
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) {
@@ -195,22 +198,6 @@ function homes() {
     field(grid, 'Home name (exact match)', home.name, (value) => {
       home.name = value;
     });
-    check(grid, 'Weather station', home.weather, (value) => {
-      home.weather = value;
-    });
-    field(
-      grid,
-      'Elevation (metres)',
-      home.elevation,
-      (value) => {
-        if (value === '') {
-          delete home.elevation;
-        } else {
-          home.elevation = Number(value);
-        }
-      },
-      'number',
-    );
     check(grid, 'Exclude this home', home.exclude, (value) => {
       home.exclude = value;
     });
@@ -456,6 +443,7 @@ function render() {
   }
   settings();
   schedule();
+  roomPreview.render();
 }
 function schedule() {
   const device = status?.devices.find((d) => d.serial === $('selected-device').value);
@@ -597,7 +585,7 @@ $('copy-diagnostics').onclick = async () => {
 try {
   blocks = await hb.getPluginConfig();
   if (!blocks.length) {
-    blocks = [{ platform: 'NestAccfactory', name: 'NestAccfactory', accounts: [] }];
+    blocks = [{ platform: 'NestClimateCntrl', name: 'Nest Climate Cntrl', accounts: [] }];
   }
   config = editableConfig(blocks[0]);
   blocks[0] = config;
@@ -619,3 +607,4 @@ try {
     $(id).disabled = true;
   }
 }
+

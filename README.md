@@ -9,7 +9,7 @@ Nest Climate Cntrl brings Nest thermostats, room sensors and Heat Link controls 
 - Nest thermostats supported by the Nest/Google connection
 - Nest Temperature Sensors associated with a thermostat
 - Nest Heat Links, including supported hot-water controls
-- Nest Protect, Home/Away and weather accessories
+- Nest Protect and Home/Away accessories
 
 Cameras, doorbells, floodlight cameras and Yale locks are outside this plugin's scope. A Heat Link connects a compatible Nest thermostat to the boiler/heating system; hot-water functions depend on the installed equipment and model.
 
@@ -39,7 +39,7 @@ HVAC fan controls operate the blower connected to Nest. They do not operate inde
 
 ### Sensors, schedules and runtime
 
-**Temperature controlled by** selects the thermostat's built-in sensor or one of its associated Nest sensors. Nest's own sensor schedule may subsequently change that selection. External temperature sensors and mixed-source software control are not enabled by this selector.
+**Temperature controlled by** selects the thermostat's built-in sensor or one of its associated Nest sensors. Nest's own sensor schedule may subsequently change that selection. For external sensors, use the separate read-only Room sensors & fans preview.
 
 Set `scheduleTimeZone` to an IANA zone such as `America/Los_Angeles` to calculate the next planned weekly setpoint. Eco, holds and learning can affect actual behavior; the next setpoint is not a confirmed manual-override expiry.
 
@@ -47,7 +47,7 @@ Runtime starts when the plugin observes valid state. It persists across restarts
 
 ## Authentication and installation
 
-The package identifier is `homebridge-nest-accfactory-plus` and the platform identifier remains `NestAccfactory`. Preserve these identifiers when configuring this development version. See [MIGRATION.md](MIGRATION.md) for accessory identity and pairing guidance.
+The package identifier is `homebridge-nest-accfactory-plus` and the platform identifier is `NestClimateCntrl`. Use the climate alias for this development version; existing accessory UUIDs are preserved, but alias/cache migration must be validated before updating an existing installation. See [MIGRATION.md](MIGRATION.md) for accessory identity and pairing guidance.
 
 Google issue-token/cookie authentication and existing compatible legacy OAuth refresh tokens are supported. Nest account access tokens remain available for supported devices. No SDM project is required. Legacy refresh tokens must already exist and remain accepted by Google; the plugin cannot generate new legacy credentials.
 
@@ -164,9 +164,7 @@ Sample config.json entries below
     },
     "homes": [
         {
-            "name": "Main Home",
-            "elevation": 321,
-            "weather": true
+            "name": "Main Home"
         }
     ],
     "devices": [
@@ -181,7 +179,7 @@ Sample config.json entries below
             "humiditySensor": true
         }
     ],
-    "platform": "NestAccfactory"
+    "platform": "NestClimateCntrl"
 }
 ```
 
@@ -192,7 +190,6 @@ The following options are available in the `config.json` `"options"` object. The
 | Name               | Description                                                                                  | Default        |
 |--------------------|----------------------------------------------------------------------------------------------|----------------|
 | debug              | Enable plugin verbose logging (independent of Homebridge debug setting)                      | false          |
-| elevation          | Height above sea level for weather station(s)                                                | 0              |
 | eveHistory         | Provide history in EveHome application where applicable                                      | true           |
 | exclude            | Exclude all device(s)                                                                        | false          |
 | ffmpegDebug        | Enable additional debugging output when ffmpeg is invoked                                    | false          |
@@ -252,9 +249,7 @@ Homes are identified using the `"name"` field, which must match the Home name sh
 
 | Name               | Description                                                                                  | Default        |
 |--------------------|----------------------------------------------------------------------------------------------|----------------|
-| elevation          | Height above sea level for the weather station                                               | 0              |
 | name               | Name of home (from Nest/Google App) to which these settings belong to                        |                |
-| weather            | Virtual weather station for this Home                                                        | false          |
 
 
 ## Development and verification
@@ -286,3 +281,11 @@ I am not affiliated with any companies such as Google, Apple, or other related e
 If you find this project useful, consider supporting upstream author **n0rt0nthec4t** through [GitHub Sponsors](https://github.com/sponsors/n0rt0nthec4t) or [Buy Me a Coffee](https://buymeacoffee.com/n0rt0nthec4t).
 
 
+
+## Mixed room sensor preview
+
+In **Room sensors & fans**, select **Discover / refresh Homebridge sources**. The picker combines native Nest temperature readings with readable Homebridge temperature sensors, including configured child bridges. Select one sensor or several for an equal average, then enter a desired room temperature in Celsius. Save the selection with Homebridge's Save button.
+
+The preview shows an illustrative, bounded target adjustment only when Nest reports its built-in source, Heat mode and Eco off. No thermostat or fan command is issued. Unavailable or unread sources suspend the estimate; source read times do not establish the age of the physical measurement. Native/HAP duplicates identified by serial number are excluded, and Nest/Google HAP readings are reserved for the native connection.
+
+Fan discovery lists on/off capability and current reported state. Automatic room-fan coordination, weighted groups and sensor schedules are not enabled.

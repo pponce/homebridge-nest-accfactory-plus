@@ -12,11 +12,12 @@ const api = {
 const originalGenerate = HomeKitDevice.generateUUID;
 configureIdentity(HomeKitDevice);
 
-test('Plus keeps historical UUIDs across case, discovery lookups, and API backends', () => {
+test('Climate alias retains historical UUIDs across supported backends', () => {
   for (const backend of [api, { matter: { uuid: { generate } } }, { uuid: { generate } }]) {
     for (const serial of ['camera-123', 'THERMOSTAT-123', 'protect-123']) {
       const expected = originalGenerate(IDENTITY_NAMESPACE, backend, serial);
       assert.equal(HomeKitDevice.generateUUID(PLUGIN_NAME, backend, serial), expected);
+      assert.equal(expected, originalGenerate('homebridge-nest-accfactory', backend, serial));
       assert.equal(HomeKitDevice.generateUUID(PLUGIN_NAME, backend, serial.toUpperCase()), expected);
     }
   }
@@ -30,7 +31,7 @@ test('Plus keeps historical UUIDs across case, discovery lookups, and API backen
   assert.throws(() => HomeKitDevice.generateUUID(PLUGIN_NAME, api, ''), TypeError);
 });
 
-test('real device lifecycle reuses cached accessories and registers new ones under Plus', async () => {
+test('real device lifecycle reuses cached accessories and registers new ones under NestClimateCntrl', async () => {
   const registrations = [];
   const publications = [];
   class Accessory {
@@ -83,3 +84,4 @@ test('real device lifecycle reuses cached accessories and registers new ones und
   assert.equal(publications[0][1][0].UUID, originalGenerate(IDENTITY_NAMESPACE, api, 'camera-123'));
   await HomeKitDevice.shutdown();
 });
+

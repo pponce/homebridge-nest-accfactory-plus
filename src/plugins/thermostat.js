@@ -2317,6 +2317,7 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
         // Apply thermostat-specific post-map adjustments
         if (typeof mappedResult?.data === 'object' && mappedResult.data?.constructor === Object) {
+          mappedResult.data.physical_temperature = mappedResult.data.current_temperature;
           // If an active remote temperature sensor is selected, use its temperature as the thermostat current temperature
           if (Number.isFinite(Number(mappedResult.data.active_rcs_sensor_temperature)) === true) {
             mappedResult.data.current_temperature = mappedResult.data.active_rcs_sensor_temperature;
@@ -2418,3 +2419,4 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
   return devices;
 }
+

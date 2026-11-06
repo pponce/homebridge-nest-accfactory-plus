@@ -140,7 +140,6 @@ export default class NestAccfactory {
         'heatlink.js',
         'homeaway.js',
         'protect.js',
-        'weather.js',
       ]);
 
       // Build runtime connection state now that cached accessories have been restored
@@ -399,13 +398,6 @@ export default class NestAccfactory {
           });
 
           if (objectKey.startsWith('structure.') === true) {
-            // Add weather data based on the structure location details
-            let weatherData = await this.#getLocationWeather(uuid, objectKey, incomingValue.postal_code, incomingValue.country_code);
-            if (weatherData !== undefined) {
-              incomingValue.weather = weatherData;
-              changedFields.add('weather');
-            }
-
             // Detect removed child objects from the swarm list and clean up local cache
             if (typeof existingValue?.swarm === 'object' && Array.isArray(incomingValue?.swarm) === true) {
               let newSwarmSet = new Set(incomingValue.swarm);
@@ -689,27 +681,6 @@ export default class NestAccfactory {
 
                 // Remove trait type metadata — we don't need to store it
                 delete this.#rawData[resourceId]?.value?.[traitLabel]?.['@type'];
-
-                // If we have structure location details and associated geo-location details, get the weather data for the location
-                // We'll store this in the object key/value as per Nest API
-                if (
-                  resourceId.startsWith('STRUCTURE_') === true &&
-                  traitLabel === 'structure_location' &&
-                  (patchValues?.postalCode?.value?.trim?.() ?? '') !== '' &&
-                  (patchValues?.countryCode?.value?.trim?.() ?? '') !== ''
-                ) {
-                  let weatherData = await this.#getLocationWeather(
-                    uuid,
-                    resourceId,
-                    patchValues.postalCode.value,
-                    patchValues.countryCode.value,
-                  );
-
-                  if (weatherData !== undefined && typeof this.#rawData?.[resourceId]?.value === 'object') {
-                    this.#rawData[resourceId].value.weather = { ...weatherData };
-                    changedEntry.fields.add('weather');
-                  }
-                }
 
                 // Store the internal Nest and Google structure uuids if matched to a defined home array entry
                 if (
@@ -2074,3 +2045,4 @@ export default class NestAccfactory {
     return [];
   }
 }
+

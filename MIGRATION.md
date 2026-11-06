@@ -1,35 +1,25 @@
-# Migrating to Nest Accfactory Plus
+# Nest Climate Cntrl migration and coexistence
 
-Plus 0.4.4 incorporates upstream 0.4.4. It retains legacy Google refresh-token authentication.
+The development platform alias is `NestClimateCntrl`; the npm package remains `homebridge-nest-accfactory-plus`. Existing accessory UUIDs continue to use the `homebridge-nest-accfactory` namespace. Neither the display name nor the platform alias changes the UUID derived from a device serial number.
 
-## Identity compatibility
+## Existing installations
 
-The npm package and registration name change to `homebridge-nest-accfactory-plus`. The platform remains `NestAccfactory`. Device UUID generation retains the original `homebridge-nest-accfactory` namespace and serial-number normalization, including externally published cameras. Homebridge can reassociate cached dynamic-platform accessories by platform name when the old plugin is absent.
+**The alias/cache transition is not yet validated for rollout. Do not treat changing the platform field alone as a tested migration.** Homebridge also stores plugin/platform associations for cached accessories. Existing bridge identity, pairing, accessory identities and service identities must be preserved together.
 
-Keep the same Homebridge storage, bridge username, PIN and pairing records. If using a child bridge, preserve its existing `_bridge` configuration. The keep-accessories option preserves orphaned cached accessories; it does not replace a backup or recreate deleted pairings.
+The intended migration will retain the current bridge username and pairing and deliberately transfer the cache association from `NestAccfactory` to `NestClimateCntrl`. It will not clear shared caches, regenerate UUIDs or require re-pairing as a default step. A tested migration procedure will be provided before release. Apple Home rooms, scenes and automations have not yet been hardware-verified through this transition.
 
-## Homebridge UI migration
+Keep the current installation unchanged until that procedure and the feature testing are complete. No cache or live configuration is rewritten merely by opening this settings page.
 
-Wait until the Plus npm version is available before uninstalling.
+## New development installations
 
-1. Download a fresh backup from **Backup & Restore → Backup Now**. Keep it private. GitHub-installed plugin code is not restored automatically by a UI backup; retain your old Git installation reference as well.
-2. Enable **Settings → Startup & Environment → Keep Accessories Of Uninstalled Plugins**, save and restart to apply it.
-3. On the Plugins page, uninstall `homebridge-nest-accfactory`. Leave **Remove plugin config?** unchecked.
-4. Install `homebridge-nest-accfactory-plus` before restarting again. For this release, select `0.4.4` if the UI offers version selection, or use:
+Use `"platform": "NestClimateCntrl"` with the existing package identifier. A separate child bridge is appropriate for a new dual-plugin setup; moving an existing installation to another bridge is a separate migration.
 
-   ```sh
-   sudo hb-service add homebridge-nest-accfactory-plus@0.4.4
-   ```
+When upstream runs cameras and doorbells, configure disjoint accessory ownership: exclude thermostats, sensors, Heat Links and any Protect/Home-Away accessories managed by Climate Cntrl from upstream. Publishing the same device through both plugins can collide on a shared bridge because the historical UUID namespace is intentionally preserved.
 
-5. Keep the existing `NestAccfactory` configuration and accounts. Do not add a second platform or generate a new child bridge. Restart Homebridge.
-6. Confirm that existing devices respond in Apple Home with their rooms, scenes and automations intact. Check camera live view, HKSV configuration and legacy authentication logs.
+Climate Cntrl does not discover weather, cameras, doorbells, floodlight cameras or Yale locks. Owned cached weather accessories also need verification in the final migration procedure.
 
-Do not remove accessories or the bridge in Apple Home, clear cached accessories, reset/unpair a bridge, or delete the Homebridge storage directory.
+## External source preview
 
-If your configuration explicitly lists the old package under a top-level `plugins` allowlist or uses `homebridge-nest-accfactory.NestAccfactory` as a qualified platform identifier, change that package reference to Plus. Ordinary configurations with `"platform": "NestAccfactory"` need no platform-name change.
+Discovery requires Homebridge accessory control (`-I`) and valid bridge PINs in the local Homebridge configuration. The UI reads configured main and child bridges only. PINs remain server-side. Native Nest sensors use the existing Google connection. Accessories available only in Apple Home are outside scope.
 
-## Validation and recovery
-
-Automated tests cover legacy UUID equivalence, cached accessory/service reuse, new registration and external publication identity. A packaged-install check verifies the actual tarball loads and registers. These checks do not prove live Google authentication, physical camera behavior or preservation of an individual Apple Home installation. Verify your installation after migration.
-
-If migration fails, retain your cache and pairing records. Stop and inspect logs before resetting anything. Restore the backup if needed and reinstall the previous package/branch. Do not run the old and Plus packages together.
+Room sensor grouping is a read-only preview. It does not activate software temperature compensation, fan automation, combined presence rules or Google whole-home writes.

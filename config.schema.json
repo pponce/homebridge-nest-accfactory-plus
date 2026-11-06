@@ -1,5 +1,5 @@
 {
-  "pluginAlias": "NestAccfactory",
+  "pluginAlias": "NestClimateCntrl",
   "pluginType": "platform",
   "singular": true,
   "schema": {
@@ -8,7 +8,7 @@
       "name": {
         "title": "Name",
         "type": "string",
-        "default": "NestAccfactory",
+        "default": "Nest Climate Cntrl",
         "condition": "1=2"
       },
       "accounts": {
@@ -231,6 +231,25 @@
             },
             "scheduleTimeZone": {
               "type": "string"
+            },
+            "sensorPreview": {
+              "type": "object",
+              "title": "Read-only room sensor preview",
+              "properties": {
+                "selected": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": true
+                },
+                "desired": {
+                  "type": "number",
+                  "minimum": 5,
+                  "maximum": 35,
+                  "default": 21
+                }
+              }
             }
           }
         }
@@ -248,15 +267,7 @@
               "minLength": 1,
               "pattern": "\\S"
             },
-            "elevation": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 8848
-            },
             "exclude": {
-              "type": "boolean"
-            },
-            "weather": {
               "type": "boolean"
             }
           }
@@ -375,17 +386,6 @@
               "key": "homes[].name",
               "title": "Home Name",
               "placeholder": "Must match the home name in the Nest or Google Home apps"
-            },
-            {
-              "key": "homes[].weather",
-              "title": "Enable Weather Station"
-            },
-            {
-              "key": "homes[].elevation",
-              "title": "Elevation",
-              "condition": {
-                "functionBody": "return (model && model.homes && model.homes[arrayIndices] && model.homes[arrayIndices].weather === true);"
-              }
             },
             {
               "key": "homes[].exclude",

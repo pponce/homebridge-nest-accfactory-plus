@@ -20,9 +20,10 @@ try {
   let registered;
   plugin.default({ registerPlatform: (...args) => { registered = args; } });
   assert.equal(registered[0], 'homebridge-nest-accfactory-plus');
-  assert.equal(registered[1], 'NestAccfactory');
+  assert.equal(registered[1], 'NestClimateCntrl');
   assert.equal(typeof registered[2], 'function');
   console.log('Production tarball installs and registers successfully:', packed.filename);
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });
 }
+

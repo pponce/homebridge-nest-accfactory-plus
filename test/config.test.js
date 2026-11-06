@@ -22,7 +22,7 @@ for (let mode of [0o600, 0o640, 0o400]) {
         let directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-config-permissions-'));
         t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
         let configPath = path.join(directory, 'config.json');
-        let platform = { platform: 'NestAccfactory', nest: { access_token: 'synthetic-migration-token' }, devices: {} };
+        let platform = { platform: 'NestClimateCntrl', nest: { access_token: 'synthetic-migration-token' }, devices: {} };
         let original = JSON.stringify({ platforms: [platform], bridge: { name: 'Unchanged' } });
         fs.writeFileSync(configPath, original, { mode });
         // chmod makes the fixture independent of the process umask.
@@ -68,7 +68,7 @@ for (let [operation, failureAt] of [
     let directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-config-failure-'));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     let configPath = path.join(directory, 'config.json');
-    let platform = { platform: 'NestAccfactory', nest: { access_token: 'synthetic-migration-token' }, devices: {} };
+    let platform = { platform: 'NestClimateCntrl', nest: { access_token: 'synthetic-migration-token' }, devices: {} };
     let original = JSON.stringify({ platforms: [platform] });
     fs.writeFileSync(configPath, original, { mode: 0o600 });
     fs.writeFileSync(configPath + '.bak', 'existing backup');
@@ -218,8 +218,8 @@ for (let [label, contents] of [
     'ambiguous platforms',
     JSON.stringify({
       platforms: [
-        { platform: 'NestAccfactory', nest: { access_token: 'one' } },
-        { platform: 'NestAccfactory', nest: { access_token: 'two' } },
+        { platform: 'NestClimateCntrl', nest: { access_token: 'one' } },
+        { platform: 'NestClimateCntrl', nest: { access_token: 'two' } },
       ],
     }),
   ],
@@ -249,7 +249,7 @@ for (let failure of ['backup disappears', 'temporary file cleanup fails']) {
     let directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-config-recovery-'));
     context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     let file = path.join(directory, 'config.json');
-    let platform = { platform: 'NestAccfactory', nest: { access_token: 'fixture-token' } };
+    let platform = { platform: 'NestClimateCntrl', nest: { access_token: 'fixture-token' } };
     let original = JSON.stringify({ platforms: [platform] });
     fs.writeFileSync(file, original);
     if (failure === 'backup disappears') {
@@ -291,14 +291,16 @@ test('migration updates only the legacy platform and preserves an already migrat
   let directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-config-platforms-'));
   context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   let file = path.join(directory, 'config.json');
-  let current = { platform: 'NestAccfactory', accounts: [{ name: 'Existing', type: 'nest', access_token: 'existing' }], devices: [] };
-  let legacy = { platform: 'NestAccfactory', google: { issuetoken: 'issue', cookie: 'cookie' }, devices: { SERIAL: { exclude: true } } };
-  fs.writeFileSync(file, JSON.stringify({ platforms: [current, legacy] }));
+  let current = { platform: 'NestClimateCntrl', accounts: [{ name: 'Existing', type: 'nest', access_token: 'existing' }], devices: [] };
+  let legacy = { platform: 'NestClimateCntrl', google: { issuetoken: 'issue', cookie: 'cookie' }, devices: { SERIAL: { exclude: true } } };
+  const upstream = { platform: 'NestAccfactory', nest: { access_token: 'upstream-fixture' } };
+  fs.writeFileSync(file, JSON.stringify({ platforms: [current, legacy, upstream] }));
   let result = processConfig(structuredClone(legacy), { warn() {}, info() {} }, { user: { configPath: () => file } });
   let saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   assert.deepEqual(saved.platforms[0], current);
+  assert.deepEqual(saved.platforms[2], upstream);
   assert.deepEqual(saved.platforms[1], {
-    platform: 'NestAccfactory',
+    platform: 'NestClimateCntrl',
     accounts: result.accounts,
     devices: [{ serialNumber: 'SERIAL', exclude: true }],
   });
@@ -394,3 +396,4 @@ test('configuration publishes a successfully probed hardware encoder and debug d
   processConfig({ options: { debug: false } }, quiet, {});
   quiet.debug('Fixture message');
 });
+

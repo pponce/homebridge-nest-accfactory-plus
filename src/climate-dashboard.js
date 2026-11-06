@@ -9,6 +9,7 @@ const FIELDS = [
   'model',
   'online',
   'current_temperature',
+  'physical_temperature',
   'current_humidity',
   'temperature_scale',
   'target_temperature',
@@ -302,3 +303,4 @@ export class ClimateDashboard {
     }
   }
 }
+

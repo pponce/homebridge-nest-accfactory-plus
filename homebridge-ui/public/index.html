@@ -1,7 +1,7 @@
 <link rel="stylesheet" href="styles.css" />
 <main>
   <header>
-    <img class="brand" src="nest-climate-cntrl-icon-512.png" width="54" height="54" alt="" />
+    <img class="brand" src="nest-climate-cntrl-icon-512.png" width="54" height="54" alt="">
     <div>
       <h1>Nest Climate Cntrl</h1>
       <p>Comfort, controls, and a clearer view of your home.</p>
@@ -11,7 +11,8 @@
   <div id="notice" role="status" class="notice" hidden></div>
   <nav aria-label="Configuration sections">
     <a href="#account">Account</a><a href="#thermostats">Thermostats</a><a href="#sensors">Sensors &amp; Heat Link</a
-    ><a href="#features">Apple Home</a><a href="#schedule">Schedule</a><a href="#runtime">Runtime</a><a href="#diagnostics">Diagnostics</a>
+    ><a href="#room-preview">Room sensors &amp; fans</a>
+    <a href="#features">Apple Home</a><a href="#schedule">Schedule</a><a href="#runtime">Runtime</a><a href="#diagnostics">Diagnostics</a>
   </nav>
   <section id="account" class="panel">
     <div class="heading">
@@ -46,6 +47,7 @@
     <div id="sensor-cards" class="cards"></div>
     <div id="heatlink-cards" class="cards"></div>
   </section>
+  <section id="room-preview" class="panel"></section>
   <section id="features" class="panel">
     <h2>Apple Home features</h2>
     <p>Choose which optional controls appear in Apple Home. Save configuration and restart the Nest bridge to apply changes.</p>
@@ -133,3 +135,4 @@
   </footer>
 </main>
 <script type="module" src="index.js"></script>
+

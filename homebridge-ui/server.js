@@ -1,12 +1,31 @@
 import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+import { ClimateAccess } from './climate-access.js';
 
 class ClimateUi extends HomebridgePluginUiServer {
   constructor() {
     super();
     this.onRequest('/status', () => this.forward('/status'));
     this.onRequest('/command', (payload) => this.forward('/command', payload));
+    this.onRequest('/sources', async () => {
+      if (!this.startingAccess) {
+        this.access = new ClimateAccess(this.homebridgeConfigPath);
+        this.startingAccess = this.access.start().catch(() => {
+          this.access.close();
+          this.startingAccess = undefined;
+          throw new RequestError('Accessory discovery could not start. Check the Homebridge bridge configuration.', { status: 503 });
+        });
+      }
+      await this.startingAccess;
+      if (!this.readingSources) {
+        this.access.client.startDiscovery(3500);
+        this.readingSources = delay(3500).then(() => this.access.refresh()).finally(() => { this.readingSources = undefined; });
+      }
+      return this.readingSources;
+    });
+    process.once('exit', () => this.access?.close());
     this.ready();
   }
 
@@ -36,3 +55,4 @@ class ClimateUi extends HomebridgePluginUiServer {
   }
 }
 new ClimateUi();
+

@@ -280,7 +280,7 @@ function persistMigratedConfig(config, log, api) {
 
     jsonConfig.platforms.forEach((platform, index) => {
       // Only consider our platform name
-      if (platform?.platform !== 'NestAccfactory') {
+      if (platform?.platform !== 'NestClimateCntrl') {
         return;
       }
 
@@ -314,7 +314,7 @@ function persistMigratedConfig(config, log, api) {
 
     // Must resolve to exactly one platform to proceed safely
     if (matchingPlatforms.length !== 1) {
-      throw new Error('unable to safely identify a single NestAccfactory platform to migrate');
+      throw new Error('unable to safely identify a single NestClimateCntrl platform to migrate');
     }
 
     // Apply migrated structure
@@ -390,3 +390,4 @@ function persistMigratedConfig(config, log, api) {
 
 // Define exports
 export { processConfig };
+

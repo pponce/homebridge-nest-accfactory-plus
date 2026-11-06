@@ -4,7 +4,7 @@ Updated: 2026-11-06
 
 ## Objective and identity
 
-Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `feature/thermostat-dashboard`. Target platform alias is `NestClimateCntrl`; implementation and tested migration from `NestAccfactory` are pending. Preserve existing accessory UUID namespace and bridge pairing during the transition; package identity remains unchanged until its separate migration. Future repository/package name: `homebridge-nest-climate-cntrl`. No npm publication or live installation performed.
+Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `feature/thermostat-dashboard`. Target platform alias is `NestClimateCntrl`; alias implementation is present; tested cache migration from `NestAccfactory` remains pending. Preserve existing accessory UUID namespace and bridge pairing during the transition; package identity remains unchanged until its separate migration. Future repository/package name: `homebridge-nest-climate-cntrl`. No npm publication or live installation performed.
 
 ## Implemented
 
@@ -43,3 +43,14 @@ Draft PR: https://github.com/pponce/homebridge-nest-accfactory-plus/pull/12
 ## Continuation details
 
 Local repository was initialized from a source snapshot rather than a full remote clone. Do not push its synthetic history. Use remote GitHub commits/trees based on inspected remote main and preserve unrelated newer files. Local source snapshots have one extra trailing newline compared with fetched content; compare normalized content when checking upstream changes. Shared submodule files were fetched at pinned revisions for local validation; never replace remote gitlinks with those copies.
+
+
+## Mixed-source discovery milestone
+
+- Alias changed to `NestClimateCntrl`; UUID namespace remains `homebridge-nest-accfactory` as required for existing accessories. Package/repository rename is still pending. Cache association migration remains unverified; no cache or live config has been edited.
+- Weather discovery and ingestion fetches removed; legacy implementation remains in source for now.
+- Server-side HAP discovery adapted from Harmony Home Control, restricted to configured main/child bridges; fresh GET reads, no write endpoint, PINs withheld from browser/diagnostics.
+- UI provides native and external temperature selection, equal-average preview, bounded target estimate and a read-only fan list. Group settings persist through Homebridge Save.
+- Raw thermostat temperature is preserved before applying active Nest sensor display normalization.
+- 22 focused tests and local build pass; new full CI results pending at this checkpoint.
+- Still not implemented: autonomous room-sensor compensation, fan control rules, weighted/scheduled groups, motion-driven Home/Away, final camera dependency cleanup. Real Nest physical-source semantics must be verified before enabling compensation.
