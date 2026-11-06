@@ -1,3 +1,15 @@
+## v0.5.0-beta.3
+
+**Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and Apple Home pairing.** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Recreate affected room assignments, scenes and automations; follow the [cutover instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.3/MIGRATION.md). Existing Climate Cntrl beta.1/beta.2 installations can update normally.
+
+- **Web dashboard passwords can now be 8–128 characters.** The Homebridge setup form, server validation and setup guide use the same limit. Existing longer passwords continue to work.
+- The checkout/publishing helper keeps local maintenance artifacts in place and stops if an update would overwrite ignored local files. It verifies the tested release package and publishes under npm's `beta` tag.
+- The standalone HTTPS dashboard remains available with its phone layout, browser/iOS icons, live Nest controls, settings, source discovery, schedules and observed runtime. See [web dashboard setup](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.3/WEB_DASHBOARD.md).
+
+Temperature, occupancy and room-fan rules remain **inactive drafts**; automatic rule execution is not included. Hardware testing is ongoing.
+
+Compatible existing **legacy Google refresh-token authentication remains supported**; the plugin cannot issue new legacy tokens. For cameras, doorbells, floodlight cameras, Yale locks or weather, use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) with separate device ownership.
+
 ## v0.5.0-beta.2
 
 **Fresh setup is required when moving from Nest Accfactory or Nest Accfactory Plus.** The package is `homebridge-nest-climate-cntrl` and the Homebridge platform changes from `NestAccfactory` to **`NestClimateCntrl`**. Create and pair a new child bridge, then recreate affected Apple Home room assignments, scenes and automations. Follow the [cutover instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.2/MIGRATION.md).

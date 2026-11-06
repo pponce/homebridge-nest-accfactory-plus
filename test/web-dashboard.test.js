@@ -116,6 +116,26 @@ test('web accounts use private password hashes, expire sessions and invalidate s
   assert.equal(loaded.sessions.size, 0);
 });
 
+test('web passwords accept 8 through 128 characters and reject out-of-range replacements', async (t) => {
+  const { storage } = await fixture(t);
+  const auth = new WebDashboardAuth(storage);
+  await auth.setup({ username: 'admin', password: 'eight888' });
+  const file = path.join(storage, 'web-account.json');
+  const record = await fs.readFile(file, 'utf8');
+  assert.doesNotMatch(record, /eight888/);
+  const loaded = new WebDashboardAuth(storage);
+  await loaded.load();
+  assert.equal((await loaded.login({ username: 'admin', password: 'eight888' }, 'one')).authenticated, true);
+  for (const password of ['short-7', 'x'.repeat(129), undefined, 12345678]) {
+    await assert.rejects(loaded.setup({ username: 'admin', password }), /8–128 characters/);
+    assert.equal(await fs.readFile(file, 'utf8'), record);
+  }
+  assert.equal((await loaded.login({ username: 'admin', password: 'eight888' }, 'one')).authenticated, true);
+  await loaded.setup({ username: 'admin', password: 'x'.repeat(128) });
+  assert.equal((await loaded.login({ username: 'admin', password: 'x'.repeat(128) }, 'one')).authenticated, true);
+  loaded.close();
+});
+
 test('concurrent account setup is serialized and outstanding old-password validation cannot issue a session', async (t) => {
   const { storage } = await fixture(t);
   const auth = new WebDashboardAuth(storage);

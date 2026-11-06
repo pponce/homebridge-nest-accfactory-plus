@@ -7,7 +7,7 @@ This feature is available in 0.5.0-beta.2 and is under beta testing. Automatic r
 ## Enable web access
 
 1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Web dashboard**. The Nest bridge must be running.
-2. Create a **web username and password**. Use at least 12 characters for the password. This account is separate from your Google and Homebridge accounts.
+2. Create a **web username and password**. Use at least 8 characters for the password. This account is separate from your Google and Homebridge accounts.
 3. Select **Enable standalone dashboard**. Save with Homebridge's **Save** button and restart the Nest child bridge.
 4. Select **Refresh web access**, then **Open climate dashboard**. The default HTTPS port is **9444**.
 

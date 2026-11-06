@@ -56,10 +56,10 @@ export class WebDashboardAuth {
       typeof username !== 'string' ||
       !/^[a-zA-Z0-9_.-]{1,64}$/.test(username) ||
       typeof password !== 'string' ||
-      password.length < 12 ||
+      password.length < 8 ||
       password.length > 128
     ) {
-      throw new Error('Use a username of 1–64 letters, numbers, dots or dashes and a password of 12–128 characters.');
+      throw new Error('Use a username of 1–64 letters, numbers, dots or dashes and a password of 8–128 characters.');
     }
     const salt = crypto.randomBytes(32).toString('hex');
     const hash = (await scrypt(password, salt, 64)).toString('hex');

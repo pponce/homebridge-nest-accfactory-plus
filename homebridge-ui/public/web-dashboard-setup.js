@@ -102,12 +102,12 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     host.append(enable, el('p', 'Save with Homebridge’s Save button and restart the Nest bridge to apply network settings.', 'help'));
     const grid = el('div', undefined, 'grid');
     username = input(grid, 'Web username', live?.username ?? 'admin', { autocomplete: 'username', maxLength: 64 });
-    password = input(grid, 'Web password', '', { type: 'password', autocomplete: 'new-password', minLength: 12, maxLength: 128 });
+    password = input(grid, 'Web password', '', { type: 'password', autocomplete: 'new-password', minLength: 8, maxLength: 128 });
     host.append(
       grid,
       el(
         'p',
-        'Use at least 12 characters. This separate web login is stored privately; it is not your Google or Homebridge password.',
+        'Use at least 8 characters. This separate web login is stored privately; it is not your Google or Homebridge password.',
         'help',
       ),
     );
@@ -116,8 +116,8 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     accountButton.type = 'button';
     accountButton.disabled = true;
     accountButton.onclick = async () => {
-      if (!username.value.trim() || password.value.length < 12) {
-        message.textContent = 'Enter a username and a password with at least 12 characters.';
+      if (!username.value.trim() || password.value.length < 8) {
+        message.textContent = 'Enter a username and a password with at least 8 characters.';
         return;
       }
       accountButton.disabled = true;

@@ -1,3 +1,9 @@
+## v0.5.0-beta.3
+
+- Allow web dashboard passwords of 8–128 characters in server validation and Homebridge setup; existing passwords remain valid.
+- Update web setup guidance and cover the password boundaries in server and browser checks.
+- Preserve local maintenance artifacts during checkout updates and refuse to overwrite ignored files.
+
 ## v0.5.0-beta.2 — Nest Climate Cntrl
 
 - Add an optional standalone HTTPS dashboard with a separate login, responsive desktop/phone layout, light/dark appearance, favicon and iOS Home Screen icon. See [web dashboard setup](WEB_DASHBOARD.md).
