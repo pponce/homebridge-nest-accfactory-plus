@@ -73,7 +73,7 @@ export async function inspectInstallation(
     platforms: [],
     installedPackages: [],
     nextStep:
-      'Review the bridge/cache layout and approve a backup before choosing a migration. This report does not authorize or apply cache changes.',
+      'Review the bridge and cache layout before choosing a migration. No installation files have been changed.',
   };
   for (const [index, entry] of config.value.platforms.entries()) {
     const alias = typeof entry?.platform === 'string' ? entry.platform.split('.').at(-1) : '';

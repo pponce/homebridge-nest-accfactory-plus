@@ -39,9 +39,9 @@ The maintainer allows UUID changes when needed. Preserve existing identities for
 
 ## Validation
 
-- Node 24 GitHub validation passes lint (14 existing warnings, zero errors), all **1,619 tests**, every production-module coverage floor and build verification.
+- Node 24 GitHub validation passes lint (14 existing warnings, zero errors), all **1,621 tests**, every production-module coverage floor and build verification.
 - Chromium behavior checks pass: masked credentials, config preservation, mixed sensor preview without writes, invalid preview settings, native sensor command, offline control disabling, 375px layout and schema fallback.
-- 30 focused control/dashboard/source/identity tests pass locally under Node 24.22.1.
+- 32 focused control/dashboard/source/identity tests pass locally under Node 24.22.1.
 - Final compatibility validation is the PR workflow: Node 22/24 with Homebridge 1.11.4 and 2.4.0; Node 26 with Homebridge 2.4.0; separate dashboard browser job. Check the latest PR head's result.
 - Validated development checkpoint: `9d08653169df21ce0a436fe93ddc5156a5ba548d`; source-discovery correction: `5dbc8b2b90f32c7544bd3d9da1eb30d00183ac27`, formatting/lock: `b571d4740827a8ffc68d2846bc21db6a70bbb104`.
 - Full visual inspection and real Homebridge integration, Eco, native sensor selection, HVAC fan, Heat Link, external sources and Apple Home migration are **not hardware verified**.
@@ -55,7 +55,7 @@ The maintainer allows UUID changes when needed. Preserve existing identities for
 5. Build the combined Climate Home/Away rule editor and preview: searchable main/child-bridge motion/occupancy picker, Google baseline, any/all groups, holds, Away delay and manual overrides. Then add the optional derived occupancy accessory. No Google whole-home writes.
 6. Add weighted/scheduled temperature groups after the single/equal-average heating controller is verified. Cooling and heat/cool ranges need separate validation.
 7. Design/test cache association migration across supported Homebridge versions and with upstream installed. Verify rooms/scenes/automations on hardware; handle owned cached weather/camera/lock accessories. No blanket cache clearing or default re-pairing.
-8. Finish camera-specific distribution/dependency cleanup while retaining provenance. Complete package/repository rename, public documentation and verification updates at feature completion. Ask before npm publication.
+8. Finish camera-specific distribution/dependency cleanup while retaining provenance. Package/repository rename and beta onboarding docs are complete. Complete remaining verification updates as features graduate from beta. npm publication of 0.5.0-beta.1 is explicitly authorized; authentication must occur in the maintainer’s terminal.
 
 ## Workspace continuation
 
@@ -77,3 +77,9 @@ Local Chromium cannot launch under the execution restrictions; use the GitHub br
 - `scripts/migration-preflight.mjs` only reads installation files and outputs counts/status; privacy/no-mutation tests added. No cache-preserving migration implementation is claimed.
 - `maintenance/publish-beta-and-inspect.sh` keeps assets/reports in the existing project folder, requests npm login locally, verifies the published tarball, and prints an rsync command for the redacted preflight report. It creates no backup and does not install or change Homebridge.
 - After receiving that report, choose/test the migration for the actual bridge layout. Obtain approval before creating any backup or applying a custom cache patch.
+
+## Validated beta checkpoint
+
+- `da0b4c2c88498585bddf0473b9385c57a7936d1c`: 1,621 tests and coverage floors passed, Chromium behavior passed, production tarball installed and registered as `homebridge-nest-climate-cntrl` / `NestClimateCntrl`.
+- Beta publishing and migration helpers are ready; no npm authentication exists in the workspace. The maintainer must run the checked helper and complete npm login/2FA locally.
+- Release preparation includes all requested callouts: platform-name change plus migration link, upstream for removed capabilities, legacy Google token support for existing token holders, and clear beta/read-only feature boundaries.

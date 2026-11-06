@@ -9,7 +9,7 @@ This is a separate beta package, not an automatic update of the old package. Ins
 1. Record the installed plugin version and whether it uses the main bridge or a child bridge.
 2. Run the read-only migration preflight supplied with the [beta release](https://github.com/pponce/homebridge-nest-climate-cntrl/releases). It reports configuration/cache structure without exporting credentials, pairing keys, device names or serial numbers.
 3. Choose whether to keep the current Apple Home accessories or create a separate beta bridge.
-4. Make an approved Homebridge backup before applying the chosen migration.
+4. Create a Homebridge backup before applying the chosen migration.
 
 **Do not change only the platform field and restart.** Homebridge stores plugin and platform ownership in its accessory cache. An unhandled change can orphan accessories and affect room assignments, scenes and automations.
 
