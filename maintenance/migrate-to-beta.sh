@@ -7,7 +7,7 @@
     local helper_ref='a108c4d1d80e1d9e2a3f79aced59ba4b07aa5dc0'
     local helper_sha='0486420172419ded0e969df7e2bf93a82fda0ef1e35a62e7edeb045e9a2af59b'
     local expected_count="${1:-}" work release helper stamp snapshot_result snapshot report
-    local client_ip client_port server_ip server_port
+    local client_ip client_port server_ip server_port ignored
     if [[ ! "$expected_count" =~ ^[1-9][0-9]*$ ]]; then
       printf '%s\n' 'Supply the reviewed accessory count. Run only after approving the local backup and cache migration.'
       return 1
@@ -16,6 +16,13 @@
       printf '%s\n' 'Expected the existing renamed development checkout.'
       return 1
     fi
+    git -C "$project" rev-parse --is-inside-work-tree >/dev/null || return 1
+    for ignored in /maintenance/migration/ /maintenance/releases/; do
+      if ! git -C "$project" check-ignore -q --no-index "${ignored#/}private-file"; then
+        printf '\n%s\n' "$ignored" >> "$project/.git/info/exclude" || return 1
+      fi
+      git -C "$project" check-ignore -q --no-index "${ignored#/}private-file" || return 1
+    done
     work="$project/maintenance/migration"
     release="$project/maintenance/releases/v$version"
     helper="$work/migrate-child-bridge.mjs"
