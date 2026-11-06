@@ -10,6 +10,7 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 
 - Repository: `pponce/homebridge-nest-climate-cntrl`.
 - Feature branch: `feature/standalone-dashboard`, implementation based on main `32abeaf07fca58fc30512f2551457cd18d143752`.
+- Draft pull request: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/13.
 - Migration work proceeds independently on `main`. Preserve those commits and concurrent README edits when preparing the feature tree.
 - Local workspace is a source snapshot with synthetic Git history. Do not push local history or replace remote submodule gitlinks.
 - No live installation changes, backups or npm publication are part of this work.
@@ -33,6 +34,8 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 - `.github/workflows/dashboard-web.yml` runs the full checks with Homebridge 2.5.0 and embedded/standalone browser fixtures, and uploads screenshots and coverage.
 - Coverage floors were added for the three new modules; existing floors remain unchanged. CI also installs a production tarball and checks every new server/UI asset.
 - Successful browser CI publishes fixture-only screenshots and a source-commit report to `review/standalone-dashboard`. Write permissions exist only in that push-only visual-review job; it never updates source branches.
+- Feature commit `a91381114c9b6c8a36a859a055d7fbcf8156a99b` passed full Node 24 / Homebridge 2.5.0 checks, production tarball installation, embedded/standalone browser tests and screenshot publication in run `42306490060`.
+- GitHub's text-only connector cannot decode PNG blobs. Review publication includes base64 text companions for retrieving exact PNG bytes for visual inspection; all screenshots contain fixture data only.
 
 ## Next steps
 

@@ -34,6 +34,8 @@ for (const name of names) {
   }
   const blob = await request('/git/blobs', { content: bytes.toString('base64'), encoding: 'base64' });
   tree.push({ path: name, mode: '100644', type: 'blob', sha: blob.sha });
+  // Text companions allow repository tools that only read UTF-8 to retrieve the exact review image.
+  tree.push({ path: name + '.base64', mode: '100644', type: 'blob', content: bytes.toString('base64') + '\n' });
 }
 const report = { sourceCommit: source, sourceBranch: 'feature/standalone-dashboard', fixtureDataOnly: true,
   checks: ['desktop and 360px layout', 'CSP', 'draft rules never send live commands', 'configuration revision conflicts',
