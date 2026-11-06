@@ -1,0 +1,24 @@
+{
+  "sourceCommit": "a91381114c9b6c8a36a859a055d7fbcf8156a99b",
+  "sourceBranch": "feature/standalone-dashboard",
+  "fixtureDataOnly": true,
+  "checks": [
+    "desktop and 360px layout",
+    "CSP",
+    "draft rules never send live commands",
+    "configuration revision conflicts",
+    "offline controls",
+    "dark mode",
+    "iOS icon dimensions"
+  ],
+  "screenshots": [
+    "login-desktop.png",
+    "overview-desktop.png",
+    "rules-desktop.png",
+    "overview-mobile.png",
+    "sources-mobile.png",
+    "rules-mobile.png",
+    "settings-mobile.png",
+    "overview-mobile-dark.png"
+  ]
+}
