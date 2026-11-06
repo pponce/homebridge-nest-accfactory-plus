@@ -7,7 +7,7 @@
 
 </span>
 
-**Nest Accfactory Plus adds legacy Google OAuth refresh-token authentication to [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory).** This fork is for users who already have a compatible refresh token from the historical `homebridge-nest` login utility and want to keep using it while receiving updates from the upstream project.
+**Nest Accfactory Plus adds legacy Google OAuth refresh-token authentication to [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory).** This fork is for users who already have a compatible refresh token from the historical `homebridge-nest` login utility and want to keep using it while receiving updates from the upstream project. There is no reason to use this plugin unless you have Google OAuth refresh-token that works. If you do this path avoids having to get authentication re-setup constantly like i had to.
 
 The original Nest Accfactory plugin and its Nest/HomeKit integration, including HomeKit Secure Video for supported cameras and doorbells, are the work of [n0rt0nthec4t and upstream contributors](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). This fork is maintained separately by [pponce](https://github.com/pponce).
 
