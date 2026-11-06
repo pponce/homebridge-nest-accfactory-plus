@@ -41,7 +41,7 @@ import HomeKitDevice from './HomeKitDevice.js';
 // Define constants
 import { __dirname, DEVICE_CATEGORY_MAP } from './consts.js';
 
-async function loadDeviceModules(log, pluginDir = '') {
+async function loadDeviceModules(log, pluginDir = '', allowedFiles = undefined) {
   let baseDir = path.join(__dirname, pluginDir);
   let deviceMap = new Map();
   let files = (await fs.readdir(baseDir)).sort();
@@ -49,7 +49,7 @@ async function loadDeviceModules(log, pluginDir = '') {
   log?.debug?.('Base module - %s', HomeKitDevice.VERSION);
 
   for (const file of files) {
-    if (file.endsWith('.js') === false) {
+    if (file.endsWith('.js') === false || (allowedFiles !== undefined && !allowedFiles.includes(file))) {
       continue;
     }
 
@@ -103,3 +103,4 @@ function getDeviceHKCategory(type) {
 
 // Define exports
 export { loadDeviceModules, getDeviceHKCategory };
+

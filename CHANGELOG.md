@@ -1,3 +1,10 @@
+## Unreleased — Nest Climate Cntrl
+
+- Add a custom settings dashboard with thermostat status, native sensor selection, schedules, runtime coverage and diagnostics.
+- Add optional Eco and momentary HVAC fan-preset switches, disabled by default.
+- Focus discovery on thermostats, sensors and heating; retain Protect, Home/Away and weather support.
+- Preserve package and accessory identity during development.
+
 # Nest Accfactory Plus changelog
 
 ## v0.4.4
@@ -538,3 +545,4 @@ Apologies for this change, as I can understand what an inconvience and frustrati
 
 - Inital re-coding from Nest_accfactory code base. These projects will now share a common code base
 - Camera/Doorbell support currently removed will re-worked
+

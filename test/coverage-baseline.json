@@ -178,5 +178,10 @@
     "lines": 100,
     "branches": 100,
     "functions": 100
+  },
+  "src/climate-dashboard.js": {
+    "lines": 100,
+    "branches": 90,
+    "functions": 90
   }
 }

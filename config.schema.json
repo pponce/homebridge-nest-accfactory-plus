@@ -25,7 +25,10 @@
             "type": {
               "type": "string",
               "default": "google",
-              "enum": ["google", "nest"]
+              "enum": [
+                "google",
+                "nest"
+              ]
             },
             "access_token": {
               "type": "string",
@@ -48,7 +51,10 @@
             "authMethod": {
               "type": "string",
               "default": "issueTokenCookie",
-              "enum": ["issueTokenCookie", "refreshToken"]
+              "enum": [
+                "issueTokenCookie",
+                "refreshToken"
+              ]
             },
             "refreshToken": {
               "type": "string",
@@ -64,7 +70,10 @@
               "default": false
             }
           },
-          "required": ["name", "type"],
+          "required": [
+            "name",
+            "type"
+          ],
           "allOf": [
             {
               "if": {
@@ -79,12 +88,19 @@
                   {
                     "properties": {
                       "authMethod": {
-                        "enum": ["issueTokenCookie"]
+                        "enum": [
+                          "issueTokenCookie"
+                        ]
                       }
                     },
-                    "required": ["issueToken", "cookie"],
+                    "required": [
+                      "issueToken",
+                      "cookie"
+                    ],
                     "not": {
-                      "required": ["refreshToken"]
+                      "required": [
+                        "refreshToken"
+                      ]
                     }
                   },
                   {
@@ -93,14 +109,21 @@
                         "const": "refreshToken"
                       }
                     },
-                    "required": ["authMethod", "refreshToken"],
+                    "required": [
+                      "authMethod",
+                      "refreshToken"
+                    ],
                     "not": {
                       "anyOf": [
                         {
-                          "required": ["issueToken"]
+                          "required": [
+                            "issueToken"
+                          ]
                         },
                         {
-                          "required": ["cookie"]
+                          "required": [
+                            "cookie"
+                          ]
                         }
                       ]
                     }
@@ -117,7 +140,9 @@
                 }
               },
               "then": {
-                "required": ["access_token"]
+                "required": [
+                  "access_token"
+                ]
               }
             }
           ]
@@ -136,26 +161,6 @@
           },
           "exclude": {
             "type": "boolean"
-          },
-          "ffmpegDebug": {
-            "type": "boolean",
-            "default": false
-          },
-          "ffmpegHWAccel": {
-            "type": "boolean",
-            "default": false
-          },
-          "ffmpegPath": {
-            "type": "string",
-            "default": "/usr/local/bin/ffmpeg"
-          },
-          "ffmpegTranscode": {
-            "type": "boolean",
-            "default": false
-          },
-          "logMotionEvents": {
-            "type": "boolean",
-            "default": true
           },
           "maxStreams": {
             "type": "integer",
@@ -192,9 +197,6 @@
               "type": "string",
               "placeholder": "Device description for configuration"
             },
-            "doorbellCooldown": {
-              "type": "string"
-            },
             "eveHistory": {
               "type": "boolean"
             },
@@ -206,15 +208,6 @@
             },
             "fanDuration": {
               "type": "string"
-            },
-            "ffmpegDebug": {
-              "type": "boolean"
-            },
-            "ffmpegHWAccel": {
-              "type": "boolean"
-            },
-            "ffmpegTranscode": {
-              "type": "boolean"
             },
             "hotwaterBoostTime": {
               "type": "string"
@@ -228,16 +221,15 @@
             "humiditySensor": {
               "type": "boolean"
             },
-            "ignoreIndoorChime": {
-              "type": "boolean"
+            "ecoSwitch": {
+              "type": "boolean",
+              "default": false
             },
-            "localAccess": {
-              "type": "boolean"
+            "fanPresetSwitches": {
+              "type": "boolean",
+              "default": false
             },
-            "logMotionEvents": {
-               "type": "boolean"
-            },
-            "motionCooldown": {
+            "scheduleTimeZone": {
               "type": "string"
             }
           }
@@ -288,27 +280,37 @@
           "orderable": false,
           "arrayItemTitle": "{{value.name || 'Account'}}",
           "items": [
-            { 
-              "key": "accounts[].name", 
+            {
+              "key": "accounts[].name",
               "title": "Name"
             },
             {
-              "key": "accounts[].type", 
+              "key": "accounts[].type",
               "title": "Type",
-              "enumNames": ["Google", "Nest"],
+              "enumNames": [
+                "Google",
+                "Nest"
+              ],
               "oneOf": [
                 {
-                  "enum": ["google"]
+                  "enum": [
+                    "google"
+                  ]
                 },
                 {
-                  "enum": ["nest"]
+                  "enum": [
+                    "nest"
+                  ]
                 }
               ]
             },
             {
               "key": "accounts[].authMethod",
               "title": "Authentication",
-              "enumNames": ["Issue Token and Cookie", "Legacy Refresh Token"],
+              "enumNames": [
+                "Issue Token and Cookie",
+                "Legacy Refresh Token"
+              ],
               "condition": {
                 "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google';"
               }
@@ -317,15 +319,15 @@
               "key": "accounts[].issueToken",
               "title": "Issue Token",
               "condition": {
-                  "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
-                }
+                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
+              }
             },
-            { 
+            {
               "key": "accounts[].cookie",
               "title": "Cookie",
               "condition": {
-                  "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
-                }
+                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
+              }
             },
             {
               "key": "accounts[].refreshToken",
@@ -335,18 +337,18 @@
                 "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && model.accounts[arrayIndices].authMethod === 'refreshToken';"
               }
             },
-            { 
+            {
               "key": "accounts[].access_token",
               "title": "Access Token",
               "condition": {
-                  "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'nest';"
-                }
+                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'nest';"
+              }
             },
-            { 
+            {
               "key": "accounts[].fieldTest",
               "title": "Use Field Test API"
             },
-            { 
+            {
               "key": "accounts[].exclude",
               "title": "Exclude Account"
             }
@@ -444,18 +446,6 @@
       "expanded": true,
       "items": [
         {
-          "key": "options.ffmpegPath",
-          "title": "FFmpeg Binary Path"
-        },
-        {
-          "key": "options.ffmpegHWAccel",
-          "title": "Enable Video Hardware Acceleration"
-        },
-        {
-          "key": "options.ffmpegTranscode",
-          "title": "Enable Video Transcoding"
-        },
-        {
           "key": "options.maxStreams",
           "title": "Simultaneous Live Viewers per Camera"
         },
@@ -464,20 +454,12 @@
           "title": "Enable Verbose Logging"
         },
         {
-          "key": "options.logMotionEvents",
-          "title": "Enable Motion Event Logging"
-        },
-        {
-          "key": "options.ffmpegDebug",
-          "title": "Enable FFmpeg Debug Logging"
-        },
-        {
           "key": "options.supportDump",
           "title": "Enable Support Dump Logging",
           "description": "Enable detailed device data logging for troubleshooting. Only enable when requested as it may produce large logs."
         }
       ]
     }
-  ]
+  ],
+  "customUi": true
 }
-

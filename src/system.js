@@ -62,6 +62,7 @@ import { fetchWrapper } from './fetchWrapper.js';
 import { adjustTemperature, scaleValue } from './utils.js';
 import { getProtoTypes } from './protobuf.js';
 import { createSupportDump } from './supportdump.js';
+import { ClimateDashboard } from './climate-dashboard.js';
 
 // Define constants
 import {
@@ -85,6 +86,7 @@ const API_STREAM_RETRY_MAX = 60000; // Maximum retry delay during API outage/fai
 // We handle the connections to Nest/Google
 // Perform device management (additions/removals/updates)
 export default class NestAccfactory {
+  dashboard = undefined;
   cachedAccessories = []; // Track restored cached accessories
 
   // Internal data only for this class
@@ -126,13 +128,13 @@ export default class NestAccfactory {
     this?.log?.debug?.('Node.js: v%s', process.versions.node);
 
     // Perform validation on the configuration passed into us and set defaults if not present
-    this.config = processConfig(config, this.log, this.api);
+    this.config = processConfig(config, this.log, this.api, { video: false });
 
     api?.on?.('didFinishLaunching', async () => {
       // We got notified that Homebridge has finished loading
 
       // Load device support modules from the plugins folder if not already done
-      this.#deviceModules = await loadDeviceModules(this.log, 'plugins');
+      this.#deviceModules = await loadDeviceModules(this.log, 'plugins', ['thermostat.js', 'tempsensor.js', 'heatlink.js', 'homeaway.js', 'protect.js', 'weather.js']);
 
       // Build runtime connection state now that cached accessories have been restored
       // and device modules are ready to receive cloud updates.
@@ -144,6 +146,24 @@ export default class NestAccfactory {
         return;
       }
 
+      if (typeof this.api?.user?.storagePath === 'function') {
+        this.dashboard = new ClimateDashboard(this.api.user.storagePath(), {
+          accounts: () => [...this.#connections.entries()].map(([id, account]) => ({
+            id, name: account.name, authorised: account.authorised === true,
+            authMethod: account.authMethod ?? account.type,
+            observing: account.climateObserving === true,
+            lastUpdate: account.climateLastUpdate ?? null,
+          })),
+          command: (id, values) => this.#set(this.#rawData?.[id]?.connection, id, values),
+          log: this.log,
+        });
+        try {
+          await this.dashboard.start();
+        } catch {
+          this.log.warn('Climate dashboard unavailable; thermostat integration will continue.');
+        }
+      }
+
       // Start connection lifecycle per configured account.
       for (let [uuid] of this.#connections.entries()) {
         this.#connections.start(uuid);
@@ -153,6 +173,7 @@ export default class NestAccfactory {
     api?.on?.('shutdown', async () => {
       // We got notified that Homebridge is shutting down
       // Perform cleanup of internal state
+      await this.dashboard?.stop();
       this.#connections?.shutdown?.();
 
       // Cleanup internal data
@@ -166,6 +187,12 @@ export default class NestAccfactory {
   }
 
   configureAccessory(accessory) {
+    const removedTypes = ['CameraRTPStreamManagement', 'Doorbell', 'LockMechanism']
+      .map((name) => this.api?.hap?.Service?.[name]?.UUID).filter(Boolean);
+    if (accessory?.services?.some((service) => removedTypes.includes(service.UUID))) {
+      this.api.unregisterPlatformAccessories(HomeKitDevice.PLUGIN_NAME, HomeKitDevice.PLATFORM_NAME, [accessory]);
+      return;
+    }
     // This gets called from Homebridge each time it restores an accessory from its cache
     this?.log?.info?.('Loading accessory from cache:', accessory.displayName);
 
@@ -428,6 +455,7 @@ export default class NestAccfactory {
                       await HomeKitDevice.message(trackedDevice.uuid, HomeKitDevice.REMOVE, {});
 
                       // Finally, remove from tracked devices
+                      this.dashboard?.remove(serialNumber);
                       this.#trackedDevices.delete(serialNumber);
                     }
                   }
@@ -574,6 +602,8 @@ export default class NestAccfactory {
             return;
           }
 
+          connection.climateObserving = true;
+          connection.climateLastUpdate = Date.now();
           let observeResponses = Array.isArray(message?.observeResponse) === true ? message.observeResponse : [message].filter(Boolean);
           let changedData = new Map(); // Map of resourceId to { fields: Set(...) } for processing after the loop
 
@@ -728,6 +758,10 @@ export default class NestAccfactory {
         );
       })
       .finally(() => {
+        if (this.#connections?.get(uuid) === connection && connection.grpcTransport === grpcTransport) {
+          connection.climateObserving = false;
+          this.dashboard?.invalidate(uuid);
+        }
         // Only continue the observe loop if this exact connection is still active and authorised.
         if (this.#connections?.get(uuid) === connection && connection.grpcTransport === grpcTransport && connection.authorised === true) {
           let observeDelay = API_STREAM_LOOP_INTERVAL;
@@ -914,6 +948,7 @@ export default class NestAccfactory {
                 }
               }
 
+              this.dashboard?.update(serialNumber, deviceModule.class.TYPE, deviceData, resourceData?.connection);
               // Send updated data onto HomeKit device for it to process
               await HomeKitDevice.message(trackedDevice.uuid, HomeKitDevice.UPDATE, deviceData);
             }
@@ -1011,6 +1046,29 @@ export default class NestAccfactory {
             ];
           };
 
+          if (key === 'eco_mode') {
+            if (typeof value !== 'boolean' || this.#rawData[nest_google_device_uuid].value?.eco_mode_state === undefined) {
+              throw new Error('Eco mode is unavailable for this thermostat');
+            }
+            setCommandTrait('eco_mode_state', 'type.nestlabs.com/nest.trait.hvac.EcoModeStateTrait.EcoModeChangeRequest', {
+              ecoMode: value ? 'ECO_MODE_MANUAL_ECO' : 'ECO_MODE_INACTIVE',
+              ecoModeActor: { method: 'HVAC_ACTOR_METHOD_REMOTE', timeOfAction: timestamp(Date.now()) },
+              setAll: false,
+            });
+          }
+
+          if (key === 'temperature_sensor') {
+            const settings = this.#rawData[nest_google_device_uuid].value?.remote_comfort_sensing_settings;
+            if (typeof value !== 'string' || settings === undefined ||
+              (value !== '' && !settings.associatedRcsSensors?.some((sensor) => sensor.deviceId?.resourceId === value))) {
+              throw new Error('Temperature sensor does not belong to this thermostat');
+            }
+            setUpdateTrait('remote_comfort_sensing_settings', 'type.nestlabs.com/nest.trait.hvac.RemoteComfortSensingSettingsTrait');
+            updateElement.state.value.activeRcsSelection = value === ''
+              ? { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' }
+              : { rcsSourceType: 'RCS_SOURCE_TYPE_SINGLE_SENSOR', activeRcsSensor: { resourceId: value } };
+          }
+
           if (
             (key === 'hvac_mode' && ['OFF', 'COOL', 'HEAT', 'RANGE'].includes(value?.toUpperCase?.())) ||
             (['target_temperature', 'target_temperature_low', 'target_temperature_high'].includes(key) === true &&
@@ -1100,10 +1158,12 @@ export default class NestAccfactory {
             });
           }
 
-          if (key === 'fan_state' && typeof value === 'boolean' && Number.isFinite(Number(values?.fan_duration)) === true) {
+          if (key === 'fan_state' && typeof value === 'boolean' &&
+            Number.isFinite(Number(values?.fan_preset_duration ?? values?.fan_duration)) === true) {
             // Set fan mode on the target thermostat, including runtime if turning on
             setUpdateTrait('fan_control_settings', 'type.nestlabs.com/nest.trait.hvac.FanControlSettingsTrait');
-            updateElement.state.value.timerEnd = value === true ? timestamp(Date.now() + Number(values.fan_duration) * 1000) : timestamp(0);
+            updateElement.state.value.timerEnd = value === true
+              ? timestamp(Date.now() + Number(values.fan_preset_duration ?? values.fan_duration) * 1000) : timestamp(0);
             if (values?.fan_timer_speed !== undefined) {
               // We have a value to set fan speed also, so handle here as combined setting
               updateElement.state.value.timerSpeed =
@@ -1996,3 +2056,4 @@ export default class NestAccfactory {
     return [];
   }
 }
+

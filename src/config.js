@@ -42,7 +42,7 @@ import FFmpeg from './plugins/camera/ffmpeg.js';
 // Define constants
 import { FFMPEG_VERSION } from './consts.js';
 
-function processConfig(config, log, api) {
+function processConfig(config, log, api, capabilities = { video: true }) {
   let migratedAccounts = false;
   let migratedDevices = false;
 
@@ -133,6 +133,7 @@ function processConfig(config, log, api) {
     hwaccel: false,
   };
 
+  if (capabilities.video === true) {
   let ffmpegPath = (config?.options?.ffmpegPath?.trim?.() ?? '') !== '' ? config.options.ffmpegPath.trim() : undefined;
 
   // Create FFmpeg probe
@@ -189,6 +190,8 @@ function processConfig(config, log, api) {
       options.ffmpeg.version = ffmpeg.version;
       options.ffmpeg.hwaccel = ffmpeg.supportsHardwareH264 === true;
     }
+  }
+
   }
 
   // Process per device configuration(s)
@@ -388,3 +391,4 @@ function persistMigratedConfig(config, log, api) {
 
 // Define exports
 export { processConfig };
+

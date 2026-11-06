@@ -1,6 +1,6 @@
 # homebridge-nest-accfactory — Agent Instructions
 
-Apply the `core-engineering-principles` skill to all code changes, reviews, refactors, and bug fixes in this repository.
+Apply pragmatic engineering principles: preserve compatibility, keep changes focused, validate failure paths, and test behavior. The external core-engineering-principles skill is optional.
 
 This file contains project-specific architecture, compatibility, and implementation requirements. These instructions take precedence where they intentionally narrow or override a general rule from the core skill.
 
@@ -187,9 +187,9 @@ Follow the [native HomeKit functionality policy in CONTRIBUTING.md](CONTRIBUTING
 
 Only expose device functionality through HomeKit services and characteristics that accurately represent its purpose. Prefer standard HomeKit representations; custom characteristics may be considered where they provide a meaningful and accurate representation of device-specific functionality.
 
-Do not create artificial switches, outlets, lights, or other unrelated services to work around missing native HomeKit functionality. Do not repurpose standard HomeKit characteristics or their defined values to represent unrelated device functionality.
+Optional thermostat Eco switches and momentary HVAC fan-preset switches are explicitly supported in this fork. Keep them disabled by default and label their purpose accurately. Do not create unrelated outlets or lights to represent climate controls. Do not repurpose standard HomeKit characteristics or their defined values to represent unrelated device functionality.
 
-Where no appropriate HomeKit representation exists, do not expose the functionality through an unrelated service or characteristic. Making a workaround optional or disabled by default does not make it acceptable.
+Where no appropriate HomeKit representation exists, do not expose the functionality through an unrelated service or characteristic. Additional representations require an explicit product decision and capability validation.
 
 Treat this as an intentional project design constraint, not a missing feature to work around.
 
@@ -265,3 +265,4 @@ Changes to Nest/Google data processing should consider both data sources when th
 Hardware-specific behaviour that cannot be exercised locally must be identified as not hardware-verified rather than inferred from unit tests.
 
 Do not treat successful unit tests as evidence that camera hardware, FFmpeg hardware acceleration, Google/Nest backend behaviour, or physical HomeKit devices have been verified.
+

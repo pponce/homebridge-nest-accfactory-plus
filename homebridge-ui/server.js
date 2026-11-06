@@ -1,0 +1,34 @@
+import { HomebridgePluginUiServer, RequestError } from '@homebridge/plugin-ui-utils';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+class ClimateUi extends HomebridgePluginUiServer {
+  constructor() {
+    super();
+    this.onRequest('/status', () => this.forward('/status'));
+    this.onRequest('/command', (payload) => this.forward('/command', payload));
+    this.ready();
+  }
+
+  async forward(route, payload) {
+    try {
+      const endpoint = JSON.parse(await fs.readFile(path.join(this.homebridgeStoragePath, 'nest-climate', 'endpoint.json'), 'utf8'));
+      if (!Number.isInteger(endpoint.port) || endpoint.port < 1 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.token)) {
+        throw new Error('Invalid endpoint');
+      }
+      const response = await fetch('http://127.0.0.1:' + endpoint.port + route, {
+        method: payload === undefined ? 'GET' : 'POST',
+        headers: { Authorization: 'Bearer ' + endpoint.token, 'Content-Type': 'application/json' },
+        body: payload === undefined ? undefined : JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
+      });
+      const data = await response.json();
+      if (!response.ok) { throw new RequestError(data.error || 'Climate request failed.', { status: response.status }); }
+      return data;
+    } catch (error) {
+      if (error instanceof RequestError) { throw error; }
+      throw new RequestError('Live dashboard unavailable. Start or restart the Nest child bridge, then refresh.', { status: 503 });
+    }
+  }
+}
+new ClimateUi();

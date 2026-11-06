@@ -1,50 +1,53 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/pponce/homebridge-nest-accfactory-plus/main/maintenance/branding/nest-accfactory-plus-icon-100.png" alt="Nest Accfactory Plus icon" width="100" height="100">
-</p>
-<span align="center">
+# Nest Climate Cntrl
 
-# Nest Accfactory Plus
+Nest Climate Cntrl brings Nest thermostats, room sensors and Heat Link controls to Apple Home, with a live dashboard inside Homebridge Settings. It is independently maintained by [pponce](https://github.com/pponce), based on [Nest Accfactory by n0rt0nthec4t and its contributors](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory).
 
-</span>
+## Supported devices
 
-**Nest Accfactory Plus adds legacy Google OAuth refresh-token authentication to [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory).** This fork is for users who already have a compatible refresh token from the historical `homebridge-nest` login utility and want to keep using it while receiving updates from the upstream project. There is no reason to use this plugin unless you have Google OAuth refresh-token that works. If you do this path avoids having to get authentication re-setup constantly like i had to.
+- Nest thermostats supported by the Nest/Google connection
+- Nest Temperature Sensors associated with a thermostat
+- Nest Heat Links, including supported hot-water controls
+- Nest Protect, Home/Away and weather accessories
 
-The original Nest Accfactory plugin and its Nest/HomeKit integration, including HomeKit Secure Video for supported cameras and doorbells, are the work of [n0rt0nthec4t and upstream contributors](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). This fork is maintained separately by [pponce](https://github.com/pponce).
+Cameras, doorbells, floodlight cameras and Yale locks are outside this plugin's scope. A Heat Link connects a compatible Nest thermostat to the boiler/heating system; hot-water functions depend on the installed equipment and model.
 
-**Support upstream development:** The funding links in this fork direct donations to the original author, **n0rt0nthec4t**, through [GitHub Sponsors](https://github.com/sponsors/n0rt0nthec4t) or [Buy Me a Coffee](https://buymeacoffee.com/n0rt0nthec4t). These donations support the upstream project; they do not go to the fork maintainer.
+## Climate dashboard
 
-## What Plus adds
+Open **Homebridge → Plugins → Nest Climate Cntrl → Settings**. The running plugin provides live status through a local authenticated connection.
 
-- **An additional Google authentication option:** select **Legacy Refresh Token** and use an existing compatible Google OAuth refresh token without supplying browser cookies or an `issueToken` URL.
-- **Support for existing credential formats:** provide the token itself or paste a legacy JSON credential containing `refresh_token`.
-- **Explicit authentication selection:** the existing Google issueToken/cookie and Nest access-token methods remain available. A failed refresh token does not silently fall back to browser cookies.
+| Area | Features |
+| --- | --- |
+| Account | Masked credentials, account options and setup guidance |
+| Thermostats | Current and target temperatures, operating state, Eco and HVAC fan actions |
+| Sensors & Heat Link | Associated sensor readings, native temperature-source selection and hot-water status |
+| Apple Home features | Optional Eco switches, HVAC fan presets, humidity and Eve history settings |
+| Schedule | Reported weekly setpoints and next planned change in the configured time zone |
+| Runtime | Observed heating/cooling totals, seven-day chart and observed coverage |
+| Diagnostics | Account authorization, update connection status and redacted diagnostic summary |
 
-**This is compatibility support for existing credentials, not a way to create a new legacy Google login.** The historical enrollment flow is deprecated; this plugin does not restore it or generate new refresh tokens. An existing token must still be accepted by Google, and continued operation is not guaranteed. See [Using a legacy Google OAuth refresh token](#using-a-legacy-google-oauth-refresh-token) for setup and limitations.
+Use Homebridge's **Save** button and restart the Nest bridge to apply configuration changes. Live action buttons send commands immediately. API acceptance is followed by a device-state update; it is not proof that physical equipment has started.
 
-### Installation and migration
+### Optional Apple Home controls
 
-Plus **0.4.4** incorporates upstream **0.4.4** and retains the additional legacy Google refresh-token authentication method. Install the published package with `sudo hb-service add homebridge-nest-accfactory-plus@0.4.4`.
+Set per-device `ecoSwitch` to `true` to expose an Eco switch when the thermostat reports Eco capability. Switching it off exits Eco; it does not turn the thermostat off.
 
-When replacing the original package, follow [the migration guide](MIGRATION.md) to retain configuration, accessory cache and pairing data. The platform remains `NestAccfactory`, and device UUIDs retain their original namespace. Existing Plus installations can update normally without uninstalling or changing their configuration.
+Set `fanPresetSwitches` to `true` to add 15-, 30- and 60-minute fan actions on thermostats with a controllable HVAC fan. These switches reset after the command is accepted. The separate fan service reports actual running state. Presets restart the timer even when the fan is already running and do not change the configured default `fanDuration`. Both switch options are disabled by default.
 
-## Supported Devices
+HVAC fan controls operate the blower connected to Nest. They do not operate independent room or ceiling fans.
 
-The following Nest devices are known to be supported by this Homebridge plugin:
+### Sensors, schedules and runtime
 
-- Nest Thermostats
-- Nest Protects
-- Nest Temperature Sensors
-- Nest Cameras
-- Nest Doorbells
-- Nest Heat Links
-- Nest × Yale Locks
+**Temperature controlled by** selects the thermostat's built-in sensor or one of its associated Nest sensors. Nest's own sensor schedule may subsequently change that selection. External temperature sensors and mixed-source software control are not enabled by this selector.
 
-**Note:** Google has discontinued support for 1st and 2nd generation Nest Thermostats as of **October 25, 2025**.  
-Based on this, these models are expected to stop functioning with this Homebridge plugin.
+Set `scheduleTimeZone` to an IANA zone such as `America/Los_Angeles` to calculate the next planned weekly setpoint. Eco, holds and learning can affect actual behavior; the next setpoint is not a confirmed manual-override expiry.
 
-The accessory supports connections using a Nest account AND/OR a Google (migrated Nest account) account.
+Runtime starts when the plugin observes valid state. It persists across restarts, keeps up to 31 days and displays seven UTC days. Offline periods, stopped Homebridge time and gaps in observation remain unknown. Runtime measures equipment state, not energy use or historical Nest reports.
 
-Thermostats, temperature sensors and Heat Links require the Google API (protobuf) to be enabled. Nest REST API support for these devices has been removed in v0.4.4.
+## Authentication and installation
+
+The package identifier is `homebridge-nest-accfactory-plus` and the platform identifier remains `NestAccfactory`. Preserve these identifiers when configuring this development version. See [MIGRATION.md](MIGRATION.md) for accessory identity and pairing guidance.
+
+Google issue-token/cookie authentication and existing compatible legacy OAuth refresh tokens are supported. Nest account access tokens remain available for supported devices. No SDM project is required. Legacy refresh tokens must already exist and remain accepted by Google; the plugin cannot generate new legacy credentials.
 
 ## Configuration
 
@@ -204,7 +207,6 @@ API support-dump blocks redact credentials, personal details, network addresses 
 
 Device-specific configuration can be applied using the `"devices"` array. Each entry represents **per-device settings** that are applied when a device with the matching `"serialNumber"` is discovered.
 
-Some options (such as `exclude`, `eveHistory` and `logMotionEvents`) override the global defaults defined in the `"options"` section. Other settings are device-specific and enable or control features available for that particular device type.
 
 The **Device Settings** section in the Homebridge GUI provides basic management of these entries. However, **not all device options are exposed in the GUI**, and some advanced options may need to be configured directly in `config.json`.
 
@@ -232,11 +234,9 @@ The `"name"` field is optional and is only used to help identify the entry in th
 | serialNumber       | Device serial number this configuration applies to                                           |         |
 
 By default, HomeKit doorbell rings respect the indoor chime setting in Nest/Google Home: disabling the indoor
-chime also suppresses HomeKit rings. Set `ignoreIndoorChime` to `true` for the doorbell to receive HomeKit
 notifications and Apple TV doorbell alerts while the physical chime is disabled, for example when using
 Google Home speakers as your chime. This option does not change the physical chime setting.
 
-Quiet Time suppresses HomeKit doorbell rings regardless of `ignoreIndoorChime`. Configure the physical chime
 and Quiet Time in Nest/Google Home. The plugin no longer exposes a chime or Quiet Time switch; remove any
 old `chimeSwitch`, `quietTimeSwitch` and `quietTimeDuration` options from your device configuration.
 
@@ -254,77 +254,10 @@ Homes are identified using the `"name"` field, which must match the Home name sh
 | name               | Name of home (from Nest/Google App) to which these settings belong to                        |                |
 | weather            | Virtual weather station for this Home                                                        | false          |
 
-## ffmpeg
 
-To support camera live streaming, HomeKit Secure Video (HKSV), and two-way audio, an ffmpeg binary must be installed and accessible to the plugin.
+## Development and verification
 
-Minimum requirements:
-- FFmpeg version **7.1** or later
-- Compiled with support for:
-  - `libx264`
-  - `libfdk_aac`
-  - `libspeex`
-  - `libopus`
-
-The plugin automatically searches common ffmpeg install locations on supported platforms and will also fall back to `ffmpeg` available in the system PATH.
-
-The `ffmpegPath` configuration option may be used to specify:
-- A full path to the ffmpeg binary
-- A directory containing the ffmpeg binary
-- A command name available in the system PATH
-
-Examples:
-
-```json
-"ffmpegPath": "/usr/local/bin/ffmpeg"
-```
-
-```json
-"ffmpegPath": "/opt/homebrew/bin"
-```
-
-```json
-"ffmpegPath": "ffmpeg"
-```
-
-A precompiled ffmpeg binary that meets these requirements is available from the **ffmpeg-for-homebridge** project and may be used as an alternative to building ffmpeg yourself.
-
-## HomeKit Secure Video (HKSV)
-
-From version **0.4.0**, **HomeKit Secure Video (HKSV)** is always enabled for supported Nest cameras and doorbells.
-
-This plugin streams video directly to HomeKit and allows recordings to be stored in **iCloud** using Apple’s HKSV infrastructure.
-
-### Important Notes
-
-- HKSV being enabled **does not mean cameras record continuously by default**.
-- Recording behaviour is controlled **entirely within the Apple Home app**.
-- By default, cameras are typically configured as **Stream Only** until recording is enabled in HomeKit.
-
-### Motion Events and Recording
-
-Nest / Google cameras expose **general motion events** to this plugin for recording triggers.
-
-Because of this, the plugin can only trigger HKSV recordings using **general motion detection** from the Nest / Google API.
-
-HomeKit Secure Video may still analyse recorded footage using its own processing, but the plugin does **not** act on person, vehicle, animal, or package-specific trigger events from the Nest / Google API.
-
-This means recording is triggered by **general motion events only**, rather than by individual event types exposed directly by the camera API..
-
-### Camera Streaming
-
-Camera live streaming and HKSV recording require a compatible **ffmpeg** binary with the features described in the section above.
-
-## Development and Verification
-
-- `npm test` runs the source test suites explicitly, including the three shared submodules. Generated `dist` files do not affect test discovery.
-- `npm run lint` checks source and tests without rewriting files.
-- `npm run check` runs lint, source tests, and the build.
-- `npm run test:coverage` reports coverage for loaded production source files and lists production modules absent from the measurements.
-
-Coverage percentages describe the measured file-backed modules, not the entire project. Tests that load transformed code through data URLs or extract individual methods can exercise behaviour without measuring the original source file. An omitted module is unmeasured, which does not necessarily mean it has no behavioural tests. Review the module inventory alongside percentages when assessing coverage gaps.
-
-Hardware discovery validates a short H264 encode before selecting acceleration and reuses that result across camera managers. Unit tests mock these probes; successful unit tests do not establish real encoder, live streaming, or HKSV behaviour on a particular host.
+Run `npm ci`, then `npm run check` for lint, regression tests, coverage and build validation. Device commands and HVAC behavior also require testing on supported hardware.
 
 ## Support Policy
 
@@ -349,4 +282,5 @@ Building and running this project is done entirely at your own risk.
 I am not affiliated with any companies such as Google, Apple, or other related entities. The author of this project shall not be held liable for any damages or issues arising from its use.
 
 If you find this project useful, consider supporting upstream author **n0rt0nthec4t** through [GitHub Sponsors](https://github.com/sponsors/n0rt0nthec4t) or [Buy Me a Coffee](https://buymeacoffee.com/n0rt0nthec4t).
+
 

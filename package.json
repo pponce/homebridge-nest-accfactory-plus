@@ -1,9 +1,9 @@
 {
     "name": "homebridge-nest-accfactory-plus",
-    "displayName": "Nest Accfactory Plus",
+    "displayName": "Nest Climate Cntrl",
     "type": "module",
     "version": "0.4.4",
-    "description": "Nest and Google Home integration with legacy Google refresh-token authentication and HomeKit Secure Video",
+    "description": "Nest thermostat, room sensor and Heat Link controls with a live Homebridge climate dashboard",
     "author": "n0rt0nthec4t",
     "license": "Apache-2.0",
     "homepage": "https://github.com/pponce/homebridge-nest-accfactory-plus#readme",
@@ -20,19 +20,13 @@
         "homekit",
         "homebridge-plugin",
         "supports-hap",
-        "hksv",
-        "homekit secure video",
         "nest",
         "google",
-        "doorbell",
-        "camera",
         "thermostat",
         "temperature",
         "smoke",
         "sensor",
-        "floodlight",
-        "hotwater",
-        "lock"
+        "hotwater"
     ],
     "main": "dist/index.js",
     "engines": {
@@ -46,7 +40,8 @@
         "README.md",
         "CHANGELOG.md",
         "MIGRATION.md",
-        "PRERELEASE_NOTES.md"
+        "PRERELEASE_NOTES.md",
+        "homebridge-ui/**/*"
     ],
     "scripts": {
         "clean": "node scripts/clean.js",
@@ -75,6 +70,7 @@
         "@evan/opus": "^1.0.3",
         "chalk": "^6.0.1",
         "protobufjs": "^8.8.1",
-        "werift": "^0.25.1"
+        "werift": "^0.25.1",
+        "@homebridge/plugin-ui-utils": "^2.2.0"
     }
 }

@@ -48,6 +48,7 @@
 
 // Define nodejs module requirements
 import path from 'node:path';
+import { setTimeout, clearTimeout } from 'node:timers';
 import fs from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
@@ -72,13 +73,16 @@ import {
 
 export default class NestThermostat extends HomeKitDevice {
   static TYPE = DEVICE_TYPE.THERMOSTAT;
-  static VERSION = '2026.10.19'; // Code version
+  static VERSION = '2026.11.06'; // Code version
 
   thermostatService = undefined;
   batteryService = undefined;
   humidityService = undefined;
   fanService = undefined; // Fan control
   humidifierDehumidifierService = undefined; // humidifier & dehumidifier control
+  ecoService = undefined;
+  presetServices = new Map();
+  presetTimers = new Map();
   #external = {}; // External module functions
 
   // Class functions
@@ -292,11 +296,77 @@ export default class NestThermostat extends HomeKitDevice {
       this?.log?.warn?.('External module configured but provides no recognised functions');
     }
 
+    this.setupClimateSwitches();
+
     // Extra setup details for output
     this.humidityService !== undefined && this.postSetupDetail('Separate humidity sensor');
   }
 
+  setupClimateSwitches(data = this.deviceData) {
+    const ecoEnabled = data.ecoSwitch === true && typeof data.eco_mode === 'boolean';
+    if (!this.accessory?.getServiceById) { return; }
+    const existingEco = this.accessory.getServiceById(this.hap.Service.Switch, 'climate-eco');
+    if (ecoEnabled) {
+      this.ecoService = this.addService(this.hap.Service.Switch, this.deviceData.description + ' Eco', 'climate-eco');
+      this.addCharacteristic(this.ecoService, this.hap.Characteristic.On, {
+        initialValue: data.eco_mode,
+        onGet: () => this.deviceData.eco_mode === true,
+        onSet: async (value) => {
+          await this.set({ uuid: this.deviceData.nest_google_device_uuid, eco_mode: value });
+        },
+      });
+    } else if (existingEco) {
+      this.removeService(existingEco);
+      this.ecoService = undefined;
+    }
+    for (const minutes of [15, 30, 60]) {
+      const subtype = 'climate-fan-' + minutes;
+      const existing = this.accessory.getServiceById(this.hap.Service.Switch, subtype);
+      if (data.fanPresetSwitches !== true || data.has_fan !== true) {
+        clearTimeout(this.presetTimers.get(minutes));
+        this.presetTimers.delete(minutes);
+        this.presetServices.delete(minutes);
+        if (existing) { this.removeService(existing); }
+        continue;
+      }
+      const service = this.addService(this.hap.Service.Switch, this.deviceData.description + ' Fan ' + minutes + ' min', subtype);
+      this.presetServices.set(minutes, service);
+      this.addCharacteristic(service, this.hap.Characteristic.On, {
+        initialValue: false,
+        onGet: () => false,
+        onSet: async (value) => {
+          if (!value) { return; }
+          await this.runFanPreset(minutes);
+          clearTimeout(this.presetTimers.get(minutes));
+          const timer = setTimeout(() => {
+            service.updateCharacteristic(this.hap.Characteristic.On, false);
+            this.presetTimers.delete(minutes);
+          }, 500);
+          timer.unref?.();
+          this.presetTimers.set(minutes, timer);
+        },
+      });
+    }
+  }
+
+  async runFanPreset(minutes) {
+    if (this.deviceData.has_fan !== true || ![15, 30, 60].includes(minutes)) {
+      throw new Error('Fan preset unavailable');
+    }
+    // Always write a new timer, including when the fan is already running.
+    await this.set({ uuid: this.deviceData.nest_google_device_uuid,
+      fan_state: true, fan_preset_duration: minutes * 60,
+      fan_timer_speed: Math.max(1, this.deviceData.fan_timer_speed || 1),
+    });
+  }
+
   onRemove() {
+    for (const timer of this.presetTimers.values()) { clearTimeout(timer); }
+    this.presetTimers.clear();
+    for (const service of this.presetServices.values()) { this.removeService(service); }
+    this.presetServices.clear();
+    this.removeService(this.ecoService);
+    this.ecoService = undefined;
     this.removeService(this.thermostatService);
     this.removeService(this.batteryService);
     this.removeService(this.humidityService);
@@ -320,6 +390,13 @@ export default class NestThermostat extends HomeKitDevice {
       return;
     }
 
+    if (['has_fan', 'ecoSwitch', 'fanPresetSwitches'].some((key) => deviceData[key] !== this.deviceData[key]) ||
+      typeof deviceData.eco_mode !== typeof this.deviceData.eco_mode) {
+      this.setupClimateSwitches(deviceData);
+    }
+    if (this.ecoService && typeof deviceData.eco_mode === 'boolean') {
+      this.ecoService.updateCharacteristic(this.hap.Characteristic.On, deviceData.eco_mode);
+    }
     let historyEntry = {};
     let temperatureScale = deviceData.temperature_scale?.toUpperCase?.() === 'F' ? 'F' : 'C';
     let hvacMode = typeof deviceData.hvac_mode === 'string' ? deviceData.hvac_mode.toUpperCase() : 'OFF';
@@ -2036,6 +2113,17 @@ const THERMOSTAT_FIELD_MAP = {
     },
   },
 
+  eco_mode: {
+    google: {
+      fields: ['eco_mode_state'],
+      translate: ({ raw }) => {
+        const mode = raw?.value?.eco_mode_state?.ecoMode;
+        return ['ECO_MODE_INACTIVE', 'ECO_MODE_MANUAL_ECO', 'ECO_MODE_AUTO_ECO'].includes(mode)
+          ? mode !== 'ECO_MODE_INACTIVE' : undefined;
+      },
+    },
+  },
+
   hvac_state: {
     google: {
       fields: ['hvac_control'],
@@ -2073,7 +2161,7 @@ const THERMOSTAT_FIELD_MAP = {
       translate: ({ raw }) =>
         raw?.value?.remote_comfort_sensing_settings?.activeRcsSelection?.activeRcsSensor !== undefined
           ? raw.value.remote_comfort_sensing_settings.activeRcsSelection.activeRcsSensor.resourceId
-          : undefined,
+          : raw?.value?.remote_comfort_sensing_settings?.activeRcsSelection?.rcsSourceType === 'RCS_SOURCE_TYPE_BACKPLATE' ? '' : undefined,
     },
   },
 
@@ -2255,6 +2343,8 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
           // Insert any extra options we've read in from configuration file for this device
           tempDevice.eveHistory =
             deviceOptions?.eveHistory !== undefined ? deviceOptions.eveHistory === true : config?.options?.eveHistory === true;
+          tempDevice.ecoSwitch = deviceOptions?.ecoSwitch === true;
+          tempDevice.fanPresetSwitches = deviceOptions?.fanPresetSwitches === true;
           tempDevice.humiditySensor = deviceOptions?.humiditySensor === true;
 
           // Process fan running duration. We only allow values matching the app
@@ -2313,3 +2403,4 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
   return devices;
 }
+
