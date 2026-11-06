@@ -6,7 +6,7 @@ Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a clima
 
 **Public beta:** this version is still being tested on real equipment. Install the `beta` release and report issues with your thermostat model and Homebridge version.
 
-**Moving from Nest Accfactory or Nest Accfactory Plus?** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Read the [migration instructions](MIGRATION.md) before changing an existing installation.
+**If moving from Nest Accfactory or Nest Accfactory Plus?** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Read the [migration instructions](MIGRATION.md) before changing an existing installation.
 
 ## What's included
 
