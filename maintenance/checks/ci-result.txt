@@ -27,76 +27,58 @@
 > homebridge-nest-climate-cntrl@0.5.0-beta.1 test:coverage
 > node --test --experimental-test-coverage --test-coverage-include="src/**" --test-coverage-exclude="**/*.test.js" --test-reporter=spec --test-reporter=./test/coverage-reporter.js --test-reporter-destination=stdout --test-reporter-destination=stdout "test/*.test.js" "src/HomeKitDevice/*.test.js" "src/HomeKitHistory/*.test.js" "src/fetchWrapper/*.test.js"
 
-✔ generateUUID preserves one deterministic identity across supported runtimes (6.532063ms)
-✔ generateUUID prefers HAP so enabling Matter does not change identity (0.240662ms)
-✔ generateUUID fails instead of creating a transient accessory identity (0.853583ms)
-✔ Homebridge honours the explicit Matter enablement check (5.348549ms)
-✔ constructor restores declared fields from a subclass persistence namespace (2.153256ms)
-✔ constructor rejects invalid persisted device data field declarations (0.388861ms)
-✔ Homebridge honours the explicit HAP enablement check and legacy default (4.552082ms)
-✔ add requires at least one protocol API (3.287967ms)
-✔ Matter device type is required only when Matter is the sole Homebridge representation (0.953902ms)
-✔ addMatterCluster merges state and command handlers without duplicating the cluster (3.925044ms)
-✔ Homebridge exposes HAP and Matter through the existing lifecycle (16.603165ms)
-✔ Matter persisted context rolls back and retries after a cache update failure (1.366658ms)
-✔ Matter teardown still runs when HAP teardown fails (0.537129ms)
-✔ Homebridge supports Matter without creating a HAP accessory or AccessoryInformation service (1.947098ms)
-✔ setup persists restored bridged HAP metadata after onAdd without requiring another change (48.54545ms)
-✔ Homebridge add without arguments preserves the default HAP representation and persists metadata (1.370785ms)
-✔ HAP cache retries once within a message after a thrown write (3.047196ms)
-✔ HAP cache retries once within a message after a rejected write (1.988286ms)
-✔ Homebridge publishes external HAP only after onAdd completes (1.022311ms)
-✔ Homebridge requires its external publishing API before external onAdd (0.359455ms)
-✔ independent HAP publication failures use the same failure path (4.73817ms)
-✔ Homebridge does not call onAdd when HAP registration leaves no usable representation (0.586041ms)
-✔ setup logging uses the requested HAP accessory name when present (0.882378ms)
-✔ migration keeps the original config after renameSync call 1 fails (1.933633ms)
-✔ missing, null and malformed options receive defaults while valid settings are preserved (1.084328ms)
-✖ maxStreams preserves integer counts from one to four and defaults invalid counts (25.353307ms)
-✔ configuration enforces FFmpeg minimum support: supported codecs (11.327863ms)
-✔ configuration enforces FFmpeg minimum support: old binary (1.450465ms)
-✔ configuration enforces FFmpeg minimum support: missing AAC (0.227828ms)
-✔ configuration enforces FFmpeg minimum support: missing Opus (0.232727ms)
-✔ configuration enforces FFmpeg minimum support: missing H264 (0.215956ms)
-✔ configuration enforces FFmpeg minimum support: missing Speex (0.216307ms)
-✔ legacy Google/Nest accounts migrate together and malformed placeholder overrides are discarded (0.568548ms)
-✔ unsafe migration keeps the original config intact: malformed JSON (1.180618ms)
-✔ unsafe migration keeps the original config intact: no platforms (0.685278ms)
-✔ unsafe migration keeps the original config intact: no matching legacy platform (0.639201ms)
-✔ unsafe migration keeps the original config intact: ambiguous platforms (0.678315ms)
-✔ migration preserves startup and the original config when backup disappears (1.521779ms)
-✔ migration preserves startup and the original config when temporary file cleanup fails (1.263664ms)
-✔ migration updates only the legacy platform and preserves an already migrated platform (2.104424ms)
-✔ invalid legacy device entries do not trigger a partial migration: {"SERIAL":null} (0.359014ms)
-✔ invalid legacy device entries do not trigger a partial migration: {"SERIAL":[]} (0.169218ms)
-✔ invalid legacy device entries do not trigger a partial migration: {"SERIAL":false} (0.172554ms)
-✔ explicit configuration flags preserve disabled APIs and route debug parameters to the logger (0.535817ms)
-✔ migration reports non-Error failures without losing the in-memory configuration (0.38864ms)
-✔ configuration publishes a successfully probed hardware encoder and debug details (2.402945ms)
-✔ legacy Google token refresh establishes and renews the existing connection without cookies (7.434278ms)
-✔ revoked legacy credentials cannot fall back to configured browser cookies (1.168946ms)
-✔ Connections builds isolated runtime entries and skips excluded/invalid accounts (0.848384ms)
-✔ Connections authenticates Nest and refreshes the same entry while releasing old runtime state (1.241723ms)
-✔ Connections Google auth exchanges OAuth and JWT then applies expiry safety margin (0.722929ms)
-✔ Connections scheduler retries transient failures at 15, 30, then 60 seconds (22.718684ms)
-✔ Connections does not retry terminal authentication failures (2.292827ms)
-✔ Connections schedules refresh after successful auth and tolerates callback failure (1.373772ms)
-✔ Connections prevents duplicate auth attempts and cannot resurrect after shutdown (1.181049ms)
+✔ generateUUID preserves one deterministic identity across supported runtimes (6.874725ms)
+✔ generateUUID prefers HAP so enabling Matter does not change identity (0.231533ms)
+✔ generateUUID fails instead of creating a transient accessory identity (0.879502ms)
+✔ Homebridge honours the explicit Matter enablement check (5.524624ms)
+✔ constructor restores declared fields from a subclass persistence namespace (2.223331ms)
+✔ constructor rejects invalid persisted device data field declarations (0.425925ms)
+✔ Homebridge honours the explicit HAP enablement check and legacy default (5.140818ms)
+✔ add requires at least one protocol API (3.352659ms)
+✔ Matter device type is required only when Matter is the sole Homebridge representation (2.700582ms)
+✔ addMatterCluster merges state and command handlers without duplicating the cluster (2.287912ms)
+✔ Homebridge exposes HAP and Matter through the existing lifecycle (16.531615ms)
+✔ Matter persisted context rolls back and retries after a cache update failure (1.413318ms)
+✔ Matter teardown still runs when HAP teardown fails (0.603787ms)
+✔ Homebridge supports Matter without creating a HAP accessory or AccessoryInformation service (1.986919ms)
+✔ setup persists restored bridged HAP metadata after onAdd without requiring another change (52.104664ms)
+✔ Homebridge add without arguments preserves the default HAP representation and persists metadata (1.098931ms)
+✔ HAP cache retries once within a message after a thrown write (3.641639ms)
+✔ HAP cache retries once within a message after a rejected write (1.315566ms)
+✔ Homebridge publishes external HAP only after onAdd completes (0.849827ms)
+✔ Homebridge requires its external publishing API before external onAdd (0.282507ms)
+✔ independent HAP publication failures use the same failure path (1.912461ms)
+✔ Homebridge does not call onAdd when HAP registration leaves no usable representation (0.388515ms)
+✔ setup logging uses the requested HAP accessory name when present (0.557411ms)
+✔ WebRTC ICE completion after the first keyframe preserves media readiness (0.835219ms)
+✔ WebRTC safely recovers from interrupted IDR within an apparently complete timestamp group (0.904198ms)
+✔ WebRTC safely recovers from empty FU payload within an apparently complete timestamp group (0.749049ms)
+✔ WebRTC source video timestamps advance monotonically across 32-bit RTP timestamp rollover (0.76577ms)
+✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=false (0.905811ms)
+✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=true (0.597887ms)
+✔ WebRTC bounds startup keyframe retries while an audio-only camera keeps the connection alive (7.379056ms)
+✔ WebRTC RTP arriving from a retired video track cannot initialise the replacement source (0.955484ms)
+✔ WebRTC a retired track event cannot reset decoder state on the replacement video track (0.960814ms)
+✔ WebRTC RTP from a retired audio track cannot enter the replacement decoder (0.773644ms)
+✔ a retired WebRTC audio track event cannot discard the current reorder queue (0.732949ms)
+✔ WebRTC ignores a track advertising an unsupported audio codec (0.507928ms)
+✔ WebRTC ignores a track advertising an unsupported video codec (0.338762ms)
+✔ WebRTC a retired extension failure cannot close its replacement peer (2.260531ms)
 ℹ tests 1621
 ℹ suites 0
-ℹ pass 1620
-ℹ fail 1
+ℹ pass 1621
+ℹ fail 0
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 7304.434427
+ℹ duration_ms 7371.19461
 ℹ start of coverage report
 ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ file                    | line % | branch % | funcs % | uncovered lines
 ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ src                     |        |          |         | 
 ℹ  auth.js                | 100.00 |   100.00 |  100.00 | 
-ℹ  climate-dashboard.js   | 100.00 |    96.26 |   93.55 | 
+ℹ  climate-dashboard.js   | 100.00 |    96.23 |   93.55 | 
 ℹ  config.js              | 100.00 |   100.00 |  100.00 | 
 ℹ  connections.js         |  98.80 |    95.43 |  100.00 | 320-321 611-612 620-621 638-639
 ℹ  consts.js              | 100.00 |   100.00 |  100.00 | 
@@ -134,44 +116,37 @@
 ℹ  protobuf.js            | 100.00 |    97.67 |  100.00 | 
 ℹ  ringbuffer.js          | 100.00 |    91.67 |  100.00 | 
 ℹ  supportdump.js         |  97.76 |    92.19 |  100.00 | 244-245 259-260 276-277 336-337 365-366
-ℹ  system.js              |  93.85 |    84.83 |   86.15 | 112-118 157-175 204-206 274-278 281-285 385-386 518-519 559-561 589-594 736-742 772-774 1034-1042 1045-1058 1177-1179 1182-1184 1538-1544 1557-1563 1581-1583 1607-1608 1834-1836 1863-1864 1868-1873 1886-1888 2046-2047
+ℹ  system.js              |  93.80 |    84.67 |   86.15 | 112-118 157-175 204-206 274-278 281-285 385-386 429 518-519 559-561 589-594 736-742 772-774 1034-1042 1045-1058 1177-1179 1182-1184 1538-1544 1557-1563 1581-1583 1607-1608 1834-1836 1863-1864 1868-1873 1886-1888 2046-2047
 ℹ  translator.js          | 100.00 |    96.00 |  100.00 | 
 ℹ  utils.js               | 100.00 |    99.06 |  100.00 | 
 ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-ℹ all files               |  96.33 |    88.57 |   96.25 | 
+ℹ all files               |  96.33 |    88.56 |   96.25 | 
 ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ℹ end of coverage report
-
-✖ failing tests:
-
-test at test/config.test.js:129:1
-✖ maxStreams preserves integer counts from one to four and defaults invalid counts (25.353307ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
-  + actual - expected
-  
-  + undefined
-  - {
-  -   default: 2,
-  -   maximum: 4,
-  -   minimum: 1,
-  -   type: 'integer'
-  - }
-  
-      at TestContext.<anonymous> (file:///home/runner/work/homebridge-nest-climate-cntrl/homebridge-nest-climate-cntrl/test/config.test.js:132:10)
-      at async Test.run (node:internal/test_runner/test:1409:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: undefined,
-    expected: { type: 'integer', default: 2, minimum: 1, maximum: 4 },
-    operator: 'deepStrictEqual',
-    diff: 'simple'
-  }
 
 Coverage scope: 37/37 production source modules measured.
 Percentages describe loaded file-backed source only; omitted modules are excluded from the aggregate.
 Data-URL imports and extracted methods may be tested without measuring their original source files.
 Coverage gate passed for every production module. Summary: coverage/summary.json
+
+> homebridge-nest-climate-cntrl@0.5.0-beta.1 build
+> npm run clean && node scripts/build.js
+
+
+> homebridge-nest-climate-cntrl@0.5.0-beta.1 clean
+> node scripts/clean.js
+
+
+> homebridge-nest-climate-cntrl@0.5.0-beta.1 postbuild
+> node scripts/verify-build.js
+
 === climate-browser.log ===
 PASS dashboard: masked credentials, preserved config, mixed sensor preview without writes, invalid preview settings, native sensor command, stale-state controls, mobile layout, schema fallback
 === climate-package.log ===
+
+added 45 packages in 2s
+npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+npm warn install-scripts   homebridge-nest-climate-cntrl@0.5.0-beta.1 (prepare: node scripts/prepare-git-install.js && npm run build)
+npm warn install-scripts
+npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+Production tarball installs and registers successfully: homebridge-nest-climate-cntrl-0.5.0-beta.1.tgz
