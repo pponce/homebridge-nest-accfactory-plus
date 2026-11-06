@@ -2,83 +2,60 @@
 
 Updated: 2026-11-06
 
-## Objective and repositories
+## Project and current release
 
-Build Nest Climate Cntrl with thermostat, sensor and Heat Link controls, plus a responsive standalone dashboard. Repository: `pponce/homebridge-nest-climate-cntrl`; npm package: `homebridge-nest-climate-cntrl`; platform: `NestClimateCntrl`.
+Repository: `pponce/homebridge-nest-climate-cntrl`. Platform: `NestClimateCntrl`. npm package: `homebridge-nest-climate-cntrl`.
 
-The tested standalone HTTPS dashboard from `feature/standalone-dashboard` (PR #13) was merged into `main` at `f4e5157752efa07f3112f06da509445765644846` for 0.5.0-beta.2; PR #13 is closed as merged. See `maintenance/DASHBOARD_SERVER_HANDOFF.md` for that work. The live installation has not been changed from this workspace.
+Current release: **0.5.0-beta.3**, source `f06e33b58462b4194d7565492e047a8389c8954e`. GitHub prerelease: https://github.com/pponce/homebridge-nest-climate-cntrl/releases/tag/v0.5.0-beta.3.
 
-Use the single Mint checkout `~/devProjects/homebridge-nest-climate-cntrl`. The current workspace snapshot is `/workspace/scratch/3557d984da62/homebridge-nest-accfactory-plus`; its synthetic local Git history must not be pushed. Use remote trees/commits and expected-SHA ref updates, preserve concurrent edits and shared-module gitlinks.
+The user authorized this release and a Mint script to update local Git and publish the tested tarball to npm's `beta` channel. npm publication is a user-terminal action; it has not been performed from this workspace. Do not claim registry availability without the script result.
 
-## Latest migration decision — fresh cutover
+## Latest change and validation
 
-The maintainer chose a fresh installation. This supersedes the earlier cache-preserving migration plan and its pending approval request. **Do not run `maintenance/migrate-to-beta.sh` or apply the offline ownership update.** No backup or live cache edit has been performed or approved.
+Web dashboard account passwords allow **8–128 characters**. Server validation, the Homebridge provisioning form and setup guidance agree. Existing longer passwords and stored hashes remain valid.
 
-- Disable the old Nest platform before enabling Climate controls.
-- Reuse working account credentials privately, including the compatible existing legacy Google refresh token.
-- After npm publication, install beta.2, configure `NestClimateCntrl`, enable a new child bridge and pair it with Apple Home.
-- Recreate affected rooms, scenes and automations. Remove the old dedicated Nest bridge and old package after verifying the new devices.
-- `Keep Accessories Of Uninstalled Plugins` can stay enabled; it does not migrate ownership. Clean up only the old Nest entries. Never reset shared bridges or clear all accessories.
-- Public README, migration guide, next beta release notes and embedded setup must warn Accfactory/Plus users about the fresh cutover.
-- Existing `NestClimateCntrl` beta.1 installations can update normally. Do not create another UUID reset for the next beta.
+Targeted tests passed: all 12 web-server/auth tests, including minimum/maximum boundaries, login after reload and preservation of the account when a replacement is rejected. The embedded browser fixture rejects seven characters and provisions an eight-character account without saving the password in plugin config.
 
-The inspected old installation has seven accessories: two thermostats, four smoke/CO accessories and one occupancy accessory. It uses Plus 0.4.4, Homebridge 2.5.0 and UI 5.30.0 on a dedicated child bridge. All seven categories remain supported. No physical Apple Home validation has occurred.
+Full release validation: **passed**. Release run `42311129478`; normal Test run `42311129429`. Required checks cover six Node/Homebridge combinations, both browser suites, production-tarball installation, ten publisher scenarios and an actual Git ignored-file collision.
 
-## Implemented in beta.1
+## Local checkout and publisher
 
-- Climate discovery: thermostats, native temperature sensors, Heat Links, Protect and Home/Away. Cameras, doorbells, floodlight cameras, Yale locks and weather are excluded. Use upstream for those capabilities with separate device ownership.
-- Custom Homebridge settings dashboard: account setup, status/actions, native temperature-source selector, schedules, observed runtime, diagnostics and optional Home features.
-- Optional Eco and 15/30/60-minute HVAC fan switches, off by default; these control the Nest-connected blower.
-- Read-only discovery of accessible Homebridge main/child-bridge temperature, room-fan and motion/occupancy sources. Bridge credentials remain on the server.
-- Mixed native/external temperature selection and single/equal-average previews. Health/freshness checks block invalid previews.
-- New devices use the Climate UUID namespace. The existing compatibility adapter can reuse a matching legacy identity only when restored to this platform; it stays to avoid disrupting already-migrated installations.
-- Approved plum icon in README and UI; 100px and 512px sources.
+Mint checkout: `~/devProjects/homebridge-nest-climate-cntrl`. The last inspection showed local `main` with only untracked `maintenance/artifacts/`.
 
-Automatic mixed-sensor thermostat compensation, external room-fan actions and combined occupancy execution are **not implemented**. Standalone rule editors save inactive drafts only.
+Use the beta.3 asset `update-checkout-and-publish-beta.sh`. SHA256: `a01cbfa5de8b99eb94bff2068e3a9e6e8b2e080e06c06ba25d981b99d83326c7`. It updates a clean local main, fetches submodules, downloads/verifies the tested release package and publishes with `--tag beta`. It retries registry visibility and never repeats an upload recorded as accepted.
 
-## Standalone dashboard
+The helper keeps `maintenance/releases/`, `maintenance/migration/` and `maintenance/artifacts/` local using Git excludes. It uses `--no-overwrite-ignore` to protect ignored files from an incoming collision. Other edits still stop the update. It never stashes, resets, deletes artifacts, creates backups or changes Homebridge.
 
-PR #13 adds an opt-in HTTPS server, separate web account provisioned through Homebridge, per-bridge private credentials/certificates, revision-checked configuration saves, desktop/phone interface, existing live thermostat actions, source discovery, rule drafts, favicon and iOS icons.
+Publication reports are under `maintenance/releases/v0.5.0-beta.3/publish-result-*.json`; the script prints the exact rsync command. The tested npm tarball SHA256 is `81bfc4cec9856b94d01efc87d3808b45d688cb07c47632667ad996f346729c30`.
 
-Review status and current commits are in the dashboard handoff. It is not included in published beta.1. npm publication of beta.2 through the requested terminal script is explicitly authorized. Final visual/accessibility checks and the old-package cutover notice are complete.
+## Fresh cutover decision
 
-## Validation and limits
+Moving from Nest Accfactory/Plus requires a new Climate child bridge and Apple Home pairing. Reuse working account credentials privately, then rebuild affected room assignments, scenes and automations. Disable the old Nest platform before activating Climate controls. Remove only old Nest entries once the new devices work.
 
-- Full six-job Test workflow 42305559126 passed on `561bfc574f3a71ac0387d7db8b42a0eb4988f7d9`: Node 22/24 with Homebridge 1.11.4 and 2.4.0, Node 26 with 2.4.0, and Node 24 with 2.5.0; lint/tests/coverage/build, browser checks and real Homebridge cache restoration.
-- Fifteen focused migration/identity tests and six mocked migration-runner scenarios passed. The offline utility and tests remain maintenance evidence only; the fresh cutover is now the supported path.
-- Dashboard checks passed real HTTPS/auth/config tests, all six compatibility jobs, production-package installation and desktop/mobile browser checks. The beta.2 release reran and passed the checks on the exact release source.
-- Live Nest behavior, Heat Link, native source changes, physical fans and Apple Home setup remain hardware verification work.
+`Keep Accessories Of Uninstalled Plugins` can stay enabled; it does not transfer ownership. Do not run `maintenance/migrate-to-beta.sh` or apply the experimental offline cache rewrite. No backups or live cache edits were performed or approved.
 
-## Beta.2 release — GitHub complete, npm awaits terminal execution
+Existing Climate beta.1/beta.2 installations can update normally. Retain stable identities; this release does not force a reset.
 
-- User explicitly authorized merging the dashboard, creating the GitHub beta and providing a Mint script to update the checkout and publish the tested npm artifact.
-- Version: `0.5.0-beta.2`, npm channel `beta`; no `latest` promotion.
-- Production/UI source `cfddca3fc4c8703abaac7b3164f923dc7377f17b` passed all six compatibility jobs, production-package checks and embedded/standalone browser checks. Feature head `e4305579944ef260805f9420b24e593c62cdad20` adds handoff notes only.
-- Release workflow now requires all six combinations, both dashboard browser fixtures, production tarball installation and publisher failure-path checks before creating the release.
-- `maintenance/update-checkout-and-publish-beta.sh` updates only a clean local `main`, fetches release artifacts, verifies checksums/package metadata and publishes under `beta`, with accepted-upload/propagation handling. No Homebridge changes or backups.
-- GitHub prerelease: https://github.com/pponce/homebridge-nest-climate-cntrl/releases/tag/v0.5.0-beta.2; tag points to `f4e5157752efa07f3112f06da509445765644846`.
-- Release workflow `42309124830` and normal Test workflow `42309124784` succeeded. All six combinations, both browser fixtures, production tarball installation and nine mocked publishing paths passed.
-- Assets: tested npm tarball, read-only preflight, checkout/publication script and SHA256SUMS.
-- Tarball SHA256: `ace1a9a8f4adb3884c4ce5fbdb9485bb24de15686ffaf8a18dbf58c761e41e96`.
-- Publisher SHA256: `f29583e28d865f2035b680578ec2a14f160c4e58bf1f18a400218df0aed8af8e`.
-- npm publication is authorized but has **not** been performed in this workspace. The user runs the supplied script on Mint; inspect its result before claiming npm availability.
+The inspected legacy installation had two thermostats, four smoke/CO accessories and one occupancy accessory, on Plus 0.4.4 / Homebridge 2.5.0 / UI 5.30.0. All seven accessory categories remain supported; real installation status needs confirmation from the user.
 
-## Publication status (beta.1 history)
+## Implemented features and boundaries
 
-GitHub prerelease `v0.5.0-beta.1` exists; npm accepted the maintainer's upload, then immediate registry verification returned E404. Do not republish this version. Verify registry visibility from the installation host before installing.
-
-The accepted beta.1 release remains unchanged. The new beta.2 publisher handles delayed registry visibility, and the beta.2 release notes include the cutover notice.
+- Thermostats, native temperature sensors, Heat Links, Protect and Nest Home/Away.
+- Legacy Google refresh-token support for existing compatible tokens; no new legacy-token issuance and no SDM requirement.
+- Embedded Homebridge settings, Eco switches, native temperature-source selection, optional 15/30/60-minute HVAC fan switches, schedules and observed runtime.
+- Standalone opt-in HTTPS dashboard, separate login, per-child private auth/certificates, responsive desktop/phone UI, plum browser/iOS icons, settings with revision conflict detection, live supported Nest actions and source discovery. PR #13 was merged for beta.2.
+- Read-only mixed Nest/non-Google temperature preview and accessible Homebridge room-fan/presence discovery.
+- Temperature, occupancy and external room-fan rules remain **inactive drafts**. Automatic compensation/occupancy/fan controllers are not implemented.
+- Cameras, doorbells, floodlight cameras, Yale locks and weather belong in upstream with separate device ownership.
 
 ## Exact next steps
 
-1. Run the verified `update-checkout-and-publish-beta.sh` release asset on Mint. It requires a clean local `main`, fast-forwards the checkout and publishes the tested beta.2 package. Complete npm login/2FA locally if prompted.
-2. Review the generated `maintenance/releases/v0.5.0-beta.2/publish-result-*.json`. The terminal prints the exact rsync command. A pending result means verify later without repeating an accepted upload.
-3. After npm is verified, install beta.2 using stop → add → start. Keep the old Nest plugin disabled. For fresh cutover, pair a new Climate child bridge and verify all seven expected devices; existing Climate beta.1 installations update normally.
-4. Enable the optional web dashboard through Homebridge settings, create its separate login, save/restart and test HTTPS/iOS Home Screen behavior on real equipment.
-5. Remove only the old Nest setup after validation, rebuild affected Apple Home assignments, then continue implementing the planned temperature, occupancy and room-fan controllers. Draft rules currently never execute.
+1. Run the beta.3 publisher on Mint; complete npm login/2FA locally and inspect the result report. If registry verification is pending, rerun verification without republishing an accepted upload.
+2. Install beta.3 using stop → add → start, following fresh cutover only for old Accfactory packages. No live installation change has occurred from this workspace.
+3. In Homebridge settings, create/update the dashboard web login with at least eight characters, enable web access, save/restart and verify HTTPS and Add to Home Screen on an actual iPhone.
+4. Verify normal Nest controls and external discovery on real equipment. Automatic browser tests use fixture data.
+5. Continue bounded temperature control, combined occupancy and room-fan execution with manual/Eco/schedule precedence and failure recovery.
 
-## Publisher local-artifact follow-up
+## Workspace continuation
 
-The installation host's checkout is on main; the only reported untracked path is `maintenance/artifacts/`. The publisher now adds that exact directory to local Git excludes, alongside release/migration outputs, and uses `git merge --ff-only --no-overwrite-ignore` so an incoming file cannot overwrite ignored local data. Dirty-check failures print the current branch and changed paths.
-
-Ten publisher scenarios and a real Git ignored-file collision test pass. The corrected helper SHA256 is `f3b16897b584f97f5aae03a876e6f63938adca0fb864f17d2a8fa34ea1ed86f6`. Use the corrected script from its pinned source commit for the retry; the immutable beta.2 release asset and npm tarball are unchanged. No local files were deleted, no backups were created, and npm publication is still awaiting the user's terminal execution.
+Workspace source snapshot: `/workspace/scratch/3557d984da62/homebridge-nest-accfactory-plus`. Its local Git history is synthetic: do not push it. Use remote trees/commits with expected-SHA updates; preserve concurrent edits and gitlinks. Keep notes under maintenance and avoid uploading real credentials or private snapshots.
