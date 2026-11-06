@@ -68,7 +68,8 @@ export class ClimateAccess {
   async get(instance, route) {
     let response;
     const addresses = [...new Set([instance.ipAddress, ...(instance.addresses ?? [])])]
-      .filter((address) => typeof address === 'string' && isIP(address)).slice(0, 8);
+      .filter((address) => typeof address === 'string' && isIP(address))
+      .slice(0, 8);
     for (const address of addresses) {
       const host = address.includes(':') ? '[' + address + ']' : address;
       try {
@@ -80,9 +81,13 @@ export class ClimateAccess {
         });
         instance.ipAddress = address;
         break;
-      } catch { /* Try another address advertised by this configured bridge. */ }
+      } catch {
+        /* Try another address advertised by this configured bridge. */
+      }
     }
-    if (!response) { throw new Error('Bridge unreachable.'); }
+    if (!response) {
+      throw new Error('Bridge unreachable.');
+    }
     if ([401, 403, 470].includes(response.status)) {
       throw new Error('Enable Homebridge accessory control (-I) and check this bridge’s PIN.');
     }

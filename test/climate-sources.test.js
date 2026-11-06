@@ -130,19 +130,28 @@ test('real discovery adapter only browses configured identities and reads them t
   const bonjour = {
     find(options, onup) {
       assert.deepEqual(options, { type: 'hap' });
-      found = onup; searches++; return browser;
+      found = onup;
+      searches++;
+      return browser;
     },
     destroy() {},
   };
   const access = new ClimateAccess(f.config, {
     clientFactory: (options) => {
       assert.deepEqual(Object.keys(options), ['usernames']);
-      return new BridgeDiscovery({ ...options, bonjourFactory: () => bonjour,
-        resolve: async () => { throw new Error('Unconfigured host must not be resolved'); } });
+      return new BridgeDiscovery({
+        ...options,
+        bonjourFactory: () => bonjour,
+        resolve: async () => {
+          throw new Error('Unconfigured host must not be resolved');
+        },
+      });
     },
     request: async (url, options) => {
       assert.equal(options.method, 'GET');
-      if (url.includes('127.0.0.2')) { throw new Error('Wrong interface'); }
+      if (url.includes('127.0.0.2')) {
+        throw new Error('Wrong interface');
+      }
       return f.access.request(url, options);
     },
   });
@@ -168,15 +177,29 @@ test('passive discovery resolves shared hosts and ignores stale lookups after st
   let stopped = 0;
   let destroyed = 0;
   let reportError;
-  const client = new BridgeDiscovery({ usernames: [bridge],
-    resolve: () => new Promise((resolve) => { resolvePending = resolve; }),
+  const client = new BridgeDiscovery({
+    usernames: [bridge],
+    resolve: () =>
+      new Promise((resolve) => {
+        resolvePending = resolve;
+      }),
     bonjourFactory: (error) => {
       reportError = error;
-      return { find(options, onup) { found = onup; const browser = new EventEmitter(); browser.stop = () => stopped++; return browser; },
-        destroy() { destroyed++; } };
+      return {
+        find(options, onup) {
+          found = onup;
+          const browser = new EventEmitter();
+          browser.stop = () => stopped++;
+          return browser;
+        },
+        destroy() {
+          destroyed++;
+        },
+      };
     },
   });
-  const instances = []; const errors = [];
+  const instances = [];
+  const errors = [];
   client.on('instance-discovered', (instance) => instances.push(instance));
   client.on('error', (error) => errors.push(error));
   try {
@@ -203,7 +226,9 @@ test('passive discovery resolves shared hosts and ignores stale lookups after st
     reportError(new Error('mDNS unavailable'));
     assert.equal(errors.length, 1);
   } finally {
-    if (!client.closed) { client.destroy(); }
+    if (!client.closed) {
+      client.destroy();
+    }
   }
 });
 test('unconfigured discoveries receive no credentials and child bridges use their own PIN', async (t) => {

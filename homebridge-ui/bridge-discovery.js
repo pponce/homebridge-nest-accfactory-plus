@@ -13,10 +13,14 @@ export class BridgeDiscovery extends EventEmitter {
   }
 
   startDiscovery(timeout = 3500) {
-    if (this.closed || this.browser || !this.usernames.size) { return; }
+    if (this.closed || this.browser || !this.usernames.size) {
+      return;
+    }
     const generation = {};
     this.generation = generation;
-    const found = (service) => { void this.discovered(service, generation); };
+    const found = (service) => {
+      void this.discovered(service, generation);
+    };
     this.browser = this.bonjour.find({ type: 'hap' }, found);
     this.browser.on('srv-update', found);
     this.timer = setTimeout(() => this.stopDiscovery(), timeout);
@@ -25,12 +29,21 @@ export class BridgeDiscovery extends EventEmitter {
 
   async discovered(service, generation) {
     const username = typeof service?.txt?.id === 'string' ? service.txt.id.toUpperCase() : '';
-    if (!this.usernames.has(username) || !Number.isInteger(service.port) || service.port < 1 || service.port > 65535) { return; }
-    let addresses = (Array.isArray(service.addresses) ? service.addresses : []).filter((address) => typeof address === 'string' && isIP(address));
+    if (!this.usernames.has(username) || !Number.isInteger(service.port) || service.port < 1 || service.port > 65535) {
+      return;
+    }
+    let addresses = (Array.isArray(service.addresses) ? service.addresses : []).filter(
+      (address) => typeof address === 'string' && isIP(address),
+    );
     // Child bridges can share a host whose address records were omitted from this announcement.
     if (!addresses.length && typeof service.host === 'string') {
-      try { addresses = (await this.resolve(service.host, { all: true })).map((entry) => entry.address).filter((address) => typeof address === 'string' && isIP(address)); }
-      catch { return; }
+      try {
+        addresses = (await this.resolve(service.host, { all: true }))
+          .map((entry) => entry.address)
+          .filter((address) => typeof address === 'string' && isIP(address));
+      } catch {
+        return;
+      }
     }
     addresses = [...new Set(addresses)].sort((a, b) => isIP(a) - isIP(b)).slice(0, 8);
     if (!this.closed && this.generation === generation && addresses.length) {
