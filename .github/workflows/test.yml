@@ -38,7 +38,13 @@ jobs:
 
       - run: npm ci
       - run: npm install --no-save --package-lock=false homebridge@${{ matrix.homebridge }}
-      - run: npm run check
+      - name: Run project checks
+        id: validation
+        continue-on-error: true
+        run: node maintenance/checks/run-migration-check.mjs check
+      - name: "${{ steps.validation.outputs.detail }}"
+        if: always() && steps.validation.outcome != 'skipped'
+        run: test '${{ steps.validation.outcome }}' = 'success'
       - name: Verify migration through Homebridge cache restoration
         id: migration
         continue-on-error: true

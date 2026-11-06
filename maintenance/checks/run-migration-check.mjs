@@ -1,16 +1,17 @@
 import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
-let detail = 'Migration restoration passed';
+const projectCheck = process.argv[2] === 'check';
+let detail = projectCheck ? 'Project checks passed' : 'Migration restoration passed';
 try {
-  const output = execFileSync(process.execPath, ['maintenance/checks/migration-restore.mjs'], {
-    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000,
+  const output = execFileSync(projectCheck ? 'npm' : process.execPath, projectCheck ? ['run', 'check'] : ['maintenance/checks/migration-restore.mjs'], {
+    encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: projectCheck ? 240000 : 60000, maxBuffer: 16 * 1024 * 1024,
   });
   process.stdout.write(output);
 } catch (error) {
-  const output = String(error.stderr || error.stdout || error.message);
+  const output = String(error.stdout || '') + '\n' + String(error.stderr || error.message);
   process.stderr.write(output);
-  detail = output.split('\n').filter((line) => /Error|Cannot|Assertion|actual:|expected:|migration-restore\.mjs:\d/.test(line))
+  detail = output.split('\n').filter((line) => /✖|Error|Cannot|Assertion|actual:|expected:|error:|code:|migration-restore\.mjs:\d/.test(line))
     .join(' ').slice(0, 480) || 'Migration restoration failed; inspect the job log';
   process.exitCode = 1;
 }

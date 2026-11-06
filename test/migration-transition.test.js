@@ -40,6 +40,7 @@ function fixture(t, withFallback = true) {
     ],
   }));
   const identifierData = {};
+  identifierData['|nextAID'] = entries.length + 2;
   for (const [index, entry] of entries.entries()) {
     identifierData[entry.UUID] = index + 2;
     let iid = 2;
@@ -52,6 +53,7 @@ function fixture(t, withFallback = true) {
         identifierData[key + '|' + characteristic.UUID] = iid++;
       }
     }
+    identifierData[entry.UUID + '|nextIID'] = iid;
   }
   const files = {
     'config.json': config, [cache]: entries,
@@ -184,9 +186,11 @@ test('migration requires complete, distinct accessory and characteristic identif
     { cache: {} },
     { cache: { ...original.cache, [second]: original.cache[first] } },
     { cache: { ...original.cache, [first + '|' + uuid('4A') + '|1']: 1 } },
+    { cache: { ...original.cache, '|nextAID': 2 } },
+    { cache: { ...original.cache, [first + '|nextIID']: undefined } },
   ]) {
     fs.writeFileSync(path.join(state.storage, name), JSON.stringify(data));
-    assert.throws(() => prepareMigration(state.storage, 7), /records are missing or inconsistent/);
+    assert.throws(() => prepareMigration(state.storage, 7), /missing or inconsistent/);
   }
 });
 

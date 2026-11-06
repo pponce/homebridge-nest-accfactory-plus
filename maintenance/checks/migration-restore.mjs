@@ -6,9 +6,9 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { prepareMigration, createSnapshot, applySnapshot } from '../migrate-child-bridge.mjs';
-import Platform from '../../src/system.js';
-import HomeKitDevice from '../../src/HomeKitDevice.js';
-import { configureIdentity, PLUGIN_NAME } from '../../src/identity.js';
+import Platform from '../../dist/system.js';
+import HomeKitDevice from '../../dist/HomeKitDevice.js';
+import { configureIdentity, PLUGIN_NAME } from '../../dist/identity.js';
 
 const require = createRequire(import.meta.url);
 const homebridgeEntry = require.resolve('homebridge');

@@ -102,6 +102,11 @@ export function prepareMigration(storage, expectedCount) {
         iids.add(iid);
       }
     }
+    const nextIID = identifierData[accessory.UUID + '|nextIID'];
+    if (!Number.isSafeInteger(nextIID) || nextIID <= Math.max(...iids)) fail('Identifier allocation counters are missing or inconsistent.');
+  }
+  if (!Number.isSafeInteger(identifierData['|nextAID']) || identifierData['|nextAID'] <= Math.max(...aids)) {
+    fail('Identifier allocation counters are missing or inconsistent.');
   }
   const nextConfig = structuredClone(config);
   nextConfig.platforms[index].platform = 'NestClimateCntrl';
