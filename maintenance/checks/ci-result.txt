@@ -1,0 +1,588 @@
+=== climate-check.log ===
+
+> homebridge-nest-accfactory-plus@0.4.4 lint
+> eslint "src/**/*.{js,mjs}" "test/**/*.js" "scripts/**/*.js" --max-warnings=20
+
+
+/home/runner/work/homebridge-nest-accfactory-plus/homebridge-nest-accfactory-plus/scripts/check-package.js
+  13:1   warning  This line has a length of 237. Maximum allowed is 140                                                          @stylistic/max-len
+  21:51  warning  Statement inside of curly braces should be on next line                                                        @stylistic/brace-style
+  21:72  warning  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  @stylistic/brace-style
+  25:3   warning  Unexpected console statement                                                                                   no-console
+
+/home/runner/work/homebridge-nest-accfactory-plus/homebridge-nest-accfactory-plus/src/HomeKitDevice/HomeKitDevice.test.js
+  3392:15  warning  Statement inside of curly braces should be on next line                                                        @stylistic/brace-style
+  3392:68  warning  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  @stylistic/brace-style
+  3397:27  warning  Statement inside of curly braces should be on next line                                                        @stylistic/brace-style
+  3397:84  warning  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  @stylistic/brace-style
+  3398:35  warning  Statement inside of curly braces should be on next line                                                        @stylistic/brace-style
+  3398:86  warning  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  @stylistic/brace-style
+  3428:28  warning  Statement inside of curly braces should be on next line                                                        @stylistic/brace-style
+  3428:88  warning  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  @stylistic/brace-style
+  3439:50  warning  Statement inside of curly braces should be on next line                                                        @stylistic/brace-style
+  3439:78  warning  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  @stylistic/brace-style
+  3445:30  warning  Statement inside of curly braces should be on next line                                                        @stylistic/brace-style
+  3445:58  warning  Closing curly brace should be on the same line as opening curly brace or on the line after the previous block  @stylistic/brace-style
+
+/home/runner/work/homebridge-nest-accfactory-plus/homebridge-nest-accfactory-plus/test/connections.test.js
+  593:1  warning  This line has a length of 150. Maximum allowed is 140  @stylistic/max-len
+
+/home/runner/work/homebridge-nest-accfactory-plus/homebridge-nest-accfactory-plus/test/identity.test.js
+  52:5  warning  Expected blank line between class members  @stylistic/lines-between-class-members
+
+✖ 18 problems (0 errors, 18 warnings)
+  0 errors and 15 warnings potentially fixable with the `--fix` option.
+
+
+> homebridge-nest-accfactory-plus@0.4.4 test:coverage
+> node --test --experimental-test-coverage --test-coverage-include="src/**" --test-coverage-exclude="**/*.test.js" --test-reporter=spec --test-reporter=./test/coverage-reporter.js --test-reporter-destination=stdout --test-reporter-destination=stdout "test/*.test.js" "src/HomeKitDevice/*.test.js" "src/HomeKitHistory/*.test.js" "src/fetchWrapper/*.test.js"
+
+✔ generateUUID preserves one deterministic identity across supported runtimes (4.731871ms)
+✔ generateUUID prefers HAP so enabling Matter does not change identity (0.186949ms)
+✔ generateUUID fails instead of creating a transient accessory identity (0.664163ms)
+✔ Homebridge honours the explicit Matter enablement check (5.951704ms)
+✔ constructor restores declared fields from a subclass persistence namespace (1.743856ms)
+✔ constructor rejects invalid persisted device data field declarations (0.319497ms)
+✔ Homebridge honours the explicit HAP enablement check and legacy default (3.743054ms)
+✔ add requires at least one protocol API (3.170789ms)
+✔ Matter device type is required only when Matter is the sole Homebridge representation (1.594633ms)
+✔ addMatterCluster merges state and command handlers without duplicating the cluster (1.316127ms)
+✔ Homebridge exposes HAP and Matter through the existing lifecycle (10.990615ms)
+✔ Matter persisted context rolls back and retries after a cache update failure (1.038452ms)
+✔ Matter teardown still runs when HAP teardown fails (0.443984ms)
+✔ Homebridge supports Matter without creating a HAP accessory or AccessoryInformation service (1.421013ms)
+✔ setup persists restored bridged HAP metadata after onAdd without requiring another change (26.312343ms)
+✔ Homebridge add without arguments preserves the default HAP representation and persists metadata (0.57575ms)
+✔ Matter-only add fails cleanly when Matter cannot be registered (0.231225ms)
+✔ Homebridge does not register or remove a cached HAP accessory when setup fails (0.544764ms)
+✔ initial UPDATE rejection stops external publication and forwards its original error (3.081345ms)
+✔ comparison preserves undefined types in updates without treating object key order as a change (2.19445ms)
+✔ comparison persists undefined type changes to both caches and snapshots independent HAP values (2.434068ms)
+✔ comparison preserves undefined types in nested history while suppressing key-order duplicates (0.671193ms)
+✔ overlapping UPDATE routes preserve committed fields and run hooks in submission order (3.428183ms)
+✔ lifecycle ordering includes HAP cache writes while other devices continue (1.26488ms)
+✔ UPDATE waits for preceding SET and merges its committed state (1.056289ms)
+✔ HomeKitDevice.onGet waits for earlier messages on the same device (1.020284ms)
+✔ HomeKitDevice.onTimer waits for earlier messages on the same device (0.57546ms)
+✔ custom waits for earlier messages on the same device (0.498605ms)
+✔ history stores finite numeric timestamps and preserves valid times across reload (1.242657ms)
+✔ onUpdate can await history with validation, duplicate filtering and all handlers (0.762119ms)
+✔ remove waits for history submitted without awaiting from onUpdate (5.020684ms)
+✔ shutdown waits for history submitted without awaiting from onUpdate (1.17121ms)
+✔ overlapping nested history entries finish in submission order (1.371229ms)
+✔ history owned by remove finishes before cleanup (0.739225ms)
+✔ history owned by shutdown finishes before cleanup (0.376602ms)
+✔ nested history failure rejects its owner and the queue recovers, awaited: true (0.853525ms)
+✔ nested history failure rejects its owner and the queue recovers, awaited: false (0.569011ms)
+✔ nested GET, HISTORY and custom handlers share ownership without bypassing state-change guards (1.950846ms)
+✔ nested state work uses generic ownership under HomeKitDevice.onTimer (0.687227ms)
+✔ nested state work uses generic ownership under HomeKitDevice.onGet (0.838603ms)
+✔ hook result ordering and registered object precedence remain unchanged (0.527768ms)
+✔ GET rejects a registered handler failure even after a successful hook result (3.860569ms)
+✔ custom message fallback rejects with its original error (0.710432ms)
+✔ remove completes cleanup before rejecting a handler failure (0.847246ms)
+✔ shutdown completes cleanup before rejecting a handler failure (3.468734ms)
+✔ set forwards dispatch failures and waits for asynchronous handlers (1.22457ms)
+✔ set detaches committed objects and arrays from caller-owned values (0.356883ms)
+✔ set preserves the undefined result after a successful asynchronous hook (1.6662ms)
+✔ named hooks and registered handlers preserve scalar results (0.872003ms)
+✔ shutdown rejects timers during hooks and from callbacks resuming after teardown (3.809253ms)
+✔ remove rejects timers during hooks and from callbacks resuming after teardown (1.988873ms)
+✔ timer message rejection is handled and the one-shot timer is removed (10.829324ms)
+✔ timer logs a thrown callback error (10.981772ms)
+✔ timer logs a rejected callback error (12.266481ms)
+✔ one-shot timers clean up after a synchronous callback failure (10.002838ms)
+✔ repeating timers continue after a synchronous callback failure (20.165216ms)
+✔ standalone HAP-NodeJS remains HAP-only (0.745424ms)
+✔ wrappers and direct messages ignore invalid payloads before hooks or state changes (1.514584ms)
+✔ service helpers create and reuse primary and subtype services and remove by instance or type (0.711534ms)
+✔ characteristic helpers create required and optional characteristics and apply configuration (1.05714ms)
+✔ characteristic setup defers current-value validation until final props are installed (0.674258ms)
+✔ characteristic setup restores the previous value if props validation throws (0.253488ms)
+✔ characteristic setup preserves props-first behaviour without a finite numeric initial value (0.286718ms)
+✔ format changes and initial values outside final constraints retain props-first validation (0.381691ms)
+✔ characteristic helpers accept minimal HAP metadata and absent optional configuration (0.420308ms)
+✔ HomeKit names preserve Unicode and internal punctuation and strip invalid boundaries (2.274359ms)
+✔ timer validation, duplicate preservation and reset follow the public contract (15.493905ms)
+✔ delayed repeating timers skip overlapping asynchronous executions (50.415994ms)
+✔ constructor validates every required metadata field and standalone pairing formats (2.438394ms)
+✔ setup rejects invalid options without calling hooks or creating representations (0.687667ms)
+✔ standalone setup requires an accessory name and known category (0.719455ms)
+✔ setup summary preserves formatting, levels, fallback and clears consumed details (0.991212ms)
+✔ Eve setup links annotated services after onAdd and removes temporary configuration (0.718604ms)
+✔ disabled Eve setup removes all Eve characteristics and history services without skipping neighbours (0.653486ms)
+✔ metadata updates remove legacy firmware characteristics and order online notifications before commit (1.099042ms)
+✔ inactive instances reject recording and linking without dereferencing an unavailable runtime (0.555881ms)
+✔ storage initialisation failures and missing read/write methods retain usable memory-only history (1.528194ms)
+✔ CSV returns no stream for empty history or invalid paths and exposes asynchronous filesystem errors (26.543598ms)
+✔ unbounded retention and default-subtype Eve sessions retain reset and transfer semantics (1.635244ms)
+✔ Eve linking gracefully reports unavailable accessory service wiring (0.483212ms)
+✔ Eve adapter options reach the advertised firmware, location, and enabled schedule configuration (1.517517ms)
+✔ A1: malformed GET programs preserve the last usable Thermo configuration (0.941617ms)
+✔ A6: unrepresentable Aqua water values remain in raw history without breaking Eve setup (0.637603ms)
+✔ binary Eve fields accept boolean and numeric states and omit unrepresentable raw states (3.152791ms)
+✔ invalid retention limits use defaults and explicit restart markers bypass otherwise active gaps (2.733585ms)
+✔ multiple accessories share registered Eve HAP types while keeping their history stores separate (0.565175ms)
+✔ A1: malformed schedules reject the whole GET update and later valid reads recover (3.851516ms)
+✔ A1: invalid scalar updates and formatter failures preserve retained state (1.332341ms)
+✔ A6: invalid water samples preserve raw records and omit only the unusable wire field (7.698265ms)
+✔ A6: Aqua uses unsigned 64-bit water fields and preserves aggregate rounding without overflow (2.864481ms)
+✔ A1: Energy rejects non-finite and mistyped live readings and recovers on the next read (1.03041ms)
+✔ initial Thermo and Aqua programs are validated and detached without a GET router (2.80403ms)
+✔ initial Thermo and Aqua scalar and formatting failures fall back to usable defaults (6.869105ms)
+✔ overlapping GET reads merge into the latest state and failures cannot restore stale state (4.99846ms)
+✔ Light Strip inherited preset names use default timings and remain writable (7.883632ms)
+✔ rejects unsupported requests without calling fetch (2.187119ms)
+✔ passes GET request options without wrapper bookkeeping (1.488224ms)
+✔ serialises plain POST bodies and applies a default content type (44.014778ms)
+✔ serialises a POST object with a constructor property (7.289564ms)
+✔ combines caller cancellation with a configured timeout (1.033795ms)
+✔ releases transient HTTP responses and applies exponential retry delays (1.104441ms)
+✔ retries transient transport errors and reports the final attempt count (0.984612ms)
+✔ does not retry explicit caller cancellation (0.379888ms)
+✔ preserves non-retryable HTTP error metadata (0.321821ms)
+✔ accepts a null caller signal with a configured timeout (3.562283ms)
+✔ cancels http retry with an injected resolved delay (1.018803ms)
+✔ cancels http retry with an injected pending delay (0.44144ms)
+✔ cancels http retry with the native delay (15.378362ms)
+✔ preserves http failure for a web stream passed through data (1.694683ms)
+✔ preserves http failure for a web stream passed through options (0.360699ms)
+✔ preserves http failure for a node stream passed through data (2.685162ms)
+✔ preserves http failure for a node stream passed through options (0.664172ms)
+✔ preserves http failure for a async iterable stream passed through data (0.403042ms)
+✔ preserves http failure for a async iterable stream passed through options (0.294861ms)
+✔ cancels transport retry with an injected resolved delay (0.111667ms)
+✔ cancels transport retry with an injected pending delay (0.10052ms)
+✔ cancels transport retry with the native delay (3.11158ms)
+✔ preserves transport failure for a web stream passed through data (0.29457ms)
+✔ preserves transport failure for a web stream passed through options (0.216384ms)
+✔ preserves transport failure for a node stream passed through data (0.853796ms)
+✔ preserves transport failure for a node stream passed through options (0.673116ms)
+✔ preserves transport failure for a async iterable stream passed through data (0.235011ms)
+✔ preserves transport failure for a async iterable stream passed through options (0.229693ms)
+✔ retries a replayable JSON body overriding a streaming options body (0.520138ms)
+✔ parseLegacyRefreshToken accepts a bare token (2.0948ms)
+✔ exchangeGoogleRefreshToken selects the historical field-test client (0.443152ms)
+✔ exchangeGoogleRefreshToken validates credentials without exposing them (0.473378ms)
+✔ exchangeGoogleRefreshToken redacts provider error descriptions (0.444565ms)
+✔ camera creates real HKSV services and reflects upstream software-off and recovery (245.348601ms)
+✔ doorbell creates real HKSV services and reflects upstream software-off and recovery (9.861277ms)
+✔ floodlight creates real HKSV services and reflects upstream software-off and recovery (7.280871ms)
+✔ camera HomeKit control: status LED off (5.515823ms)
+✔ camera HomeKit control: night vision off (4.893112ms)
+✔ camera HomeKit control: camera off (4.786694ms)
+✔ camera recording audio control forwards enable/disable to the device (4.63714ms)
+✔ motion, detection disable, offline and shutdown clear the same HomeKit service (7.607299ms)
+✔ camera capability setup: not battery powered (17.449637ms)
+✔ camera capability setup: no optional controls (16.28057ms)
+✔ camera capability setup: no FFmpeg (1.259462ms)
+✔ camera capability setup: protocol unavailable (2.139788ms)
+✔ camera capability setup: NexusTalk (2.861586ms)
+✔ camera capability setup: migration (5.40709ms)
+✔ camera protocol replacement and migration preserve controller identity (4.705302ms)
+✔ camera snapshot callback: online (4.024114ms)
+✔ camera snapshot callback: offline (3.161014ms)
+✔ camera snapshot callback: software off (4.266246ms)
+✔ camera snapshot callback: migration (4.761887ms)
+✔ camera snapshot callback: missing upstream image (5.083187ms)
+✔ HKSV active changes start and stop the real retained buffer without recreating its controller (6.886582ms)
+✔ live startup without ffmpeg acknowledges without acquiring a source (0.711283ms)
+✔ live startup without session acknowledges without acquiring a source (0.283333ms)
+✔ unexpected talkback error releases the live source, peer process and sockets (8.76582ms)
+✔ unexpected talkback exit releases the live source, peer process and sockets (2.695729ms)
+✔ unexpected talkback clean-exit releases the live source, peer process and sockets (3.209557ms)
+✔ replaced HKSV generators finish without following another process sharing their session key (5.760279ms)
+✔ unexpected HKSV completion wakes a waiting generator and releases the recording source (0.901267ms)
+✔ HKSV input acquisition failure is terminated by FFmpeg without waiting for a HomeKit close (1.410438ms)
+✔ late recording completion cannot stop a replacement created during source teardown (1.062248ms)
+✔ mixed thermostat and Heat Link setup preserves shared HAP defaults and emits no bounds diagnostics (27.845313ms)
+✔ cached thermostat setup reuses characteristic identity and applies its device values without diagnostics (1.222427ms)
+✔ cached heatlink setup reuses characteristic identity and applies its device values without diagnostics (1.461294ms)
+✔ upstream heat to off updates HomeKit without changing thermostat capabilities (3.918546ms)
+✔ upstream cool to off updates HomeKit without changing thermostat capabilities (2.407648ms)
+✔ upstream range to off updates HomeKit without changing thermostat capabilities (1.802163ms)
+✔ upstream ecoheat to off updates HomeKit without changing thermostat capabilities (2.343172ms)
+✔ upstream ecocool to off updates HomeKit without changing thermostat capabilities (3.028406ms)
+✔ upstream ecorange to off updates HomeKit without changing thermostat capabilities (0.972143ms)
+✔ temperature setup uses valid fallbacks when optional target readings are not yet available (3.023618ms)
+✔ Eco uses per-device resource commands with explicit manual/inactive modes (3.096277ms)
+✔ sensor selection writes the associated thermostat and preserves other settings (2.963158ms)
+✔ Eco rejects unavailable capability, malformed values and API denial (0.486988ms)
+✔ fan timer writes a future deadline even for a running fan (0.410523ms)
+✔ optional switches are absent by default, stable on repeated setup and removed when disabled (0.942519ms)
+✔ preset switch awaits command, resets after acceptance, and propagates errors (0.742069ms)
+✔ configuration editor preserves legacy credentials, overrides and unknown fields (2.91094ms)
+✔ dashboard closes its listener if endpoint persistence fails (18.103815ms)
+✔ runtime splits UTC midnight and counts previous HVAC state (1.014737ms)
+✔ runtime never fills downtime, offline intervals, or backward time (0.258907ms)
+✔ next schedule uses specified timezone and wraps week, ignores invalid entries (11.884321ms)
+✔ local dashboard rejects unauthenticated/browser-origin requests and redacts runtime fields (86.569204ms)
+✔ commands validate association, capability and connectivity; failures remain failures (10.336517ms)
+✔ dashboard serializes commands and does not report acceptance early (4.679954ms)
+✔ saved history survives restart without counting the stopped interval (5.357346ms)
+✔ split Observe traits create one thermostat, publish remote Off, then remove the same accessory (209.511695ms)
+✔ accepted Observe state wins over confirmed state regardless of arrival order (10.014326ms)
+✔ HomeKit SET completes the real command route and rejects failed cloud writes without committing data (15.781335ms)
+✔ retained Nest REST ingestion creates Protect and ignores retired thermostat/sensor buckets (12.782293ms)
+✔ migration preserves mode 600 with existing sidecars=false (12.548693ms)
+✔ migration preserves mode 600 with existing sidecars=true (2.864941ms)
+✔ migration preserves mode 640 with existing sidecars=false (1.219163ms)
+✔ migration preserves mode 640 with existing sidecars=true (1.233493ms)
+✔ migration preserves mode 400 with existing sidecars=false (6.324751ms)
+✔ migration preserves mode 400 with existing sidecars=true (2.581358ms)
+✔ migration keeps the original config after fchmodSync call 1 fails (1.169768ms)
+✔ migration keeps the original config after fchmodSync call 2 fails (1.125082ms)
+✔ Connections invalidation resolves all snapshot waiters and shutdown cancels scheduled retries (1.36483ms)
+✔ Google account rejects logged out with the expected retry policy (0.664323ms)
+✔ Google account rejects temporary OAuth error with the expected retry policy (0.262752ms)
+✔ Google account rejects missing JWT with the expected retry policy (0.256624ms)
+✔ Google account rejects missing session token with the expected retry policy (0.28142ms)
+✔ Google account expiry 301 uses a bounded refresh delay (0.562671ms)
+✔ Google account expiry 120 uses a bounded refresh delay (0.278146ms)
+✔ Google account expiry undefined uses a bounded refresh delay (0.36085ms)
+✔ Nest login rejects invalid camera session: {"status":403,"status_detail":"Denied","status_description":"Forbidden"} (0.363313ms)
+✔ Nest login rejects invalid camera session: {"status":500} (0.26773ms)
+✔ Nest login rejects invalid camera session: {"items":[{"session_token":" "}]} (0.252758ms)
+✔ Nest session response rejects missing runtime credentials: undefined (0.596531ms)
+✔ Nest session response rejects missing runtime credentials: {} (0.274099ms)
+✔ Nest session response rejects missing runtime credentials: {"access_token":" "} (0.199678ms)
+✔ successful authorisation completing after shutdown cannot recreate an account (7.830442ms)
+✔ unexpected scheduler errors are contained and retried without duplicate connection work (1.038802ms)
+✔ Google-enabled connections create and replace transports with current auth; fieldTest=false (0.938703ms)
+✔ Google-enabled connections create and replace transports with current auth; fieldTest=true (0.339778ms)
+✔ Connections validates partial account records and logs only explicitly excluded accounts (0.344065ms)
+✔ Connections tolerates absent constructor options: undefined (0.119468ms)
+✔ Connections tolerates absent constructor options: null (0.060921ms)
+✔ Connections tolerates absent constructor options: invalid (0.059259ms)
+✔ connection failure classification and diagnostic detail: {"status":401} (3.841712ms)
+✔ connection failure classification and diagnostic detail: {"code":null,"status":403} (0.559066ms)
+✔ connection failure classification and diagnostic detail: {"code":"ERR_INVALID_URL"} (2.179087ms)
+✔ connection failure classification and diagnostic detail: {"status":503} (0.671914ms)
+✔ connection failure classification and diagnostic detail: "Fixture network failure" (0.553036ms)
+✔ authorisation callback failure is logged without discarding the valid session: Error: Fixture callback failure (0.736521ms)
+✔ authorisation callback failure is logged without discarding the valid session: Fixture non-error callback failure (0.70285ms)
+✔ Google refresh retains field-test endpoints and reports retry success at debug level (0.695199ms)
+✔ scheduler logs unexpected failures and falls back from invalid retry delays: Error: Fixture scheduler failure (3.015597ms)
+✔ scheduler logs unexpected failures and falls back from invalid retry delays: Fixture non-error scheduler failure (1.976063ms)
+✔ invalidation logs its reason, replaces the refresh timer and releases pending ingestion work on shutdown (1.038111ms)
+✔ Connections.fromConfig accepts an empty configuration without scheduling network work (0.20085ms)
+✔ Google OAuth rejection without detail remains retryable: {"error":"TEMPORARY"} (0.470393ms)
+✔ Google OAuth rejection without detail remains retryable: {"error":""} (0.222242ms)
+✔ Google missing JWT diagnostic retains failure and retry state (0.602651ms)
+✔ Google missing session diagnostic retains failure and retry state (0.277816ms)
+✔ coverage accepts exact floors and rejects an entirely unmeasured module (4.225324ms)
+✔ coverage rejects insufficient or missing lines: 0 (0.445596ms)
+✔ coverage rejects insufficient or missing lines: undefined (0.117966ms)
+✔ coverage rejects insufficient or missing lines: NaN (0.103424ms)
+✔ coverage rejects invalid lines floor: undefined (0.319668ms)
+✔ coverage rejects invalid lines floor: NaN (0.313508ms)
+✔ coverage rejects invalid lines floor: -1 (0.13365ms)
+✔ coverage rejects invalid lines floor: 101 (0.335161ms)
+✔ coverage rejects insufficient or missing branches: 0 (0.680006ms)
+✔ coverage rejects insufficient or missing branches: undefined (0.105798ms)
+✔ coverage rejects insufficient or missing branches: NaN (0.090775ms)
+✔ coverage rejects invalid branches floor: undefined (0.096614ms)
+✔ coverage rejects invalid branches floor: NaN (1.752359ms)
+✔ coverage rejects invalid branches floor: -1 (0.293309ms)
+✔ coverage rejects invalid branches floor: 101 (0.592766ms)
+✔ coverage rejects insufficient or missing functions: 0 (0.088142ms)
+✔ coverage rejects insufficient or missing functions: undefined (0.076995ms)
+✔ coverage rejects insufficient or missing functions: NaN (0.083295ms)
+✔ coverage rejects invalid functions floor: undefined (0.080661ms)
+✔ asynchronous replacement startup failure leaves the running session intact (0.341901ms)
+✔ older replacement startup cannot stop a newer pending request (1.349037ms)
+✔ EPIPE stays silent while other pipe errors reach diagnostics and completion (0.663602ms)
+✔ unsuccessful signals leave the session active and do not schedule forced termination (0.760417ms)
+✔ inaccessible DRM metadata disables QSV without failing construction or software support (0.60227ms)
+✔ binary resolution uses the configured directory on darwin (0.508831ms)
+✔ binary resolution uses the configured executable on darwin (0.525945ms)
+✔ binary resolution uses the configured home directory on darwin (1.435205ms)
+✔ binary resolution uses the configured directory on linux (0.167941ms)
+✔ binary resolution uses the configured executable on linux (0.152428ms)
+✔ binary resolution uses the configured home directory on linux (0.158867ms)
+✔ binary resolution uses the configured directory on win32 (0.153699ms)
+✔ binary resolution uses the configured executable on win32 (0.184085ms)
+✔ binary resolution uses the configured home directory on win32 (0.262903ms)
+✔ default binary discovery selects an existing installation on darwin (0.37521ms)
+✔ default binary discovery selects an existing installation on linux (0.191176ms)
+✔ default binary discovery selects an existing installation on win32 (0.304745ms)
+✔ default binary discovery uses PATH when no installation is found on darwin (0.270454ms)
+✔ default binary discovery uses PATH when no installation is found on win32 (0.138397ms)
+✔ missing explicit executable skips probes and cannot advertise required codec support (0.303854ms)
+✔ unusable version probe cannot establish minimum support: {"status":1,"stdout":"ffmpeg version 8.0 "} (0.16043ms)
+✔ unusable version probe cannot establish minimum support: {"status":0,"stdout":null} (0.084176ms)
+✔ unusable version probe cannot establish minimum support: {"status":0,"stdout":"unrecognised version"} (0.102343ms)
+✔ failed -encoders query isolates unavailable features: Fixture feature probe failed (0.266959ms)
+✔ gRPC refuses a non-gRPC response: {":status":200,"content-type":"application/json"} (1.90716ms)
+✔ gRPC refuses a non-gRPC response: {"content-type":"application/grpc"} (0.436592ms)
+✔ gRPC maps stream error timeout (0.720477ms)
+✔ gRPC maps stream error aborted (0.471454ms)
+✔ gRPC maps stream error connection (0.437443ms)
+✔ gRPC maps stream error unexpected (0.3817ms)
+✔ unary timeout cancels just its request and preserves the pooled session (11.004065ms)
+✔ unary transient failure retries after backoff (1.955362ms)
+✔ Observe transient failure retries after backoff (1.287544ms)
+✔ Observe waits for asynchronous callbacks in order and reports handler failure after stream completion (2.558273ms)
+✔ auth-based pooling shares a session, rotates on new credentials and releases only the final owner (1.205712ms)
+✔ session failure removes stale pooling state and a later command opens a replacement (1.036098ms)
+✔ gRPC encodes nested Any payloads without mutating caller objects (6.056812ms)
+✔ gRPC malformed protobuf response fails only the current request (0.726586ms)
+✔ gRPC stream closed without trailers returns an explicit unknown status (0.485565ms)
+✔ gRPC propagates an unavailable auth-provider error before opening a session (1.034797ms)
+✔ gRPC Observe terminal status 1 / cancelled is classified correctly (4.982446ms)
+✔ gRPC Observe terminal status 4 / context timed out is classified correctly (0.439317ms)
+✔ gRPC Observe terminal status 4 / deadline reached is classified correctly (0.503473ms)
+✔ gRPC Observe terminal status 4 / read timeout is classified correctly (0.422711ms)
+✔ gRPC Observe terminal status 4 / quota exhausted is classified correctly (3.164639ms)
+✔ gRPC Observe terminal status 16 / expired credentials is classified correctly (0.604404ms)
+✔ gRPC synchronous request failure releases only that request and allows reuse (1.17123ms)
+✔ gRPC synchronous write failure releases only that request and allows reuse (4.734776ms)
+✔ gRPC synchronous end failure releases only that request and allows reuse (1.722424ms)
+✔ gRPC timeout errors nested in cause keep their error classification and allow a later command (0.860366ms)
+✔ gRPC stale session close and release cannot evict its pooled replacement (0.957852ms)
+▶ gRPC failures clean up only the request and preserve the pooled connection
+  ✔ clone (188.308087ms)
+  ✔ encode (4.111063ms)
+  ✔ write (1.449196ms)
+  ✔ stream (0.732875ms)
+✔ gRPC failures clean up only the request and preserve the pooled connection (196.570435ms)
+▶ gRPC response buffering and terminal status handling
+  ✔ grows beyond one doubling (3.487562ms)
+  ✔ retains split header and payload (0.597052ms)
+  ✔ compacts consumed frames before growth (0.771362ms)
+  ✔ accepts exact buffer maximum (0.513677ms)
+  ✔ rejects data above maximum (0.310805ms)
+  ✔ rejects oversized advertised payload (0.311636ms)
+  ✔ rejects compressed frames (0.404254ms)
+  ✔ preserves unary cancellation (1.090219ms)
+  ✔ normalises observe cancellation (0.733657ms)
+  ✔ normalises expected observe deadline (0.318116ms)
+  ✔ preserves unexpected observe failure (0.2809ms)
+✔ gRPC response buffering and terminal status handling (16.847047ms)
+✔ RTP payload inspection: missing (3.05144ms)
+✔ Protect safety summary criticalDevices overrides healthy sensor traits for FAILURE_TYPE_TEMP (0.146038ms)
+✔ Protect safety summary criticalDevices overrides healthy sensor traits for FAILURE_TYPE_CO (0.122934ms)
+✔ Protect safety summary warningDevices overrides healthy sensor traits for FAILURE_TYPE_SMOKE (0.128802ms)
+✔ Protect safety summary warningDevices overrides healthy sensor traits for FAILURE_TYPE_TEMP (0.312477ms)
+✔ Protect safety summary warningDevices overrides healthy sensor traits for FAILURE_TYPE_CO (0.137506ms)
+✔ Protect sensor fault reports map consistently across APIs: passed=false (0.623833ms)
+✔ Protect sensor fault reports map consistently across APIs: passed=true (0.241741ms)
+✔ MediaTimeline indexes mixed media and keyframes (1.727922ms)
+✔ MediaTimeline trims expired items without crossing a protected cursor (0.511575ms)
+✔ MediaTimeline finds the closest item when mixed timestamps are not ordered (0.340248ms)
+✔ MediaTimeline reports capacity drops and resets cleanly (0.34101ms)
+✔ MediaTimeline preserves video, audio and keyframe indexes across repeated compaction (6.519884ms)
+✔ MediaTimeline skips untimed metadata when finding the latest timestamp and trims it safely (0.368ms)
+✔ MediaTimeline chooses the oldest valid output cursor and releases protection as viewers leave (0.329673ms)
+✔ MediaTimeline rejects invalid lookup and media inputs without moving its logical index (0.217665ms)
+✔ MediaTimeline accounts for accepted payloads across protected trims, wrapped storage and clear (0.338486ms)
+✔ NexusTalk opens only one socket and starts playback after complete authorisation (15.922025ms)
+✔ NexusTalk decodes fragmented and coalesced playback packets with source timestamps (9.288ms)
+✔ NexusTalk grows its packet buffer and recovers after oversized framing (3.190007ms)
+✔ NexusTalk ignores malformed protobuf and resumes at the next framed packet (0.963891ms)
+✔ NexusTalk redirects only after socket close and ignores stale socket events (2.037044ms)
+✔ NexusTalk camera-unreachable playback end does not reconnect (3.949022ms)
+✔ NexusTalk stalled playback requests one reconnect after the old socket closes (0.928398ms)
+✔ NexusTalk groups video by timestamp and flushes the final frame on close (2.137885ms)
+✔ NexusTalk queues talkback until authorisation and preserves FIFO payloads (2.390923ms)
+✔ NexusTalk close during TLS setup prevents a late handshake from sending authentication (0.851733ms)
+✔ live audio follows its decoder-start policy and resumes with the first IDR (1.649806ms)
+✔ record audio follows its decoder-start policy and resumes with the first IDR (1.402315ms)
+✔ Streamer retained timeline stays bounded under sustained overload and throttles full-buffer warnings (18.571805ms)
+✔ source reconnect resets codec bootstrap while retaining output stream identity (2.00717ms)
+✔ scheduler isolates repeated output failures and stops only the failing camera (8.552762ms)
+✔ successful output ticks reset the scheduler failure count between transient pipe failures (1.393012ms)
+✔ source lifecycle clears stale host overrides and returns explicit close completion (0.576321ms)
+✔ decoder bootstrap avoids duplicating parameter sets already carried by a keyframe: both (0.657453ms)
+✔ decoder bootstrap avoids duplicating parameter sets already carried by a keyframe: SPS (0.849159ms)
+✔ decoder bootstrap avoids duplicating parameter sets already carried by a keyframe: PPS (0.74972ms)
+✔ source/output audio gap diagnostics are bounded and require opt-in: false (1.573702ms)
+✔ source/output audio gap diagnostics are bounded and require opt-in: true (1.283268ms)
+✔ StreamTransport keeps sequential RTP groups sorted without rescanning (3.094855ms)
+✔ StreamTransport re-sorts reordered RTP packets and closes recovered gaps (0.290304ms)
+✔ StreamTransport preserves sequential ordering across RTP wraparound (0.245627ms)
+✔ media health suppresses deltas, recovers via keyframes and falls back on a new failure (2.954576ms)
+✔ isolated timestamp clamps stay harmless but repeated clamps count as bad media (0.419367ms)
+✔ media state backfills partial protocol state and bounds its expired event history (0.591264ms)
+✔ transport lifecycle publishes each state once and resets session-learned metadata on reconnect (0.6961ms)
+✔ transport metadata is learned from SPS and source timing without duplicate complete-shape logs (2.429861ms)
+✔ PCM metadata derives bitrate and audio gap counters from emitted frames (1.566621ms)
+✔ transport repairs diagnostic counters and contains failing consumer callbacks (1.124591ms)
+✔ audio jitter waits for its delay, sorts rollover packets and rejects duplicates and stale packets (0.92998ms)
+✔ audio jitter stays bounded and forced release bypasses delay (0.482471ms)
+✔ a failed device mapper is reported and later data can recover without restarting the platform (4.787221ms)
+✔ platform weather GET: complete (200.550216ms)
+✔ platform weather GET: API error (5.358632ms)
+✔ platform weather GET: missing fields (3.072959ms)
+✔ weather GET skips unavailable account: missing token (3.597746ms)
+✔ weather GET skips unavailable account: unauthorised (2.957165ms)
+✔ Google camera history returns an empty list for deadline (4.069547ms)
+✔ Google camera history returns an empty list for request timeout (2.96718ms)
+✔ Google camera history returns an empty list for no response (3.040257ms)
+✔ Google camera history returns an empty list for incomplete (3.965292ms)
+✔ Google camera history returns an empty list for complete without events (3.819188ms)
+✔ Google camera history normalises timestamps, zones and event enums and orders newest first (3.987637ms)
+✔ retained REST camera history: empty zones (4.504231ms)
+✔ retained REST camera history: zone zero (8.367679ms)
+✔ retained REST camera history: missing zones (4.508137ms)
+✔ retained REST camera history: invalid JSON shape (4.07756ms)
+✔ REST camera history handles transport error UND_ERR_HEADERS_TIMEOUT (4.419315ms)
+✔ REST camera history handles transport error UND_ERR_CONNECT_TIMEOUT (4.160393ms)
+✔ REST camera history handles transport error UNEXPECTED (4.437194ms)
+✔ Nest snapshot GET handles image (5.58954ms)
+✔ Nest snapshot GET handles empty (4.977014ms)
+✔ Nest snapshot GET handles error (5.118971ms)
+✔ Google snapshot falls back to cached URL after rejected refresh (4.4289ms)
+✔ Google snapshot falls back to no URL after rejected refresh (4.396439ms)
+✔ Google snapshot observes a fresh image, clears its waiter and fetches the new URL (9.166252ms)
+✔ snapshot command rejection cleans its waiter and GET degrades safely (2.702358ms)
+✔ Google snapshot times out its Observe wait and fetches the previously available image (3.698806ms)
+✔ overall snapshot timeout lets HomeKit continue when a cloud command never settles (3.28703ms)
+✔ platform SET {"hvac_mode":"off"} updates target_temperature_settings (167.151922ms)
+✔ platform SET {"hvac_mode":"heat"} updates target_temperature_settings (9.270388ms)
+✔ platform SET {"target_temperature_low":21} updates target_temperature_settings (4.604911ms)
+✔ platform SET {"target_temperature_high":26} updates target_temperature_settings (3.88887ms)
+✔ platform SET {"temperature_scale":"f"} updates display_settings (7.941681ms)
+✔ platform SET {"temperature_scale":"C"} updates display_settings (3.699628ms)
+✔ platform SET {"temperature_lock":true} updates temperature_lock_settings (3.161851ms)
+✔ platform SET {"temperature_lock":false} updates temperature_lock_settings (3.498066ms)
+✔ platform SET {"fan_state":false,"fan_duration":60,"fan_timer_speed":0} updates fan_control_settings (4.467702ms)
+✔ platform SET {"fan_timer_speed":3} updates fan_control_settings (3.319342ms)
+✔ platform SET {"fan_timer_speed":0} updates fan_control_settings (4.090421ms)
+✔ platform SET {"streaming_enabled":true} updates recording_toggle_settings (4.34258ms)
+✔ platform SET {"streaming_enabled":false} updates recording_toggle_settings (4.33357ms)
+✔ platform SET {"audio_enabled":true} updates microphone_settings (4.31348ms)
+✔ platform SET {"audio_enabled":false} updates microphone_settings (4.4601ms)
+✔ RTCP report 201 reaches both local receivers even when masked type matches RTP (1.404218ms)
+✔ malformed packets are ignored while unknown control traffic keeps its existing routes (2.1263ms)
+✔ talkback socket errors close only their owner: Error: bind failed (0.838157ms)
+✔ talkback socket errors close only their owner: socket failure (1.364415ms)
+✔ unexpected socket close errors remain visible (0.843515ms)
+✔ thermostat callbacks propagate asynchronous failures through the HAP write boundary (3.908831ms)
+✔ thermostat mapper ignores REST with raw data arriving first from Nest (3.088604ms)
+✔ thermostat mapper ignores REST with raw data arriving first from Google (0.546772ms)
+✔ external heat waits for off and completes before the thermostat update resolves (7.889969ms)
+✔ external cool waits for off and completes before the thermostat update resolves (1.276254ms)
+✔ initial and updated humidifier capabilities retain enum zero and reuse the service (1.283316ms)
+✔ camera timer polls with real GET routing and commits the returned UPDATE (9.064481ms)
+✔ translator prefers the configured source and reports required fields (2.505021ms)
+✔ translator maps only fields affected by a partial update (0.180641ms)
+✔ translator falls back when the preferred source has no usable value (0.209834ms)
+✔ translator merges objects without mutating either input (0.27369ms)
+✔ translator retains meaningful preferred values: false (0.235403ms)
+✔ translator retains meaningful preferred values: 0 (0.175503ms)
+✔ translator retains meaningful preferred values: [] (0.130866ms)
+✔ translator retains meaningful preferred values: {} (0.105028ms)
+✔ translator resolver exceptions fall back to the other source, wrapped=false (0.260079ms)
+✔ translator resolver exceptions fall back to the other source, wrapped=true (0.139389ms)
+✔ translator failed custom merge uses its declared fallback: false (1.675389ms)
+✔ translator failed custom merge uses its declared fallback: 0 (0.118708ms)
+✔ translator failed custom merge uses its declared fallback: undefined (0.08016ms)
+✔ translator related-resource changes rebuild only dependent fields with the full shared context (0.314802ms)
+✔ WebRTC rejects an invalid answer stream ID and permits the next open (0.378667ms)
+✔ WebRTC rejects an invalid answer SDP and permits the next open (0.289143ms)
+✔ WebRTC close while view intent is pending never joins the ended session (1.404443ms)
+✔ WebRTC concurrent closes send one talkback stop and one stream end (0.802202ms)
+✔ WebRTC discards an excessively slow IDR; already streaming=false (0.759828ms)
+✔ WebRTC discards an excessively slow IDR; already streaming=true (0.524406ms)
+✔ WebRTC accepts a large valid IDR using the learned resolution allowance (276.79613ms)
+✔ WebRTC accepts a large valid IDR using the learned bitrate allowance (276.835979ms)
+✔ WebRTC keeps only one PLI in flight and resumes retries after it settles (2.150971ms)
+✔ WebRTC FIR/REMB throw failure leaves keyframe recovery usable (0.984405ms)
+✔ WebRTC FIR/REMB reject failure leaves keyframe recovery usable (0.886748ms)
+✔ WebRTC ICE completion after the first keyframe preserves media readiness (0.669863ms)
+✔ WebRTC safely recovers from interrupted IDR within an apparently complete timestamp group (0.683944ms)
+✔ WebRTC safely recovers from empty FU payload within an apparently complete timestamp group (0.609203ms)
+✔ WebRTC source video timestamps advance monotonically across 32-bit RTP timestamp rollover (0.761139ms)
+✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=false (0.746709ms)
+✔ WebRTC late talkback start cannot affect a replacement peer; deferred stop=true (0.429924ms)
+✔ WebRTC bounds startup keyframe retries while an audio-only camera keeps the connection alive (6.258733ms)
+✔ WebRTC RTP arriving from a retired video track cannot initialise the replacement source (0.798847ms)
+✔ WebRTC a retired track event cannot reset decoder state on the replacement video track (0.635993ms)
+✔ WebRTC RTP from a retired audio track cannot enter the replacement decoder (0.549182ms)
+✔ a retired WebRTC audio track event cannot discard the current reorder queue (0.454701ms)
+✔ WebRTC ignores a track advertising an unsupported audio codec (0.390244ms)
+✔ WebRTC ignores a track advertising an unsupported video codec (0.241242ms)
+✔ WebRTC a retired extension failure cannot close its replacement peer (1.484372ms)
+ℹ tests 1606
+ℹ suites 0
+ℹ pass 1606
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5587.678433
+ℹ start of coverage report
+ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ file                    | line % | branch % | funcs % | uncovered lines
+ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ src                     |        |          |         | 
+ℹ  auth.js                | 100.00 |   100.00 |  100.00 | 
+ℹ  climate-dashboard.js   |  96.71 |    91.00 |   90.32 | 66-67 123-124 145-146 151-152 182-183
+ℹ  config.js              | 100.00 |   100.00 |  100.00 | 
+ℹ  connections.js         |  98.80 |    95.43 |  100.00 | 320-321 611-612 620-621 638-639
+ℹ  consts.js              | 100.00 |   100.00 |  100.00 | 
+ℹ  devices.js             | 100.00 |   100.00 |  100.00 | 
+ℹ  fetchWrapper           |        |          |         | 
+ℹ   fetchWrapper.js       |  98.64 |    96.43 |  100.00 | 75-76 78-79
+ℹ  grpctransport.js       |  94.37 |    85.84 |   96.43 | 112-113 129-130 163-164 263-264 295-296 407-412 488-489 591-606 649-650 690-691 701-702 724-731 767-768
+ℹ  HomeKitDevice          |        |          |         | 
+ℹ   HomeKitDevice.js      |  99.60 |    98.24 |   98.77 | 980-986 1627-1628
+ℹ  HomeKitHistory         |        |          |         | 
+ℹ   HomeKitHistory.js     |  99.65 |    95.91 |  100.00 | 2462 2470 2913-2916 3357-3358 3372-3373 3390-3391
+ℹ  identity.js            | 100.00 |   100.00 |  100.00 | 
+ℹ  index.js               | 100.00 |   100.00 |  100.00 | 
+ℹ  plugins                |        |          |         | 
+ℹ   camera.js             |  94.67 |    80.80 |   92.79 | 119-120 136 151-153 266-268 296-298 321-322 354-355 384-385 421-424 435-438 547-548 595-596 628-629 680-681 698-699 706-707 714 740-743 759-760 810-824 836-838 856-859 873-876 908-909 925-926 948-950 1046-1047 1055-1057 1087-1088 1127-1128 1199-1200 1206 1311-1313 1323-1324 1379-1381 1419-1420 1451-1453 1472-1473 1603-1604 1615-1616 1659-1660 1668-1669 1689-1690 1711-1712 2036 2110-2111 2126-2127 2323-2324
+ℹ   camera                |        |          |         | 
+ℹ    ffmpeg.js            |  98.80 |    95.47 |  100.00 | 250-251 257-258 262-263 385-386 490-491
+ℹ    h264.js              |  99.42 |    99.07 |  100.00 | 472-473 651-652
+ℹ    mediatimeline.js     | 100.00 |   100.00 |  100.00 | 
+ℹ    nexustalk.js         |  92.20 |    82.35 |  100.00 | 378-382 452-456 569-570 573-575 598-599 602-603 619-620 624-625 630-632 635-636 644-645 684-691 761-764 793-794 797-798 870-873 894-895 918-919 922-923 944-945 948-949 965-968 1040-1042 1108-1118 1123-1127 1145-1146 1271-1272 1275-1276 1299-1300 1317-1318 1323-1324 1327-1328 1331-1333 1355-1356 1387-1388 1392-1393 1400-1401 1409-1410 1421-1422 1436-1438 1488-1489
+ℹ    streamer.js          |  92.57 |    79.47 |   89.47 | 215-218 252-253 289 299 313-314 392-393 513-514 530-531 535-536 569-570 582-584 588-589 652-653 700-701 712-713 724-725 765-768 786-787 821-822 944-945 996-997 1002-1006 1106-1108 1157-1158 1212-1213 1216-1217 1264-1265 1280-1281 1284-1300 1303-1306 1357-1358 1363-1364 1377-1378 1384-1385 1471-1472 1552-1557 1562-1563 1566-1567 1570-1571 1600-1603 1621-1623 1703 1732-1734 1753-1760 1775-1777 1826-1827 1863-1867 1913-1919 1950-1951 1971-1972 2045 2171-2173 2189-2195 2213-2215 2221-2222 2225-2226 2234-2235 2238-2239
+ℹ    streamtransport.js   |  97.17 |    89.96 |   91.23 | 209-211 303-305 308-310 313-315 401-402 697-698 752-753 772-773 865-866 1138-1139 1158-1159 1167-1168 1259-1260 1352-1353 1415-1416 1419-1420 1424-1425 1463-1464 1468-1469
+ℹ    talkback.js          | 100.00 |   100.00 |  100.00 | 
+ℹ    webrtc.js            |  89.92 |    79.35 |   96.15 | 279-280 310-311 381-387 410-411 540-541 724-725 729-730 798-799 870-871 1060-1068 1106-1107 1138-1141 1206-1207 1266-1267 1274-1278 1283-1284 1287-1288 1291-1292 1337-1361 1374 1376 1381-1390 1466-1493 1504-1510 1522-1523 1526-1527 1559-1564 1572-1573 1582-1583 1629-1633 1638-1642 1647-1648 1655-1657 1667-1668 1674-1678 1697-1699 1706-1709 1745-1748 1770-1777 1792-1804 1822-1823 1902-1904 1907-1909 1922-1923 1931-1933 1938-1940 1969-1970 1982-1985 2026-2027 2057-2058 2068-2069 2084-2085 2114-2117 2244-2245 2255-2256 2310-2312
+ℹ   daikinsystem.mjs      | 100.00 |    97.14 |  100.00 | 
+ℹ   doorbell.js           |  97.52 |    80.56 |  100.00 | 64-65 103-104
+ℹ   floodlight.js         |  97.47 |    77.27 |  100.00 | 105-106 115-116
+ℹ   heatlink.js           |  96.73 |    83.24 |  100.00 | 94-95 127 146-148 173-175 316-318 386-392 637-638
+ℹ   homeaway.js           |  98.84 |    86.49 |  100.00 | 132 253-254
+ℹ   lock.js               |  97.97 |    82.29 |  100.00 | 128-130 276-277 318-321 411 586-587
+ℹ   protect.js            |  98.98 |    89.53 |  100.00 | 50-51 201-202 205-206 781-782
+ℹ   tempsensor.js         |  97.93 |    90.91 |  100.00 | 257-258 322-323 348-349 354-355
+ℹ   thermostat.js         |  94.71 |    84.96 |   90.16 | 95 214 256-257 276-277 295-297 308-309 312-319 321-323 332-333 336-355 359-369 373-374 377-378 412-413 747-748 1140-1141 1200-1201 1257-1259 1265-1266 1335-1336 1554-1555 1581-1589 1596-1597 1632-1633 1716-1717 1773-1774 1803-1804 2151-2152 2160 2175-2178 2187-2195 2204-2214 2322-2323 2339-2340 2415-2416
+ℹ   weather.js            |  98.76 |    82.64 |   96.15 | 209-210 372-373 478-479
+ℹ  protobuf.js            | 100.00 |    97.67 |  100.00 | 
+ℹ  ringbuffer.js          | 100.00 |    91.67 |  100.00 | 
+ℹ  supportdump.js         |  97.76 |    92.19 |  100.00 | 244-245 259-260 276-277 336-337 365-366
+ℹ  system.js              |  93.30 |    84.86 |   86.15 | 111-117 157-175 204-206 273-277 280-284 384-385 524-525 565-567 595-600 699 701-712 763-769 799-801 1061-1069 1072-1085 1204-1206 1209-1211 1565-1571 1584-1590 1608-1610 1634-1635 1861-1863 1890-1891 1895-1900 1913-1915 2073-2074
+ℹ  translator.js          | 100.00 |    96.00 |  100.00 | 
+ℹ  utils.js               | 100.00 |    99.06 |  100.00 | 
+ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ all files               |  96.26 |    88.58 |   96.16 | 
+ℹ ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ℹ end of coverage report
+
+Coverage scope: 37/37 production source modules measured.
+Percentages describe loaded file-backed source only; omitted modules are excluded from the aggregate.
+Data-URL imports and extracted methods may be tested without measuring their original source files.
+Coverage gate failed:
+  src/climate-dashboard.js: lines 96.71052631578947% is below 100%
+=== climate-browser.log ===
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+locator.getAttribute: Error: strict mode violation: getByLabel('Legacy refresh token') resolved to 2 elements:
+    1) <select>…</select> aka getByLabel('AuthenticationIssue token and')
+    2) <input type="password" autocomplete="off" spellcheck="false"/> aka getByRole('textbox', { name: 'Legacy refresh token' })
+
+Call log:
+  - waiting for getByLabel('Legacy refresh token')
+
+    at /home/runner/work/homebridge-nest-accfactory-plus/homebridge-nest-accfactory-plus/maintenance/checks/dashboard-browser.mjs:43:62 {
+  log: [ "  - waiting for getByLabel('Legacy refresh token')" ]
+}
+
+Node.js v24.22.2
