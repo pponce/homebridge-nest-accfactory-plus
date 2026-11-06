@@ -12,13 +12,15 @@ import tempfile
 
 PROJECT = Path(__file__).resolve().parents[2]
 MOCK = r'''#!/usr/bin/env python3
-import json, os, pathlib, shutil, sys
+import json, os, pathlib, shutil, subprocess, sys
 name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 root = pathlib.Path(os.environ['PUBLISH_FIXTURE'])
 scenario = os.environ['PUBLISH_SCENARIO']
 with (root / 'calls.jsonl').open('a') as log: log.write(json.dumps([name, *args]) + '\n')
 if name == 'git':
+    if scenario == 'artifacts' and args[2] in ['check-ignore', 'status']:
+        sys.exit(subprocess.run([os.environ['REAL_GIT'], *args]).returncode)
     args = args[2:]
     if args[:3] == ['remote', 'get-url', 'origin']: print('https://github.com/pponce/homebridge-nest-climate-cntrl.git')
     elif args[:2] == ['branch', '--show-current']: print('main')
@@ -69,6 +71,14 @@ def run_case(scenario):
         (checkout / '.git/info').mkdir(parents=True)
         pkg = {'name': 'homebridge-nest-climate-cntrl', 'version': '0.5.0-beta.2'}
         (checkout / 'package.json').write_text(json.dumps(pkg))
+        artifact = checkout / 'maintenance/artifacts/local-result.txt'
+        if scenario == 'artifacts':
+            subprocess.run(['git', '-C', str(checkout), 'init', '-b', 'main'], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(checkout), 'add', 'package.json'], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(checkout), '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                            'commit', '-m', 'Fixture'], check=True, capture_output=True)
+            artifact.parent.mkdir(parents=True)
+            artifact.write_text('retain this local artifact')
         filename = 'homebridge-nest-climate-cntrl-0.5.0-beta.2.tgz'
         archive = root / filename
         with tarfile.open(archive, 'w:gz') as tar:
@@ -87,7 +97,7 @@ def run_case(scenario):
             script.write_text(MOCK)
             script.chmod(0o755)
         env = dict(os.environ, HOME=str(home), PATH=str(bin_dir) + ':' + os.environ['PATH'],
-                   PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario)
+                   PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario, REAL_GIT=shutil.which('git'))
         release = checkout / 'maintenance/releases/v0.5.0-beta.2'
         if scenario == 'pending':
             release.mkdir(parents=True)
@@ -96,9 +106,9 @@ def run_case(scenario):
                                 env=env, text=True, capture_output=True, timeout=45)
         calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
         publishes = [call for call in calls if call[0] == 'npm' and call[3] == 'publish']
-        expected = 'SUCCESS' if scenario in ['success', 'existing'] else 'PENDING' if scenario == 'pending' else 'FAILED'
+        expected = 'SUCCESS' if scenario in ['success', 'existing', 'artifacts'] else 'PENDING' if scenario == 'pending' else 'FAILED'
         assert 'END: ' + expected in result.stdout, (scenario, result.stdout, result.stderr)
-        assert len(publishes) == (1 if scenario in ['success', 'publish-failure'] else 0), (scenario, publishes)
+        assert len(publishes) == (1 if scenario in ['success', 'publish-failure', 'artifacts'] else 0), (scenario, publishes)
         if scenario in ['dirty', 'diverged']:
             assert not any(call[0] in ['curl', 'npm'] for call in calls), (scenario, calls)
         if scenario == 'checksum': assert not any(call[0] == 'npm' for call in calls)
@@ -109,8 +119,37 @@ def run_case(scenario):
         if scenario == 'success':
             assert (release / 'npm-upload-accepted').exists()
             assert '--tag' in publishes[0] and publishes[0][publishes[0].index('--tag') + 1] == 'beta'
+        if scenario == 'artifacts':
+            assert artifact.read_text() == 'retain this local artifact'
+            assert '/maintenance/artifacts/' in (checkout / '.git/info/exclude').read_text()
+            assert any(call[0] == 'git' and '--no-overwrite-ignore' in call for call in calls)
         print(scenario + ': passed')
 
 
-for case in ['success', 'existing', 'pending', 'dirty', 'diverged', 'checksum', 'mismatch', 'registry-failure', 'publish-failure']:
+for case in ['success', 'existing', 'pending', 'dirty', 'diverged', 'checksum', 'mismatch', 'registry-failure', 'publish-failure', 'artifacts']:
     run_case(case)
+
+# Real Git must reject an upstream file that would overwrite an ignored local artifact.
+with tempfile.TemporaryDirectory(prefix='publish-ignore-fixture-') as temp:
+    repo = Path(temp)
+    def git(*args, check=True):
+        return subprocess.run(['git', '-C', str(repo), '-c', 'user.name=Fixture',
+                               '-c', 'user.email=fixture@example.invalid', *args],
+                              check=check, capture_output=True, text=True)
+    git('init', '-b', 'main')
+    (repo / 'README').write_text('fixture')
+    git('add', 'README')
+    git('commit', '-m', 'Base')
+    git('checkout', '-b', 'incoming')
+    target = repo / 'maintenance/artifacts/local-result.txt'
+    target.parent.mkdir(parents=True)
+    target.write_text('upstream content')
+    git('add', 'maintenance/artifacts/local-result.txt')
+    git('commit', '-m', 'Incoming artifact')
+    git('checkout', 'main')
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('retained local content')
+    (repo / '.git/info/exclude').write_text('/maintenance/artifacts/\n')
+    result = git('merge', '--ff-only', '--no-overwrite-ignore', 'incoming', check=False)
+    assert result.returncode != 0 and target.read_text() == 'retained local content'
+    print('ignored artifact collision: passed')

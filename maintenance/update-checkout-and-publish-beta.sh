@@ -26,7 +26,7 @@
         git -C "$project" remote set-url origin "git@github.com:pponce/$package.git" || return 1 ;;
       *) printf '%s\n' 'Unexpected origin. Review the checkout before publishing.'; return 1 ;;
     esac
-    for ignored in /maintenance/releases/ /maintenance/migration/; do
+    for ignored in /maintenance/releases/ /maintenance/migration/ /maintenance/artifacts/; do
       if ! git -C "$project" check-ignore -q --no-index "${ignored#/}private-file"; then
         printf '\n%s\n' "$ignored" >> "$project/.git/info/exclude" || return 1
       fi
@@ -36,11 +36,13 @@
     worktree_status=$(git -C "$project" status --porcelain) || return 1
     if [ "$branch" != main ] || [ -n "$worktree_status" ]; then
       printf '%s\n' 'Checkout must be on main with no local changes. Nothing was stashed, reset or backed up.'
+      printf 'Current branch: %s\n' "${branch:-detached HEAD}"
+      if [ -n "$worktree_status" ]; then printf '%s\n' "$worktree_status"; fi
       return 1
     fi
     printf '%s\n' 'Fetching main and release tags; updating by fast-forward only...'
     git -C "$project" fetch origin --prune --tags || return 1
-    git -C "$project" merge --ff-only origin/main || return 1
+    git -C "$project" merge --ff-only --no-overwrite-ignore origin/main || return 1
     nest_publish_head=$(git -C "$project" rev-parse HEAD) || return 1
     if [ "$nest_publish_head" != "$(git -C "$project" rev-parse origin/main)" ]; then
       printf '%s\n' 'Local main contains extra commits. Review it before publishing.'

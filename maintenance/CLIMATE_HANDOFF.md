@@ -76,3 +76,9 @@ The accepted beta.1 release remains unchanged. The new beta.2 publisher handles 
 3. After npm is verified, install beta.2 using stop → add → start. Keep the old Nest plugin disabled. For fresh cutover, pair a new Climate child bridge and verify all seven expected devices; existing Climate beta.1 installations update normally.
 4. Enable the optional web dashboard through Homebridge settings, create its separate login, save/restart and test HTTPS/iOS Home Screen behavior on real equipment.
 5. Remove only the old Nest setup after validation, rebuild affected Apple Home assignments, then continue implementing the planned temperature, occupancy and room-fan controllers. Draft rules currently never execute.
+
+## Publisher local-artifact follow-up
+
+The installation host's checkout is on main; the only reported untracked path is `maintenance/artifacts/`. The publisher now adds that exact directory to local Git excludes, alongside release/migration outputs, and uses `git merge --ff-only --no-overwrite-ignore` so an incoming file cannot overwrite ignored local data. Dirty-check failures print the current branch and changed paths.
+
+Ten publisher scenarios and a real Git ignored-file collision test pass. The corrected helper SHA256 is `f3b16897b584f97f5aae03a876e6f63938adca0fb864f17d2a8fa34ea1ed86f6`. Use the corrected script from its pinned source commit for the retry; the immutable beta.2 release asset and npm tarball are unchanged. No local files were deleted, no backups were created, and npm publication is still awaiting the user's terminal execution.
