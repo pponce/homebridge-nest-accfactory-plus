@@ -91,3 +91,12 @@ Local Chromium cannot launch under the execution restrictions; use the GitHub br
 - The publishing helper now retries registry verification and records accepted uploads to prevent repeated publication on a later invocation. Downloaded release assets and migration reports are ignored by Git. Published beta assets remain unchanged.
 - Validation: Bash syntax and whitespace checks; isolated fixtures verified local changes/history retention, repeated runs, destination collision, delayed registry visibility, unresolved registry visibility and integrity mismatch. Publishing-helper fixtures verified exactly one mock upload across repeated runs after acceptance, including when verification remains pending. No real npm upload occurred in these tests.
 - Next: run the rename/recovery helper, return the existing redacted preflight report, then select and test a migration procedure for that bridge layout. No live Homebridge changes or backups have been made.
+
+## Migration inspection detail follow-up
+
+- The first redacted preflight shows one enabled legacy child bridge, the plus package at 0.4.4, Google refresh-token authentication, readable pairing data, seven owned cached accessories, two thermostats and five accessories classified as other. No missing or duplicate accessory UUIDs were reported. This report alone does not confirm the folder rename or npm registry verification.
+- Do not infer that the five other accessories are unsupported. The original classifier did not distinguish smoke/CO, Home/Away, occupancy or weather capabilities.
+- Schema 2 of the read-only preflight adds those classifications, aggregated service labels, identifier-cache presence and installed Homebridge/UI versions. Raw characteristic values, custom UUIDs, names and credentials remain excluded.
+- Four focused tests pass, including exact installation-file preservation, private-data redaction, weather versus temperature identification, smoke/CO grouping, custom UUID handling, runtime versions and missing identifier records.
+- Next: obtain the expanded report, then finish and test the migration procedure. Preserve the existing child-bridge identity, pairing, identifier records and supported accessory UUIDs where possible. The package/platform ownership transition remains unimplemented; do not imply that a config-only rename is safe.
+- No backup or live installation mutation is authorized by this follow-up. Request approval before creating a backup or applying a custom cache migration. No new npm publication is needed for this inspection update.

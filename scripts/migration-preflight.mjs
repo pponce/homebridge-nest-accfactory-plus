@@ -7,6 +7,31 @@ const packages = ['homebridge-nest-accfactory', 'homebridge-nest-accfactory-plus
 const aliases = ['NestAccfactory', 'NestClimateCntrl'];
 const validUsername = (value) => typeof value === 'string' && /^(?:[a-f\d]{2}:){5}[a-f\d]{2}$/i.test(value);
 const mac = (value) => value.replaceAll(':', '').toUpperCase();
+const serviceNames = {
+  '3E': 'accessory-information',
+  '40': 'fan',
+  '43': 'light',
+  '45': 'lock',
+  '49': 'switch',
+  '4A': 'thermostat',
+  '7F': 'carbon-monoxide',
+  '82': 'humidity',
+  '85': 'motion',
+  '86': 'occupancy',
+  '87': 'smoke',
+  '89': 'air-quality',
+  '8A': 'temperature',
+  '96': 'battery',
+  '97': 'carbon-dioxide',
+  '110': 'camera',
+  '121': 'doorbell',
+  B7: 'fan',
+  D0: 'valve',
+};
+function standardType(value) {
+  const match = typeof value === 'string' && /^([\da-f]{1,8})(?:-0000-1000-8000-0026bb765291)?$/i.exec(value);
+  return match ? match[1].toUpperCase().replace(/^0+/, '') : '';
+}
 async function json(file) {
   try {
     return { status: 'read', value: JSON.parse(await fs.readFile(file, 'utf8')) };
@@ -21,21 +46,34 @@ function cacheSummary(entries) {
     .map((plugin) => ({ plugin, count: owned.filter((entry) => entry.plugin === plugin).length }))
     .filter((entry) => entry.count);
   const types = {};
+  const serviceGroups = new Map();
   for (const entry of owned) {
-    const uuids = (entry.services ?? []).map((service) =>
-      String(service.UUID ?? service.type)
-        .toUpperCase()
-        .split('-')[0]
-        .replace(/^0+/, ''),
-    );
+    const services = Array.isArray(entry.services) ? entry.services : [];
+    const uuids = services.map((service) => standardType(service?.UUID ?? service?.type));
+    const information = services.find((service) => standardType(service?.UUID ?? service?.type) === '3E');
+    const model = (Array.isArray(information?.characteristics) ? information.characteristics : []).find(
+      (characteristic) => standardType(characteristic?.UUID ?? characteristic?.type) === '20',
+    )?.value;
     const kind = uuids.some((id) => ['110', '121', '45'].includes(id))
       ? 'camera-doorbell-or-lock'
       : uuids.includes('4A')
         ? 'thermostat'
-        : uuids.includes('8A')
-          ? 'temperature-sensor'
-          : 'other';
+        : model === 'Weather'
+          ? 'weather'
+          : uuids.some((id) => ['87', '7F'].includes(id))
+            ? 'smoke-or-carbon-monoxide-sensor'
+            : model === 'Home/Away'
+              ? 'home-away'
+              : uuids.includes('8A')
+                ? 'temperature-sensor'
+                : uuids.includes('86')
+                  ? 'occupancy-sensor'
+                  : 'other';
     types[kind] = (types[kind] ?? 0) + 1;
+    // Only fixed capability labels leave this process, never model values or custom UUIDs.
+    const labels = [...new Set(uuids.map((id) => serviceNames[id] ?? 'custom-or-unknown'))].sort();
+    const group = JSON.stringify({ kind, services: labels });
+    serviceGroups.set(group, (serviceGroups.get(group) ?? 0) + 1);
   }
   const uuids = owned.map((entry) => entry.UUID).filter((value) => typeof value === 'string');
   return {
@@ -43,6 +81,7 @@ function cacheSummary(entries) {
     nestAccessories: owned.length,
     owners,
     types,
+    serviceGroups: [...serviceGroups].map(([group, count]) => ({ ...JSON.parse(group), count })),
     missingIdentities: owned.length - uuids.length,
     duplicateIdentities: uuids.length - new Set(uuids).size,
   };
@@ -64,7 +103,7 @@ export async function inspectInstallation(
     throw new Error('Homebridge configuration is unavailable or invalid. Check the storage path and read permissions.');
   }
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     mode: 'read-only',
     generatedAt: new Date().toISOString(),
     nodeVersion: process.version,
@@ -88,6 +127,9 @@ export async function inspectInstallation(
     const pairing = usernameValid
       ? await json(path.join(storage, 'persist', 'AccessoryInfo.' + mac(bridge.username) + '.json'))
       : { status: 'unknown-identity' };
+    const identifiers = usernameValid
+      ? await json(path.join(storage, 'persist', 'IdentifierCache.' + mac(bridge.username) + '.json'))
+      : { status: 'unknown-identity' };
     const accounts = Array.isArray(entry.accounts)
       ? entry.accounts
       : [entry.google && { ...entry.google, type: 'google' }, entry.nest && { ...entry.nest, type: 'nest' }].filter(Boolean);
@@ -98,6 +140,7 @@ export async function inspectInstallation(
       disabled: entry._bridge?.disable === true,
       bridgeIdentityPresent: usernameValid,
       pairingRecord: pairing.status,
+      identifierCache: identifiers.status,
       pairedClientCount:
         pairing.status === 'read' && pairing.value?.pairedClients && typeof pairing.value.pairedClients === 'object'
           ? Object.keys(pairing.value.pairedClients).length
@@ -117,7 +160,7 @@ export async function inspectInstallation(
       },
     });
   }
-  for (const name of packages) {
+  for (const name of [...packages, 'homebridge', 'homebridge-config-ui-x']) {
     for (const root of packageRoots) {
       const installed = await json(path.join(root, name, 'package.json'));
       if (installed.status === 'read' && installed.value?.name === name && /^\d+\.\d+\.\d+(?:-[\w.-]+)?$/.test(installed.value.version)) {
