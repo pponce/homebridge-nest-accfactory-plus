@@ -40,6 +40,7 @@
         "README.md",
         "CHANGELOG.md",
         "MIGRATION.md",
+        "WEB_DASHBOARD.md",
         "PRERELEASE_NOTES.md",
         "homebridge-ui/**/*",
         "AUTHENTICATION.md",

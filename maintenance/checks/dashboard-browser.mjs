@@ -8,7 +8,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = new URL('../../homebridge-ui/public/', import.meta.url);
 const server = http.createServer(async (request, response) => {
   const name = request.url === '/' ? 'index.html' : request.url.slice(1);
-  if (!['index.html', 'index.js', 'climate-utils.js', 'sensor-preview.js', 'room-preview.js', 'styles.css', 'nest-climate-cntrl-icon-512.png'].includes(name)) { response.writeHead(404).end(); return; }
+  if (!['index.html', 'index.js', 'climate-utils.js', 'sensor-preview.js', 'room-preview.js', 'web-dashboard-setup.js', 'styles.css', 'nest-climate-cntrl-icon-512.png'].includes(name)) { response.writeHead(404).end(); return; }
   response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html');
   response.end(await fs.readFile(new URL(name, root)));
 });
@@ -20,7 +20,7 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.addInitScript(() => {
-    window.saved = []; window.commands = []; window.available = true;
+    window.saved = []; window.commands = []; window.webAccounts = []; window.available = true;
     const status = { accounts: [{ id: 'A', name: 'Google', authorised: true, observing: true }], devices: [
       { serial: 'T', id: 'THERMOSTAT', type: 'Thermostat', account: 'A', lastUpdate: Date.now(),
         data: { description: 'Living room', online: true, hvac_state: 'heating', hvac_mode: 'heat', current_temperature: 21, physical_temperature: 21,
@@ -35,6 +35,8 @@ try {
         if (!window.available) { throw new Error('Fixture offline'); }
         if (path === '/sources') { return { bridges: [], sources: [{ id: 'external', provider: 'homebridge', kind: 'temperature', name: 'Office sensor', bridgeName: 'Rooms', available: true, temperature: 19, lastReadAt: Date.now(), measuredAt: null }] }; }
         if (path === '/status') { return structuredClone(status); }
+        if (path === '/web/status') { return { enabled: false, available: false, accountConfigured: window.webAccounts.length > 0 }; }
+        if (path === '/web/account') { window.webAccounts.push(data); return { accountConfigured: true }; }
         window.commands.push(data); return { accepted: true, message: 'Accepted' };
       },
     };
@@ -49,6 +51,13 @@ try {
   assert.equal(config.devices[0].custom, 'preserved');
   assert.equal(config.custom, 'untouched');
   assert.equal(config.accounts[0].refreshToken, 'fixture-secret');
+  await page.getByLabel('Web password', { exact: true }).fill('fixture-web-password');
+  await page.getByRole('button', { name: 'Create web login', exact: true }).click();
+  await page.getByRole('button', { name: 'Update web login', exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Web password', { exact: true }).inputValue(), '');
+  await page.getByLabel('Enable standalone dashboard', { exact: true }).check();
+  await page.waitForFunction(() => window.saved.at(-1)[0].webDashboard?.enabled === true);
+  assert.equal(await page.evaluate(() => JSON.stringify(window.saved).includes('fixture-web-password')), false);
   await page.getByRole('button', { name: 'Discover / refresh Homebridge sources' }).click();
   await page.getByLabel('Office sensor', { exact: false }).check();
   await page.getByText('Illustrative Nest target:', { exact: false }).waitFor();

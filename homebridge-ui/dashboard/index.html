@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#77618e" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Climate Cntrl" />
+    <meta name="description" content="Your home's climate, sensors and controls, together." />
+    <title>Nest Climate Cntrl</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <div id="login-screen" class="login-screen">
+      <section class="login-intro" aria-label="About Climate Cntrl">
+        <div class="brand"><img src="/icon-192.png" alt="" width="54" height="54" /><span>Nest Climate<br /><strong>Cntrl</strong></span></div>
+        <div class="login-copy"><span class="eyebrow">A more comfortable home</span><h1>Your home’s climate,<br />in one place.</h1><p>See your thermostats, explore room sensors and plan your climate setup.</p></div>
+        <div class="login-footer">Independent Nest integration · Homebridge</div>
+      </section>
+      <main class="login-main" id="login-main">
+        <div class="login-card">
+          <span class="eyebrow">Your home, connected</span><h2 id="login-title">Welcome home.</h2>
+          <p id="login-help">Sign in with your Climate Cntrl web account.</p>
+          <p id="login-error" class="callout danger" role="alert" hidden></p>
+          <form id="login-form">
+            <label>Username<input id="username" name="username" autocomplete="username" required maxlength="64" /></label>
+            <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" /></label>
+            <button id="sign-in" class="button primary wide" type="submit">Sign in <span aria-hidden="true">→</span></button>
+          </form>
+          <button id="setup-retry" class="button primary" type="button" hidden>Check setup again</button>
+          <p class="small-note">Web accounts are separate from your Homebridge login. Manage access in the plugin’s Homebridge settings.</p>
+        </div>
+      </main>
+    </div>
+
+    <div id="app" class="app-shell" hidden>
+      <aside class="sidebar">
+        <a class="brand" href="#overview" aria-label="Nest Climate Cntrl home"><img src="/icon-192.png" width="46" height="46" alt="" /><span>Nest Climate<br /><strong>Cntrl</strong></span></a>
+        <span class="nav-caption">YOUR HOME</span>
+        <nav id="navigation" class="navigation" aria-label="Main navigation">
+          <a href="#overview" data-page="overview"><span data-icon="home"></span><span>Overview</span></a>
+          <a href="#sources" data-page="sources"><span data-icon="sensors"></span><span>Sensors &amp; fans</span></a>
+          <a href="#rules" data-page="rules"><span data-icon="rules"></span><span>Climate rules</span><span class="nav-tag">Drafts</span></a>
+          <a href="#settings" data-page="settings"><span data-icon="settings"></span><span>Settings</span></a>
+        </nav>
+        <div class="sidebar-note"><span data-icon="leaf"></span><p>Small adjustments.<br />A home that feels right.</p></div>
+        <div class="sidebar-footer"><span class="avatar" data-icon="user"></span><div><strong id="signed-in-name">Web account</strong><span>Local dashboard</span></div><button id="sign-out" class="icon-button" type="button" aria-label="Sign out" title="Sign out"><span data-icon="logout"></span></button></div>
+      </aside>
+
+      <main id="content" class="workspace">
+        <header class="page-header">
+          <div><div class="eyebrow" id="page-eyebrow">Your home at a glance</div><h1 id="page-title" tabindex="-1">Climate overview</h1></div>
+          <div class="header-actions"><span id="connection-state" class="status-pill neutral" role="status">Connecting</span><button id="refresh-status" class="icon-button outlined" type="button" aria-label="Refresh status" title="Refresh status"><span data-icon="refresh"></span></button></div>
+        </header>
+        <div id="notice" class="callout" role="status" hidden></div>
+
+        <section id="page-overview" data-section="overview">
+          <div class="overview-top">
+            <article class="welcome-card"><div><span class="eyebrow">COMFORT, TOGETHER</span><h2 id="home-heading">A clearer view of home.</h2><p id="overview-summary">Connecting to your Nest devices…</p></div><div class="home-mark" aria-hidden="true"><img src="/icon-192.png" width="120" height="120" alt="" /></div></article>
+            <article class="quick-card"><span class="card-label">A little more connected</span><h2>Plan your climate rules</h2><p>Bring room temperatures, presence and ceiling fans into your setup.</p><a class="text-link" href="#rules">Open rule workbench <span aria-hidden="true">↗</span></a><span class="draft-chip">Drafts · no automatic actions</span></article>
+          </div>
+          <div class="section-heading"><div><h2>Your thermostats</h2><p>Current readings and direct Nest controls.</p></div><span id="last-updated" class="subtle">Waiting for an update</span></div>
+          <div id="thermostats" class="thermostat-grid"><div class="empty-state"><span class="loading-ring" aria-hidden="true"></span><p>Loading your thermostats…</p></div></div>
+          <div class="section-heading"><div><h2>A week of comfort</h2><p>Observed heating and cooling. Missing coverage is unknown.</p></div><label class="compact-label">Thermostat<select id="runtime-device"></select></label></div>
+          <div class="insight-grid"><article class="panel runtime-panel"><div id="runtime-summary" class="runtime-summary"></div><div id="runtime-chart" class="runtime-chart"></div><div class="chart-legend"><span class="legend heating">Heating</span><span class="legend cooling">Cooling</span><span>UTC days · not energy consumption</span></div><details><summary>View runtime and coverage</summary><div id="runtime-table" class="table-scroll"></div></details></article><article class="panel schedule-panel"><div class="section-heading tight"><h3>Coming up</h3><span data-icon="calendar"></span></div><p id="schedule-next" class="schedule-next">No schedule available.</p><div id="schedule-preview"></div><p class="small-note">Nest schedules, Eco and holds can affect the next change. A scheduled setpoint is not a confirmed override end time.</p></article></div>
+          <div id="heat-links" class="supporting-grid"></div>
+        </section>
+
+        <section id="page-sources" data-section="sources" hidden>
+          <div class="section-heading"><div><h2>A home full of signals</h2><p>Find the readings that describe how each room feels.</p></div><button id="refresh-sources" class="button secondary" type="button"><span data-icon="refresh"></span>Discover sources</button></div>
+          <div class="panel source-toolbar"><label class="search-field"><span data-icon="search"></span><input id="source-search" type="search" placeholder="Find a sensor, fan or room" aria-label="Find a source" /></label><div id="source-filters" class="segmented" role="group" aria-label="Source type"><button type="button" data-filter="all" aria-pressed="true">All</button><button type="button" data-filter="temperature" aria-pressed="false">Temperature</button><button type="button" data-filter="presence" aria-pressed="false">Presence</button><button type="button" data-filter="fan" aria-pressed="false">Fans</button></div></div>
+          <p id="source-summary" class="subtle" role="status">Nest sources appear as devices connect. Discover Homebridge sources to include other rooms.</p>
+          <div id="source-list" class="source-grid"></div>
+          <details class="panel"><summary>Bridge connections &amp; source availability</summary><div id="bridge-list"></div><p class="small-note">Discovery reads configured Homebridge main and child bridges. Accessory control must be enabled on the source bridge. Devices available only in Apple Home cannot be discovered here. Read time does not establish when a sensor last measured the room.</p></details>
+        </section>
+
+        <section id="page-rules" data-section="rules" hidden>
+          <div class="rule-intro"><div><h2>Make room for smarter comfort.</h2><p>Build a setup around the rooms you use and the signals you trust.</p></div><span class="draft-chip large"><span data-icon="draft"></span>Draft workbench</span></div>
+          <div class="callout draft-notice"><span data-icon="info"></span><div><strong>Design and save your rules.</strong><p>These drafts do not change thermostats, fans or Home/Away. Automatic rule execution is not available in this version.</p></div></div>
+          <div id="rule-tabs" class="rule-tabs" role="tablist" aria-label="Rule type"><button type="button" role="tab" data-kind="temperature" aria-selected="true"><span data-icon="thermometer"></span>Temperature<span class="rule-count" data-count="temperature">0</span></button><button type="button" role="tab" data-kind="presence" aria-selected="false"><span data-icon="home"></span>Home &amp; away<span class="rule-count" data-count="presence">0</span></button><button type="button" role="tab" data-kind="fan" aria-selected="false"><span data-icon="fan"></span>Room fans<span class="rule-count" data-count="fan">0</span></button></div>
+          <div class="rule-workbench"><aside class="panel rule-collection"><div class="section-heading tight"><h3 id="rule-list-title">Temperature groups</h3><button id="new-rule" class="icon-button outlined" type="button" aria-label="Add rule" title="Add rule"><span data-icon="plus"></span></button></div><div id="rule-list"></div></aside><div id="rule-editor" class="panel rule-editor"></div></div>
+        </section>
+
+        <section id="page-settings" data-section="settings" hidden>
+          <article class="panel"><div class="section-heading"><div><h2>Your dashboard</h2><p>Make this space feel like home.</p></div><span data-icon="settings"></span></div><div class="form-grid"><label>Dashboard name<input id="dashboard-name" maxlength="80" /></label><div class="field-note"><span class="label-text">Browser access</span><strong id="dashboard-url">Local HTTPS</strong><span class="small-note">Network and web-account settings are managed in Homebridge.</span></div></div><label class="toggle-row"><span><strong>Eve history</strong><small>Use history for supported accessories by default.</small></span><input id="eve-history" type="checkbox" role="switch" /></label></article>
+          <article class="panel"><div class="section-heading"><div><h2>Apple Home features</h2><p>Choose the optional controls exposed for each thermostat.</p></div><span class="draft-chip">Restart to apply</span></div><div id="device-settings"></div></article>
+          <article class="panel"><div class="section-heading"><div><h2>Account connections</h2><p>Authentication and the device connection are shown separately.</p></div><span data-icon="shield"></span></div><div id="account-list"></div><p class="small-note">Credentials stay on the server. Add accounts or change Nest/Google credentials in the plugin’s Homebridge settings.</p></article>
+          <article class="panel install-card"><img src="/apple-touch-icon.png" width="64" height="64" alt="Climate Cntrl app icon" /><div><h2>A place on your home screen</h2><p>On iPhone or iPad, open this address in Safari, tap Share, then Add to Home Screen. Trust the dashboard’s HTTPS certificate before signing in.</p><span class="subtle">This app requires a connection to your Homebridge host.</span></div></article>
+          <p class="attribution">Nest Climate Cntrl · Independently maintained by pponce.<br />Built on Nest Accfactory. Not affiliated with Google or Nest.</p>
+        </section>
+
+        <div id="save-bar" class="save-bar" hidden><div><strong id="save-title">You have unsaved changes</strong><span id="save-detail">Review your setup, then save.</span></div><div class="save-actions"><button id="discard" class="button secondary" type="button">Discard</button><button id="save" class="button primary" type="button">Save changes</button></div></div>
+      </main>
+    </div>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>

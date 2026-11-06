@@ -202,6 +202,18 @@ small {
   flex-wrap: wrap;
   margin-top: 12px;
 }
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.button-link[hidden] {
+  display: none;
+}
 details {
   margin-top: 18px;
   border-top: 1px solid var(--line);
@@ -324,3 +336,4 @@ footer p {
     font-size: 24px;
   }
 }
+

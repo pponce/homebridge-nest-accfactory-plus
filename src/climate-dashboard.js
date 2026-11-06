@@ -30,6 +30,7 @@ const FIELDS = [
   'current_water_temperature',
   'hot_water_temperature',
   'battery_level',
+  'occupancy',
   'humiditySensor',
   'ecoSwitch',
   'fanPresetSwitches',
@@ -266,7 +267,11 @@ export class ClimateDashboard {
         response.end(JSON.stringify(this.snapshot()));
         return;
       }
-      if (request.method !== 'POST' || request.url !== '/command') {
+      if (request.method === 'GET' && request.url === '/web/status') {
+        response.end(JSON.stringify(this.webDashboard?.status() ?? { enabled: false, available: false, accountConfigured: false }));
+        return;
+      }
+      if (request.method !== 'POST' || !['/command', '/web/account'].includes(request.url)) {
         response.writeHead(404).end('{}');
         return;
       }
@@ -278,7 +283,16 @@ export class ClimateDashboard {
           return;
         }
       }
-      response.end(JSON.stringify(await this.control(JSON.parse(body))));
+      const payload = JSON.parse(body);
+      if (request.url === '/web/account') {
+        if (!this.webDashboard) {
+          response.writeHead(503).end(JSON.stringify({ error: 'Restart the Nest bridge to configure web access.' }));
+          return;
+        }
+        response.end(JSON.stringify(await this.webDashboard.setupAccount(payload)));
+        return;
+      }
+      response.end(JSON.stringify(await this.control(payload)));
     } catch (error) {
       response.writeHead(400).end(JSON.stringify({ error: error instanceof SyntaxError ? 'Invalid request.' : error.message }));
     }

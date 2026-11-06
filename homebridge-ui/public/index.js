@@ -1,4 +1,5 @@
 import { mountRoomPreview } from './room-preview.js';
+import { mountWebDashboardSetup } from './web-dashboard-setup.js';
 import { nextSetpoint, editableConfig } from './climate-utils.js';
 const hb = window.homebridge;
 const $ = (id) => document.getElementById(id);
@@ -16,6 +17,7 @@ const roomPreview = mountRoomPreview({
   getConfig: () => config,
   changed,
 });
+const webDashboardSetup = mountWebDashboardSetup({ host: $('web-dashboard'), homebridge: hb, getConfig: () => config, changed });
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) {
@@ -599,6 +601,8 @@ try {
   $('support-dump').checked = config.options.supportDump === true;
   accounts();
   homes();
+  webDashboardSetup.render();
+  await webDashboardSetup.refresh();
   await refresh();
   const timer = setInterval(() => {
     if (!document.hidden && !document.activeElement?.closest('#sensors')) {

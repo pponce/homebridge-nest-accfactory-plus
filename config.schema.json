@@ -266,6 +266,41 @@
             }
           }
         }
+      },
+      "webDashboard": {
+        "type": "object",
+        "title": "Web dashboard",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "title": "Enable standalone HTTPS dashboard"
+          },
+          "host": {
+            "type": "string",
+            "default": "0.0.0.0",
+            "title": "Listen address"
+          },
+          "port": {
+            "type": "integer",
+            "default": 9444,
+            "minimum": 1024,
+            "maximum": 65535,
+            "title": "HTTPS port"
+          },
+          "displayHost": {
+            "type": "string",
+            "title": "Browser hostname or IP"
+          },
+          "certificatePath": {
+            "type": "string",
+            "title": "TLS certificate file"
+          },
+          "keyPath": {
+            "type": "string",
+            "title": "TLS private key file"
+          }
+        }
       }
     }
   },
@@ -447,6 +482,39 @@
           "key": "options.supportDump",
           "title": "Enable Support Dump Logging",
           "description": "Enable detailed device data logging for troubleshooting. Only enable when requested as it may produce large logs."
+        }
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Web dashboard",
+      "expandable": true,
+      "expanded": false,
+      "description": "Open the climate dashboard in its own browser window. HTTPS uses a local certificate unless certificate files are supplied. Create the separate web account in the custom settings page.",
+      "items": [
+        {
+          "key": "webDashboard.enabled",
+          "title": "Enable standalone HTTPS dashboard"
+        },
+        {
+          "key": "webDashboard.port",
+          "title": "HTTPS port"
+        },
+        {
+          "key": "webDashboard.host",
+          "title": "Listen address"
+        },
+        {
+          "key": "webDashboard.displayHost",
+          "title": "Browser hostname or IP (optional)"
+        },
+        {
+          "key": "webDashboard.certificatePath",
+          "title": "TLS certificate file (optional)"
+        },
+        {
+          "key": "webDashboard.keyPath",
+          "title": "TLS private key file (optional)"
         }
       ]
     }

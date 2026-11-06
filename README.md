@@ -11,6 +11,7 @@ Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a clima
 ## What's included
 
 - **Climate dashboard:** thermostat temperature, target, heating/cooling state, connection status and diagnostics.
+- **Standalone web dashboard (development preview):** optional HTTPS access from a computer or phone, separate sign-in, saved settings and draft rule editors. See [web dashboard setup](WEB_DASHBOARD.md).
 - **Legacy Google authentication:** keeps support for compatible existing refresh tokens. If you already have a working legacy token, you can continue using it; this plugin cannot issue a new one.
 - **Eco switches:** optional Apple Home switches to enter and leave Eco mode.
 - **Native room sensors:** readings from associated Nest Temperature Sensors and a **Temperature controlled by** selector.

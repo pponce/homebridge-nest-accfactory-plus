@@ -1,0 +1,81 @@
+name: Standalone climate dashboard
+
+on:
+  push:
+    branches: [feature/standalone-dashboard]
+  pull_request:
+    paths:
+      - 'src/web-dashboard*.js'
+      - 'homebridge-ui/**'
+      - 'test/web-dashboard*.test.js'
+      - 'maintenance/checks/dashboard-web-browser.mjs'
+      - '.github/workflows/dashboard-web.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false homebridge@2.5.0
+      - run: npm run check
+      - name: Verify the production package includes the web server and assets
+        run: node scripts/check-package.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: standalone-dashboard-coverage
+          path: coverage/summary.json
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Check browser behavior and responsive layout
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
+          export PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright"
+          export CHROMIUM_PATH="$(command -v google-chrome)"
+          export REVIEW_OUTPUT_DIR="$RUNNER_TEMP/climate-dashboard-review"
+          node maintenance/checks/dashboard-browser.mjs
+          node maintenance/checks/dashboard-web-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: standalone-dashboard-screenshots
+          path: ${{ runner.temp }}/climate-dashboard-review
+  visual-review:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/standalone-dashboard'
+    needs: browser
+    runs-on: ubuntu-latest
+    concurrency:
+      group: standalone-dashboard-visual-review
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: standalone-dashboard-screenshots
+          path: ${{ runner.temp }}/climate-dashboard-review
+      - name: Publish fixture screenshots to the visual review branch
+        run: node maintenance/checks/publish-dashboard-review.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REVIEW_OUTPUT_DIR: ${{ runner.temp }}/climate-dashboard-review

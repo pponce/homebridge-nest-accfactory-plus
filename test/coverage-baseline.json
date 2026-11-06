@@ -183,5 +183,20 @@
     "lines": 100,
     "branches": 90,
     "functions": 90
+  },
+  "src/web-dashboard-auth.js": {
+    "lines": 95,
+    "branches": 85,
+    "functions": 95
+  },
+  "src/web-dashboard-config.js": {
+    "lines": 85,
+    "branches": 75,
+    "functions": 90
+  },
+  "src/web-dashboard.js": {
+    "lines": 85,
+    "branches": 75,
+    "functions": 65
   }
 }

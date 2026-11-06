@@ -1,0 +1,183 @@
+// Browser fixture only. No Nest, Homebridge or other real device requests are made.
+import http from 'node:http';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
+const require = createRequire(import.meta.url);
+const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
+const project = fileURLToPath(new URL('../../', import.meta.url));
+const output = process.env.REVIEW_OUTPUT_DIR || path.join(project, 'maintenance/review/dashboard-web');
+const staticRoot = path.join(project, 'homebridge-ui/dashboard');
+const publicRoot = path.join(project, 'homebridge-ui/public');
+const csrf = 'fixture-csrf';
+let authenticated = false;
+let statusAvailable = true;
+let conflict = false;
+const commands = [];
+const saves = [];
+const day = 86400000;
+const runtime = Array.from({ length: 7 }, (_, index) => ({ date: new Date(Date.now() - (6 - index) * day).toISOString().slice(0, 10), heating: [4700, 6500, 3800, 7200, 5100, 6100, 4200][index], cooling: [0, 900, 1200, 0, 600, 0, 700][index], observed: index === 6 ? 33000 : 86400 }));
+const snapshot = () => ({
+  generatedAt: Date.now(), runtimeTimezone: 'UTC', lastCommand: null,
+  accounts: [{ id: 'A', name: 'Google Home', authorised: true, observing: true, authMethod: 'refreshToken', lastUpdate: Date.now() }],
+  devices: [
+    { serial: 'T1', id: 'thermostat-living', type: 'Thermostat', account: 'A', lastUpdate: Date.now(), data: {
+      description: 'Living room', model: 'Nest Learning Thermostat', online: true, temperature_scale: 'C', current_temperature: 21.5,
+      physical_temperature: 21.5, current_humidity: 43, target_temperature: 22, hvac_mode: 'heat', hvac_state: 'heating',
+      eco_mode: false, has_fan: true, fan_state: false, linked_rcs_sensors: ['sensor-bedroom'], active_rcs_sensor: '',
+      schedules: { 0: { first: { time: 25200, 'temp-min': 21, 'temp-max': 25 }, second: { time: 79200, 'temp-min': 18, 'temp-max': 25 } }, 1: { first: { time: 25200, 'temp-min': 21, 'temp-max': 25 } } },
+    }, runtime },
+    { serial: 'T2', id: 'thermostat-upstairs', type: 'Thermostat', account: 'A', lastUpdate: Date.now(), data: {
+      description: 'Upstairs', model: 'Nest Thermostat', online: true, temperature_scale: 'C', current_temperature: 20.8, physical_temperature: 20.8,
+      current_humidity: 47, target_temperature: 21, hvac_mode: 'heat', hvac_state: 'off', eco_mode: false, has_fan: false,
+      linked_rcs_sensors: [], active_rcs_sensor: '', schedules: {},
+    }, runtime },
+    { serial: 'S1', id: 'sensor-bedroom', type: 'TemperatureSensor', account: 'A', lastUpdate: Date.now(), data: { description: 'Bedroom sensor', online: true, current_temperature: 20.2 } },
+    { serial: 'H1', id: 'home-away', type: 'HomeAway', account: 'A', lastUpdate: Date.now(), data: { description: 'Nest Home/Away', online: true, occupancy: true } },
+  ],
+});
+const sourceData = () => ({ bridges: [{ id: 'B1', name: 'Room devices', kind: 'child', available: true }, { id: 'B2', name: 'Hallway', kind: 'child', available: true }], sources: [
+  { id: 'office-temp', name: 'Office sensor', bridgeName: 'Room devices', provider: 'homebridge', kind: 'temperature', available: true, temperature: 20.1, lastReadAt: Date.now(), measuredAt: null },
+  { id: 'hall-motion', name: 'Hallway motion', bridgeName: 'Hallway', provider: 'homebridge', kind: 'motion', available: true, detected: false, lastReadAt: Date.now(), measuredAt: null },
+  { id: 'living-presence', name: 'Living room presence', bridgeName: 'Room devices', provider: 'homebridge', kind: 'occupancy', available: true, detected: true, lastReadAt: Date.now(), measuredAt: null },
+  { id: 'living-fan', name: 'Living room ceiling fan', bridgeName: 'Room devices', provider: 'homebridge', kind: 'fan', available: true, running: false, canControl: true, lastReadAt: Date.now(), measuredAt: null },
+  { id: 'bedroom-fan', name: 'Bedroom fan', bridgeName: 'Room devices', provider: 'homebridge', kind: 'fan', available: true, running: true, canControl: true, lastReadAt: Date.now(), measuredAt: null },
+] });
+let config = {
+  name: 'A little more comfort.', options: { eveHistory: true },
+  devices: [{ serialNumber: 'T1', ecoSwitch: false, humiditySensor: true, fanPresetSwitches: false, fanDuration: '1h', scheduleTimeZone: 'America/Los_Angeles' }],
+  rules: {
+    temperature: [{ id: 'temperature-1', kind: 'temperature', name: 'Living room balance', enabled: false, thermostatId: 'T1', sourceIds: ['nest:thermostat-living'], aggregation: 'average', desiredTemperature: 21 }],
+    occupancy: [{ id: 'presence-1', kind: 'presence', name: 'Someone is home', enabled: false, sourceIds: ['hall-motion', 'living-presence'], logic: 'any', holdMinutes: 10, awayDelayMinutes: 20 }],
+    fans: [{ id: 'fan-1', kind: 'fan', name: 'Cooler evenings', enabled: false, sourceIds: ['office-temp'], targetIds: ['living-fan'], action: 'temperature', threshold: 24, hysteresis: 1 }],
+  },
+};
+let revision = 1;
+const envelope = () => ({ revision: String(revision), config: structuredClone(config), accounts: [{ name: 'Google Home', type: 'google', authMethod: 'refreshToken', configured: true }], web: { enabled: true, port: 9444, url: 'https://homebridge.local:9444', username: 'admin' }, executionEnabled: false, restartRequired: false });
+const assets = new Set(['index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png']);
+const server = http.createServer(async (request, response) => {
+  response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'");
+  response.setHeader('Cache-Control', 'no-store');
+  const route = new URL(request.url, 'http://localhost').pathname;
+  const json = (code, value) => { response.writeHead(code, { 'Content-Type': 'application/json' }).end(JSON.stringify(value)); };
+  if (route.startsWith('/api/')) {
+    let body = {};
+    if (request.method !== 'GET') { let raw = ''; for await (const chunk of request) raw += chunk; body = JSON.parse(raw || '{}'); }
+    if (route === '/api/session') { json(200, authenticated ? { authenticated: true, username: 'admin', csrfToken: csrf } : { authenticated: false, setupRequired: false }); return; }
+    if (route === '/api/login') {
+      if (body.username !== 'admin' || body.password !== 'fixture-password') { json(401, { error: 'Check your username and password.' }); return; }
+      authenticated = true; json(200, { authenticated: true, username: 'admin', csrfToken: csrf }); return;
+    }
+    if (!authenticated) { json(401, { error: 'Sign in required.' }); return; }
+    if (request.method !== 'GET' && request.headers['x-csrf-token'] !== csrf) { json(403, { error: 'CSRF token missing.' }); return; }
+    if (route === '/api/logout') { authenticated = false; json(200, { authenticated: false }); return; }
+    if (route === '/api/status') { json(statusAvailable ? 200 : 503, statusAvailable ? snapshot() : { error: 'Fixture bridge unavailable.' }); return; }
+    if (route === '/api/sources') { json(200, sourceData()); return; }
+    if (route === '/api/config' && request.method === 'GET') { json(200, envelope()); return; }
+    if (route === '/api/config' && request.method === 'PUT') {
+      if (conflict || body.revision !== String(revision)) { json(409, { error: 'Configuration changed.' }); return; }
+      saves.push(structuredClone(body)); config = structuredClone(body.config); revision++; json(200, envelope()); return;
+    }
+    if (route === '/api/command') { commands.push(structuredClone(body)); json(200, { accepted: true, message: 'Command accepted.' }); return; }
+    json(404, { error: 'Not found.' }); return;
+  }
+  let file; let name;
+  if (route.startsWith('/shared/') && ['climate-utils.js', 'sensor-preview.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
+  else { name = route === '/' ? 'index.html' : route.slice(1); if (!assets.has(name)) { response.writeHead(404).end(); return; } file = path.join(staticRoot, name); }
+  response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html');
+  response.end(await fs.readFile(file));
+});
+await fs.mkdir(output, { recursive: true });
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+let browser;
+try {
+  browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1100 }, colorScheme: 'light' });
+  const errors = []; const cspErrors = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error' && /Content Security Policy|Refused to/.test(message.text())) cspErrors.push(message.text()); });
+  const base = 'http://127.0.0.1:' + server.address().port;
+  await page.goto(base);
+  await page.getByRole('heading', { name: 'Welcome home.' }).waitFor();
+  await page.screenshot({ path: path.join(output, 'login-desktop.png'), fullPage: true });
+  await page.getByLabel('Username', { exact: true }).fill('admin');
+  await page.getByLabel('Password', { exact: true }).fill('fixture-password');
+  await page.getByRole('button', { name: 'Sign in', exact: false }).click();
+  await page.getByText('Connected', { exact: true }).waitFor();
+  await page.getByRole('heading', { name: 'Living room', exact: true }).waitFor();
+  await page.screenshot({ path: path.join(output, 'overview-desktop.png'), fullPage: true });
+  assert.equal(await page.locator('#password').inputValue(), '');
+  assert.equal(await page.getByLabel('Turn Eco on for Living room').isEnabled(), true);
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  assert.equal(await page.getByLabel('Default HVAC fan duration').inputValue(), '1h');
+  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  await page.getByLabel('Rule name', { exact: true }).fill('Downstairs balance');
+  await page.getByLabel('Desired room temperature (°C)', { exact: true }).fill('22');
+  await page.getByLabel('Office sensor', { exact: false }).check();
+  await page.getByText('2 sources · desired 22.0°C.', { exact: false }).waitFor();
+  await page.screenshot({ path: path.join(output, 'rules-desktop.png'), fullPage: true });
+  assert.equal(commands.length, 0, 'Rule previews must never call live commands');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('Saved. Your rule drafts remain inactive.', { exact: true }).waitFor();
+  assert.equal(saves.length, 1);
+  assert.equal(saves[0].config.rules.temperature[0].desiredTemperature, 22);
+  assert.equal(saves[0].config.rules.temperature[0].enabled, false);
+  assert.equal(saves[0].config.devices[0].fanDuration, '1h');
+  assert.equal(saves[0].config.devices[0].scheduleTimeZone, 'America/Los_Angeles');
+  assert.equal(commands.length, 0);
+  await page.getByRole('tab', { name: 'Home & away', exact: false }).click();
+  await page.getByText('Home condition met now', { exact: true }).waitFor();
+  await page.getByRole('tab', { name: 'Room fans', exact: false }).click();
+  await page.getByText('Run condition not met', { exact: true }).waitFor();
+  assert.equal(commands.length, 0);
+  conflict = true;
+  await page.getByLabel('Rule name', { exact: true }).fill('A concurrent edit');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('The configuration changed elsewhere.', { exact: false }).waitFor();
+  assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'A concurrent edit');
+  assert.equal(saves.length, 1);
+  page.on('dialog', (dialog) => dialog.accept());
+  conflict = false;
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await Promise.all([page.waitForResponse((response) => response.url().endsWith('/api/command')), page.getByLabel('Turn Eco on for Living room').click()]);
+  await page.waitForFunction(() => !document.querySelector('[aria-label="Turn Eco on for Living room"]').disabled);
+  assert.deepEqual(commands[0], { serial: 'T1', action: 'eco', value: true });
+  await page.getByLabel('Temperature controlled by for Living room', { exact: true }).selectOption('sensor-bedroom');
+  await Promise.all([page.waitForResponse((response) => response.url().endsWith('/api/command')), page.getByLabel('Apply temperature source for Living room', { exact: true }).click()]);
+  await page.waitForFunction(() => !document.querySelector('[aria-label="Apply temperature source for Living room"]').disabled);
+  assert.deepEqual(commands[1], { serial: 'T1', action: 'sensor', value: 'sensor-bedroom' });
+  statusAvailable = false;
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await page.getByText('Fixture bridge unavailable.', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Turn Eco on for Living room').isDisabled(), true);
+  statusAvailable = true;
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await page.getByText('Connected', { exact: true }).waitFor();
+  await page.setViewportSize({ width: 360, height: 800 });
+  for (const [name, pageName] of [['Overview', 'overview'], ['Sensors & fans', 'sources'], ['Climate rules', 'rules'], ['Settings', 'settings']]) {
+    await page.getByRole('link', { name, exact: pageName !== 'rules' }).click();
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, pageName + ' must fit at 360px');
+    await page.screenshot({ path: path.join(output, pageName + '-mobile.png'), fullPage: true });
+  }
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await page.screenshot({ path: path.join(output, 'overview-mobile-dark.png'), fullPage: true });
+  const manifest = await (await page.request.get(base + '/manifest.webmanifest')).json();
+  assert.equal(manifest.display, 'standalone');
+  for (const asset of ['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png']) assert.equal((await page.request.get(base + '/' + asset)).status(), 200);
+  const apple = await (await page.request.get(base + '/apple-touch-icon.png')).body();
+  assert.equal(apple.readUInt32BE(16), 180);
+  assert.equal(apple.readUInt32BE(20), 180);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(cspErrors, []);
+  console.log('PASS standalone dashboard: login, live controls, draft-only previews, durable config payload, preserved custom durations, revision conflicts, offline controls, 360px layout, dark mode, CSP, iOS icons');
+  console.log('Screenshots:', output);
+} finally {
+  await browser?.close();
+  await new Promise((resolve) => server.close(resolve));
+}
