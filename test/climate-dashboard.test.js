@@ -25,6 +25,8 @@ test('dashboard isolates non-climate resources and clears native sensor selectio
   assert.equal(f.dashboard.devices.has('C'), false);
   f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 20 }, 'A');
   assert.equal(f.dashboard.ledger.previous.has('S'), false);
+  f.dashboard.update('H', 'HomeAway', { occupancy: true, refreshToken: 'NEVER EXPORT' }, 'A');
+  assert.deepEqual(f.dashboard.snapshot().devices.find((d) => d.serial === 'H').data, { occupancy: true });
   f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: 'S' }, 'A');
   assert.equal(f.dashboard.snapshot().devices.find((d) => d.serial === 'T').data.active_rcs_sensor, 'S');
   f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: undefined }, 'A');
@@ -142,6 +144,41 @@ test('local dashboard rejects unauthenticated/browser-origin requests and redact
   assert.equal((await fetch(f.url + '/command', { method: 'POST', headers: f.headers, body: 'bad json' })).status, 400);
   assert.equal((await fetch(f.url + '/command', { method: 'POST', headers: f.headers, body: 'a'.repeat(5000) })).status, 413);
 });
+test('web account provisioning requires the local dashboard token and never exposes the password in status', async (t) => {
+  const f = await fixture(t);
+  const requests = [];
+  f.dashboard.webDashboard = {
+    status: () => ({ enabled: false, available: false, accountConfigured: true, username: 'admin' }),
+    setupAccount: async (payload) => {
+      requests.push(payload);
+      return { accountConfigured: true };
+    },
+  };
+  const payload = { username: 'admin', password: 'PRIVATE-WEB-PASSWORD' };
+  const denied = await fetch(f.url + '/web/account', { method: 'POST', body: JSON.stringify(payload) });
+  assert.equal(denied.status, 403);
+  const origin = await fetch(f.url + '/web/account', {
+    method: 'POST',
+    headers: { ...f.headers, Origin: 'https://example.com' },
+    body: JSON.stringify(payload),
+  });
+  assert.equal(origin.status, 403);
+  assert.equal(requests.length, 0);
+  const saved = await fetch(f.url + '/web/account', { method: 'POST', headers: f.headers, body: JSON.stringify(payload) });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(requests, [payload]);
+  const status = await fetch(f.url + '/web/status', { headers: f.headers });
+  const statusText = await status.text();
+  assert.doesNotMatch(statusText, /PRIVATE-WEB-PASSWORD/);
+  assert.equal(JSON.parse(statusText).accountConfigured, true);
+  f.dashboard.webDashboard = undefined;
+  assert.deepEqual(await (await fetch(f.url + '/web/status', { headers: f.headers })).json(), {
+    enabled: false,
+    available: false,
+    accountConfigured: false,
+  });
+  assert.equal((await fetch(f.url + '/web/account', { method: 'POST', headers: f.headers, body: '{}' })).status, 503);
+});
 test('commands validate association, capability and connectivity; failures remain failures', async (t) => {
   const f = await fixture(t);
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'sensor', value: 'FOREIGN' }));
@@ -156,6 +193,14 @@ test('commands validate association, capability and connectivity; failures remai
   }
   assert.deepEqual(f.requests[1], ['DEVICE_T', { temperature_sensor: 'SENSOR' }]);
   assert.equal(f.requests[3][1].fan_duration, 1800);
+  const accepted = await fetch(f.url + '/command', {
+    method: 'POST',
+    headers: f.headers,
+    body: JSON.stringify({ serial: 'T', action: 'eco', value: true }),
+  });
+  assert.equal(accepted.status, 200);
+  assert.equal((await accepted.json()).accepted, true);
+  assert.deepEqual(f.requests.at(-1), ['DEVICE_T', { eco_mode: true }]);
   assert.equal(f.dashboard.snapshot().devices[0].data.eco_mode, false, 'wait for cloud confirmation');
   f.accounts[0].observing = false;
   await assert.rejects(f.dashboard.control({ serial: 'T', action: 'eco', value: true }));

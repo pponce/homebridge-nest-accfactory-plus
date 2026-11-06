@@ -1,5 +1,7 @@
-## Unreleased — Nest Climate Cntrl
+## v0.5.0-beta.2 — Nest Climate Cntrl
 
+- Add an optional standalone HTTPS dashboard with a separate login, responsive desktop/phone layout, light/dark appearance, favicon and iOS Home Screen icon. See [web dashboard setup](WEB_DASHBOARD.md).
+- Add web settings editing with concurrent-change detection and inactive temperature, occupancy and room-fan rule drafts. Automatic rule execution is not included.
 - Add a custom settings dashboard with thermostat status, native sensor selection, schedules, runtime coverage and diagnostics.
 - Add optional Eco and momentary HVAC fan-preset switches, disabled by default.
 - Focus discovery on thermostats, sensors and Heat Links; retain Protect and Nest Home/Away. Camera, doorbell, floodlight-camera, Yale lock and weather exposure are removed; use upstream Nest Accfactory for those capabilities.

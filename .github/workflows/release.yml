@@ -17,6 +17,7 @@ jobs:
     if: github.repository == 'pponce/homebridge-nest-climate-cntrl' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - node: 22
@@ -29,6 +30,8 @@ jobs:
             homebridge: 2.4.0
           - node: 26
             homebridge: 2.4.0
+          - node: 24
+            homebridge: 2.5.0
     steps:
       - uses: actions/checkout@v5
         with:
@@ -39,7 +42,13 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm install --no-save --package-lock=false homebridge@${{ matrix.homebridge }}
-      - run: npm run check
+      - name: Run project checks
+        id: validation
+        continue-on-error: true
+        run: node maintenance/checks/run-migration-check.mjs check
+      - name: "${{ steps.validation.outputs.detail }}"
+        if: always() && steps.validation.outcome != 'skipped'
+        run: test '${{ steps.validation.outcome }}' = 'success'
   dashboard-browser:
     runs-on: ubuntu-latest
     steps:
@@ -47,10 +56,19 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Check dashboard behavior
+      - name: Prepare browser checks
         run: |
           npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
-          PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright" CHROMIUM_PATH="$(command -v google-chrome)" node maintenance/checks/dashboard-browser.mjs
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/climate-browser/node_modules/playwright" >> "$GITHUB_ENV"
+          echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          echo "REVIEW_OUTPUT_DIR=$RUNNER_TEMP/climate-dashboard-review" >> "$GITHUB_ENV"
+      - name: Check embedded and standalone dashboard behavior
+        id: browser
+        continue-on-error: true
+        run: node maintenance/checks/run-dashboard-browser.mjs
+      - name: "${{ steps.browser.outputs.detail }}"
+        if: always() && steps.browser.outcome != 'skipped'
+        run: test '${{ steps.browser.outcome }}' = 'success'
   release:
     needs: [test, dashboard-browser]
     runs-on: ubuntu-latest
@@ -81,11 +99,13 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, 'VERSION=' + pkg.version + '\n');
           NODE
       - run: node scripts/check-package.js
-      - name: Prepare migration helper and checksums
+      - name: Check the checkout and npm publication helper
+        run: python3 maintenance/checks/publish-beta-runner.py
+      - name: Prepare release helpers and checksums
         run: |
           cp scripts/migration-preflight.mjs nest-climate-migration-preflight.mjs
-          cp maintenance/publish-beta-and-inspect.sh publish-beta-and-inspect.sh
-          sha256sum "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs publish-beta-and-inspect.sh > SHA256SUMS
+          cp maintenance/update-checkout-and-publish-beta.sh update-checkout-and-publish-beta.sh
+          sha256sum "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh > SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -96,7 +116,7 @@ jobs:
           else
             flags=()
             if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease --latest=false); fi
-            gh release create "v$VERSION" "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs publish-beta-and-inspect.sh SHA256SUMS \
+            gh release create "v$VERSION" "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh SHA256SUMS \
               --target "$GITHUB_SHA" --title "Nest Climate Cntrl v$VERSION" \
               --notes-file RELEASE_NOTES.md "${flags[@]}"
           fi

@@ -6,7 +6,7 @@ Updated: 2026-11-06
 
 Build Nest Climate Cntrl with thermostat, sensor and Heat Link controls, plus a responsive standalone dashboard. Repository: `pponce/homebridge-nest-climate-cntrl`; npm package: `homebridge-nest-climate-cntrl`; platform: `NestClimateCntrl`.
 
-`main` contains the released beta.1 implementation and maintenance updates. Standalone HTTPS development is on `feature/standalone-dashboard`, draft PR #13. See `maintenance/DASHBOARD_SERVER_HANDOFF.md` for that work. The live installation has not been changed from this workspace.
+The tested standalone HTTPS dashboard from `feature/standalone-dashboard` (PR #13) is being merged into `main` for 0.5.0-beta.2. See `maintenance/DASHBOARD_SERVER_HANDOFF.md` for that work. The live installation has not been changed from this workspace.
 
 Use the single Mint checkout `~/devProjects/homebridge-nest-climate-cntrl`. The current workspace snapshot is `/workspace/scratch/3557d984da62/homebridge-nest-accfactory-plus`; its synthetic local Git history must not be pushed. Use remote trees/commits and expected-SHA ref updates, preserve concurrent edits and shared-module gitlinks.
 
@@ -40,7 +40,7 @@ Automatic mixed-sensor thermostat compensation, external room-fan actions and co
 
 PR #13 adds an opt-in HTTPS server, separate web account provisioned through Homebridge, per-bridge private credentials/certificates, revision-checked configuration saves, desktop/phone interface, existing live thermostat actions, source discovery, rule drafts, favicon and iOS icons.
 
-Review status and current commits are in the dashboard handoff. It is not included in published beta.1. Do not publish a new npm beta without explicit approval. Final visual/accessibility checks and the old-package cutover notice are being completed.
+Review status and current commits are in the dashboard handoff. It is not included in published beta.1. npm publication of beta.2 through the requested terminal script is explicitly authorized. Final visual/accessibility checks and the old-package cutover notice are being completed.
 
 ## Validation and limits
 
@@ -49,7 +49,16 @@ Review status and current commits are in the dashboard handoff. It is not includ
 - Dashboard initial feature checks passed real HTTPS/auth/config tests, all six compatibility jobs, package installation and desktop/mobile browser checks. Recheck the final PR head after polish.
 - Live Nest behavior, Heat Link, native source changes, physical fans and Apple Home setup remain hardware verification work.
 
-## Publication status
+## Beta.2 release preparation
+
+- User explicitly authorized merging the dashboard, creating the GitHub beta and providing a Mint script to update the checkout and publish the tested npm artifact.
+- Version: `0.5.0-beta.2`, npm channel `beta`; no `latest` promotion.
+- Production/UI source `cfddca3fc4c8703abaac7b3164f923dc7377f17b` passed all six compatibility jobs, production-package checks and embedded/standalone browser checks. Feature head `e4305579944ef260805f9420b24e593c62cdad20` adds handoff notes only.
+- Release workflow now requires all six combinations, both dashboard browser fixtures, production tarball installation and publisher failure-path checks before creating the release.
+- `maintenance/update-checkout-and-publish-beta.sh` updates only a clean local `main`, fetches release artifacts, verifies checksums/package metadata and publishes under `beta`, with accepted-upload/propagation handling. No Homebridge changes or backups.
+- Update this checkpoint with the final release commit/run and assets after validation; npm publication remains a user-terminal action.
+
+## Publication status (beta.1 history)
 
 GitHub prerelease `v0.5.0-beta.1` exists; npm accepted the maintainer's upload, then immediate registry verification returned E404. Do not republish this version. Verify registry visibility from the installation host before installing.
 

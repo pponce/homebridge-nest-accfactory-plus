@@ -2,7 +2,7 @@
 
 # Nest Climate Cntrl
 
-Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a climate dashboard inside Homebridge.
+Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a climate dashboard inside Homebridge and an optional standalone web interface.
 
 **Public beta:** this version is still being tested on real equipment. Install the `beta` release and report issues with your thermostat model and Homebridge version.
 
@@ -11,6 +11,7 @@ Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a clima
 ## What's included
 
 - **Climate dashboard:** thermostat temperature, target, heating/cooling state, connection status and diagnostics.
+- **Web dashboard:** optional direct HTTPS access from a computer or phone, separate sign-in, saved settings, sensor discovery and draft rule editors. See [web dashboard setup](WEB_DASHBOARD.md).
 - **Legacy Google authentication:** keeps support for compatible existing refresh tokens. If you already have a working legacy token, you can continue using it; this plugin cannot issue a new one.
 - **Eco switches:** optional Apple Home switches to enter and leave Eco mode.
 - **Native room sensors:** readings from associated Nest Temperature Sensors and a **Temperature controlled by** selector.
@@ -44,6 +45,14 @@ Live action buttons send commands immediately. Configuration changes use Homebri
 External discovery requires readable Homebridge accessories and the bridge's accessory-control configuration. Sensors or fans visible only in Apple Home are not accessible. Bridge PINs stay on the server.
 
 Schedule entries show planned changes, not guaranteed hold-expiry times. Runtime is recorded while the plugin observes valid equipment state; it does not recover Nest history or estimate energy use.
+
+## Web dashboard
+
+Open **Plugins → Nest Climate Cntrl → Settings → Web dashboard**, create a web username/password, then enable web access, save and restart the Nest child bridge. Select **Open climate dashboard** to visit its address, usually `https://<homebridge-host>:9444`.
+
+The phone-friendly interface shows thermostat status, native controls, sensors, schedules and runtime. It also lets you save supported settings and prepare temperature, occupancy and room-fan rule drafts. **These drafts are inactive; saving one does not control your devices.**
+
+On iPhone, open the address in Safari and choose **Share → Add to Home Screen** for the plum app icon. The default local HTTPS certificate needs browser trust; you can supply a trusted certificate instead. Web access is off by default. See [complete setup and network options](WEB_DASHBOARD.md).
 
 ## Help and credits
 

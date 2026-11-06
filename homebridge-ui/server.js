@@ -9,6 +9,8 @@ class ClimateUi extends HomebridgePluginUiServer {
     super();
     this.onRequest('/status', () => this.forward('/status'));
     this.onRequest('/command', (payload) => this.forward('/command', payload));
+    this.onRequest('/web/status', () => this.forward('/web/status'));
+    this.onRequest('/web/account', (payload) => this.forward('/web/account', payload));
     this.onRequest('/sources', async () => {
       if (!this.startingAccess) {
         this.access = new ClimateAccess(this.homebridgeConfigPath);

@@ -1,12 +1,18 @@
-## Next beta — unreleased
+## v0.5.0-beta.2
 
-**Breaking change for Nest Accfactory / Nest Accfactory Plus users: fresh setup and Apple Home pairing are required.** Install `homebridge-nest-climate-cntrl` with platform **`NestClimateCntrl`** on a new child bridge. Recreate the affected room assignments, scenes and automations. Read the [cutover instructions](MIGRATION.md) before installing.
+**Fresh setup is required when moving from Nest Accfactory or Nest Accfactory Plus.** The package is `homebridge-nest-climate-cntrl` and the Homebridge platform changes from `NestAccfactory` to **`NestClimateCntrl`**. Create and pair a new child bridge, then recreate affected Apple Home room assignments, scenes and automations. Follow the [cutover instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.2/MIGRATION.md).
 
-This is a one-time cutover from the older packages. Existing `NestClimateCntrl` installations, including 0.5.0-beta.1, can keep their bridge and accessories when updating. `Keep Accessories Of Uninstalled Plugins` does not transfer old accessories to the new platform.
+**Already using Nest Climate Cntrl beta.1?** Update normally and keep your existing Climate bridge. This release does not require another reset.
 
-Compatible existing **legacy Google refresh-token authentication remains supported**. For cameras, doorbells, floodlight cameras, Yale locks or weather, use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) with separate device ownership.
+- **Standalone web dashboard:** open your climate controls directly from a computer, tablet or phone, with a responsive layout, light/dark appearance, browser icon and iOS Home Screen icon.
+- **Optional HTTPS access:** off by default, with a separate web login created in Homebridge settings. Each child bridge has its own web account and certificate. See [web dashboard setup](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.2/WEB_DASHBOARD.md).
+- **Live overview:** thermostat readings, targets, heating/cooling state, supported Eco changes, native Nest temperature-source selection, HVAC fan timers, schedules and observed runtime.
+- **Settings from the web:** save supported climate settings while retaining account credentials and bridge identity. Concurrent edits are detected, and settings that need a restart are identified.
+- **Sensor and rule setup previews:** inspect accessible Nest/Homebridge sources and save temperature, occupancy and room-fan rule drafts. **Drafts do not change thermostats, room fans or Home/Away. Automatic rule execution is not included.**
+- **Legacy Google authentication remains supported** for compatible existing refresh tokens. This plugin cannot issue new legacy tokens; Google issue-token/cookie authentication remains available without an SDM project.
+- Cameras, doorbells, floodlight cameras, Yale locks and weather are outside this plugin's climate scope. Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) for those capabilities, with [separate device ownership](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.2/MIGRATION.md#running-alongside-upstream).
 
-This beta remains under hardware testing. Publication is pending.
+**Beta:** hardware testing is ongoing. Runtime covers observed periods only. Real thermostat/Heat Link behavior and iOS installation still need testing on users' equipment.
 
 ## v0.5.0-beta.1
 

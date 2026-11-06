@@ -63,6 +63,7 @@ import { adjustTemperature, scaleValue } from './utils.js';
 import { getProtoTypes } from './protobuf.js';
 import { createSupportDump } from './supportdump.js';
 import { ClimateDashboard } from './climate-dashboard.js';
+import { WebDashboard } from './web-dashboard.js';
 import { rememberCachedIdentity } from './identity.js';
 
 // Define constants
@@ -88,6 +89,7 @@ const API_STREAM_RETRY_MAX = 60000; // Maximum retry delay during API outage/fai
 // Perform device management (additions/removals/updates)
 export default class NestAccfactory {
   dashboard = undefined;
+  webDashboard = undefined;
   cachedAccessories = []; // Track restored cached accessories
 
   // Internal data only for this class
@@ -147,10 +149,9 @@ export default class NestAccfactory {
       // and device modules are ready to receive cloud updates.
       this.#connections = this.#createConnections();
 
-      // Check for valid connections, either a Nest and/or Google one specified. Otherwise, return back.
+      // The setup dashboard remains available before a cloud account has been configured.
       if (this.#connections.size === 0) {
         this?.log?.error?.('No active connections have been specified in the JSON configuration. Please review');
-        return;
       }
 
       if (typeof this.api?.user?.storagePath === 'function') {
@@ -172,6 +173,17 @@ export default class NestAccfactory {
         } catch {
           this.log.warn('Climate dashboard unavailable; thermostat integration will continue.');
         }
+        if (typeof this.api?.user?.configPath === 'function') {
+          this.webDashboard = new WebDashboard({
+            storage: this.api.user.storagePath(),
+            configPath: this.api.user.configPath(),
+            platformConfig: this.config,
+            dashboard: this.dashboard,
+            log: this.log,
+          });
+          this.dashboard.webDashboard = this.webDashboard;
+          await this.webDashboard.start();
+        }
       }
 
       // Start connection lifecycle per configured account.
@@ -183,6 +195,7 @@ export default class NestAccfactory {
     api?.on?.('shutdown', async () => {
       // We got notified that Homebridge is shutting down
       // Perform cleanup of internal state
+      await this.webDashboard?.stop();
       await this.dashboard?.stop();
       this.#connections?.shutdown?.();
 

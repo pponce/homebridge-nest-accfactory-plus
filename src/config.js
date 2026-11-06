@@ -38,6 +38,7 @@ import chalk from 'chalk';
 
 // Import our modules
 import FFmpeg from './plugins/camera/ffmpeg.js';
+import { normalizeWebDashboard } from './web-dashboard.js';
 
 // Define constants
 import { FFMPEG_VERSION } from './consts.js';
@@ -45,6 +46,7 @@ import { FFMPEG_VERSION } from './consts.js';
 function processConfig(config, log, api, capabilities = { video: true }) {
   let migratedAccounts = false;
   let migratedDevices = false;
+  config.webDashboard = normalizeWebDashboard(config.webDashboard);
 
   // Process account configuration(s)
   if (Array.isArray(config?.accounts) === false) {
