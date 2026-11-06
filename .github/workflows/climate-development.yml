@@ -27,8 +27,33 @@ jobs:
             git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Format climate dashboard and controls'
             git push origin HEAD:feature/thermostat-dashboard
           fi
-      - run: npm run check
+      - run: npm run check 2>&1 | tee "$RUNNER_TEMP/climate-check.log"
       - name: Browser behavior checks
+        if: always()
         run: |
           npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
-          PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright" CHROMIUM_PATH="$(command -v google-chrome)" node maintenance/checks/dashboard-browser.mjs
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright" CHROMIUM_PATH="$(command -v google-chrome)" node maintenance/checks/dashboard-browser.mjs 2>&1 | tee "$RUNNER_TEMP/climate-browser.log"
+      - name: Record validation diagnostics on development branch
+        if: always()
+        run: |
+          mkdir -p maintenance/checks
+          python - <<'PYTHON'
+          import os, pathlib
+          report = []
+          for name in ['climate-check.log', 'climate-browser.log']:
+              path = pathlib.Path(os.environ['RUNNER_TEMP']) / name
+              report.append('=== ' + name + ' ===')
+              if path.exists():
+                  lines = path.read_text(errors='replace').splitlines()
+                  indexes = set(range(max(0, len(lines)-90), len(lines)))
+                  for i, line in enumerate(lines):
+                      if any(word in line for word in ['error', 'warning', 'not ok', '✖', 'AssertionError', 'Coverage gate failed']):
+                          indexes.update(range(max(0,i-2), min(len(lines),i+22)))
+                  report.extend(lines[i] for i in sorted(indexes))
+          pathlib.Path('maintenance/checks/ci-result.txt').write_text('\n'.join(report)+'\n')
+          PYTHON
+          git add maintenance/checks/ci-result.txt
+          if ! git diff --cached --quiet; then
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'Record climate development validation results'
+            git push origin HEAD:feature/thermostat-dashboard
+          fi
