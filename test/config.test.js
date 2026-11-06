@@ -126,10 +126,11 @@ test('missing, null and malformed options receive defaults while valid settings 
   assert.equal(config.options.ffmpeg.debug, true);
 });
 
-test('maxStreams preserves integer counts from one to four and defaults invalid counts', async (t) => {
+test('legacy camera viewer counts remain parseable without appearing in climate settings', async (t) => {
   t.mock.method(child_process, 'spawnSync', () => ({ error: new Error('No test FFmpeg') }));
   let schema = JSON.parse(await readFile(new URL('../config.schema.json', import.meta.url), 'utf8'));
-  assert.deepEqual(schema.schema.properties.options.properties.maxStreams, { type: 'integer', default: 2, minimum: 1, maximum: 4 });
+  assert.equal(schema.schema.properties.options.properties.maxStreams, undefined);
+  assert.equal(JSON.stringify(schema.layout).includes('options.maxStreams'), false);
   for (let [value, expected] of [
     [1, 1],
     [2, 2],

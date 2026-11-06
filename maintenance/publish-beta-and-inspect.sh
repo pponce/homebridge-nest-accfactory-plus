@@ -1,16 +1,20 @@
 {
   printf '%s\n' '=== Nest Climate Cntrl beta publish + inspection START ==='
   nest_climate_beta_tasks() {
-    local project_dir release_dir report_dir report_file asset username server_ip client_ip client_port server_port
+    local project_dir release_dir report_dir report_file asset username server_ip client_ip client_port server_port candidate
+    local project_folders=()
     local version='0.5.0-beta.1'
     local package='homebridge-nest-climate-cntrl'
     local release_url='https://github.com/pponce/homebridge-nest-climate-cntrl/releases/download/v0.5.0-beta.1'
-    if [ -d "$HOME/devProjects/homebridge-nest-climate-cntrl" ] && [ -d "$HOME/devProjects/homebridge-nest-accfactory-plus" ]; then
-      printf '%s\n' 'Both project folders exist. Choose the active checkout before continuing.'
+    for candidate in "$HOME/devProjects/homebridge-nest-climate-cntrl" "$HOME/devProjects/homebridge-nest-accfactory-plus" "$HOME/devProjects/homebridge-nest-accfactory"; do
+      if [ -d "$candidate" ]; then project_folders+=("$candidate"); fi
+    done
+    if [ "${#project_folders[@]}" -gt 1 ]; then
+      printf '%s\n' 'Multiple Nest project folders exist. Choose the active checkout before continuing.'
       return 1
     fi
-    if [ -d "$HOME/devProjects/homebridge-nest-accfactory-plus" ]; then
-      project_dir="$HOME/devProjects/homebridge-nest-accfactory-plus"
+    if [ "${#project_folders[@]}" -eq 1 ]; then
+      project_dir="${project_folders[0]}"
     else
       project_dir="$HOME/devProjects/homebridge-nest-climate-cntrl"
     fi
