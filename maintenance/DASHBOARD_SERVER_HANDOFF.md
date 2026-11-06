@@ -10,11 +10,11 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 
 - Repository: `pponce/homebridge-nest-climate-cntrl`.
 - Feature branch: `feature/standalone-dashboard`, implementation based on main `32abeaf07fca58fc30512f2551457cd18d143752`.
-- Draft pull request: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/13.
+- Merged pull request: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/13.
 - Fresh-install documentation from main `3552339eacf7a15172d2a5ee354a5fb2875f3511` is merged into the feature. Nest Accfactory/Plus users need a fresh child bridge and Apple Home setup; existing Climate beta installations retain their bridge.
-- Migration work proceeds independently on `main`. Preserve those commits and concurrent README edits when preparing the feature tree.
+- Merged into `main` at `f4e5157752efa07f3112f06da509445765644846`; included in GitHub prerelease `v0.5.0-beta.2`. Preserve concurrent edits and use the released source for installation.
 - Local workspace is a source snapshot with synthetic Git history. Do not push local history or replace remote submodule gitlinks.
-- No live installation changes, backups or npm publication are part of this work.
+- No live installation changes or backups were performed. npm beta.2 publication through the maintainer's terminal script is authorized and awaits execution.
 
 ## Architecture
 
@@ -43,11 +43,13 @@ Add an opt-in, directly addressable climate dashboard to Nest Climate Cntrl, wit
 - Follow-up `afe9b1ee454a0a0ee60b681f4404dfa1756b8d94` also passed all six project matrices and standalone/package/browser workflows. Eight screenshots were retrieved and visually inspected in `maintenance/review-dashboard/`.
 - Visual review prompted stronger small-text contrast, 44px mobile controls, a compact mobile overview, a shorter fan-condition label and clean screenshot captures. Final browser assertions cover these changes and fixed navigation/save-bar clearance. `run-dashboard-browser.mjs` exposes fixture failure details in workflow metadata.
 
-## Next steps
+## Release and next steps
 
-1. Review draft PR 13. There are no known implementation or automated-test blockers for the dashboard preview.
-2. Keep this feature separate from the published `0.5.0-beta.1` package until a release is approved. No feature merge, version bump, npm publication or live installation change has been performed.
-3. After an approved preview installation, validate HTTPS trust and Add to Home Screen on a real iPhone, native Nest commands with hardware, and external source discovery on the user's actual bridges. Automated browser review uses fixture data.
-4. Implement and test automatic mixed-temperature compensation, combined occupancy actions and room-fan controllers in a later change. Saved draft rules intentionally never execute actions in this preview.
+- PR #13 is merged. GitHub prerelease `v0.5.0-beta.2` is published from `f4e5157752efa07f3112f06da509445765644846`.
+- Release workflow `42309124830` and normal Test workflow `42309124784` passed. Both dashboard browser fixtures, all six Node/Homebridge combinations, production-package installation and nine publisher scenarios are green.
+- README includes direct web access and setup; tagged release notes and changelog describe the dashboard and inactive rule boundaries.
+- Run the verified release publisher on Mint to update local `main` and publish the exact tested tarball under npm's `beta` tag. No workspace npm publication was attempted.
+- After installation, validate HTTPS trust, Add to Home Screen on a real iPhone, native Nest hardware commands and external source discovery.
+- Automatic mixed-temperature compensation, combined occupancy actions and room-fan controllers remain unimplemented. Saved drafts never execute actions.
 
-Fresh setup guidance is already on main. Users moving from Nest Accfactory or Plus create and pair a fresh child bridge, then rebuild affected Apple Home room assignments, scenes and automations. Existing Nest Climate Cntrl beta installations can keep their bridge. The dashboard does not change the UUID adapter or force a reset.
+Nest Accfactory/Plus users need fresh setup and pairing with rebuilt Apple Home assignments. Existing Climate beta.1 users can update without resetting the bridge.
