@@ -14,9 +14,12 @@ export function editableConfig(input) {
   if (!config.accounts.length) {
     if (config.nest?.access_token) {
       config.accounts.push({ name: 'Nest', type: 'nest', ...config.nest });
+      delete config.nest;
     }
     if (config.google?.issuetoken && config.google?.cookie) {
       config.accounts.push({ name: 'Google', type: 'google', ...config.google, issueToken: config.google.issuetoken });
+      delete config.accounts.at(-1).issuetoken;
+      delete config.google;
     }
   }
   config.devices ??= [];
@@ -82,3 +85,4 @@ export function nextSetpoint(entries, timeZone, now = new Date()) {
       .sort((a, b) => a.distance - b.distance)[0] ?? null
   );
 }
+

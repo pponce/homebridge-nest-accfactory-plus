@@ -41,3 +41,17 @@ jobs:
         with:
           name: coverage-node-${{ matrix.node }}-homebridge-${{ matrix.homebridge }}
           path: coverage/summary.json
+
+
+  dashboard-browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Test configuration dashboard in Chromium
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
+          PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright" CHROMIUM_PATH="$(command -v google-chrome)" node maintenance/checks/dashboard-browser.mjs

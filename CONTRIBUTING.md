@@ -36,9 +36,9 @@ Custom characteristics must accurately represent the underlying device capabilit
 
 Where no appropriate HomeKit representation exists, do not expose the functionality through an unrelated service or characteristic:
 
-- Do not create artificial switches, outlets, lights or other unrelated services to work around missing native HomeKit functionality.
+- Optional thermostat Eco switches and momentary HVAC fan-preset switches are supported. Keep them disabled by default and validate the underlying device capability.
 - Do not repurpose standard HomeKit characteristics or their defined values to represent unrelated device functionality.
-- Making a workaround optional, configurable or disabled by default does not exempt it from this policy.
+- Other accessory representations require a clear product decision and accurate service semantics.
 
 Functionality without an appropriate HomeKit representation should remain in the Nest or Google app.
 
@@ -73,3 +73,4 @@ CI is configured to run checks with Node.js 22 and 24 against Homebridge 1.11.4 
 Record meaningful alpha and beta changes under the current version in `PRERELEASE_NOTES.md`. Entries describe that pre-release only and are not cumulative.
 
 For a final release, consolidate meaningful outcomes into `CHANGELOG.md`. Shared modules may maintain their own code-date changelogs. Update existing source code-date metadata when changing those files, without changing unrelated package or release versions.
+

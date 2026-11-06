@@ -1,9 +1,8 @@
-# Plugin icon
+# Nest Climate Cntrl icon
 
-`nest-accfactory-plus-icon-100.png` is a 100 × 100 RGBA PNG for Homebridge's plugin icon request.
+The icon depicts a thermostat coordinating room sensors and a fan under one roof. It uses a muted plum background with cream, teal and amber details. Created using image generation and exported to PNG.
 
-Design: teal house and circular device symbol with a purple plus, transparent background, no text or verification badge. Created with OpenAI image generation, then exported at the submission size.
+- `nest-climate-cntrl-icon-100.png`: 100 × 100 px for the Homebridge icon listing.
+- `../../homebridge-ui/public/nest-climate-cntrl-icon-512.png`: 512 × 512 px for the dashboard and README.
 
-Request plugin verification first, then attach this image to an icon request: https://github.com/homebridge/plugins/issues/new/choose
-
-The icon does not indicate that verification has been granted.
+The icon represents the product direction; it does not certify feature availability or Homebridge verification. See the feature plan for room-fan and mixed-sensor implementation status.

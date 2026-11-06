@@ -16,23 +16,27 @@ Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `
 
 ## Validation
 
-- 15 focused tests pass under Node 24.22.1.
-- Dashboard module coverage: 100% lines, 90.82% branches, 90.32% functions.
+- 17 focused tests pass under Node 24.22.1.
+- Dashboard module coverage: 100% lines, 96.26% branches, 93.55% functions.
 - `npm run build` and build verification pass.
-- Full lint/regression/coverage pending: local dependency download unavailable; eslint missing.
-- Browser behavior script prepared; local Chromium cannot launch because its Unix socket is prohibited by the execution environment. No visual validation claimed.
+- GitHub Node 24 validation passed lint, 1,608 regression tests, all module coverage floors and build. Final PR matrix validates Node 22/24/26 with supported Homebridge versions.
+- Chromium behavior tests passed in GitHub: masked credentials, saved config preservation, sensor command, offline controls, 375px layout and schema fallback. Local Chromium cannot launch because of execution restrictions. Full visual inspection and live Homebridge integration remain pending.
 - Real thermostat Eco, sensor selection and HVAC fan behavior are not hardware verified.
 
 ## Remaining work
 
-1. Run GitHub validation, resolve lint/regression/coverage failures without lowering existing floors. Development workflow formats only changed climate files; remove it before final merge once normal PR checks are green.
+1. Run GitHub validation, resolve lint/regression/coverage failures without lowering existing floors. Temporary formatting/diagnostic workflow removed. Browser checks now run in the normal PR workflow.
 2. Run browser checks and inspect desktop/mobile light/dark UI. Validate real Homebridge UI lifecycle/API integration, config save and restart.
 3. Verify protocol commands against physical thermostat, associated sensors and Heat Link. Confirm no accessory duplication and camera/lock cache cleanup behavior.
 4. Finish removal of camera-specific distribution/dependencies while retaining upstream provenance and existing tests as appropriate.
-5. Produce climate-focused icon and apply it to README/UI.
+5. Approved plum icon exported at 100px and 512px and applied to README/UI.
 6. Room/ceiling-fan coordination remains unimplemented. Investigate reusable accessible main/child bridge discovery from the Harmony Home Control project; do not confuse this with Nest HVAC blower presets.
 7. Preserve and follow `maintenance/FEATURE_PLAN.md` for mixed native/external temperature sensors. Begin with read-only discovery and compensation preview. No external-sensor thermostat writes are enabled.
 8. Plan package/repository rename, migration and Homebridge verification updates separately. Ask before publishing npm.
+
+## Review location
+
+Draft PR: https://github.com/pponce/homebridge-nest-accfactory-plus/pull/12
 
 ## Continuation details
 

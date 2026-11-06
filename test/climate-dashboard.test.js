@@ -38,6 +38,7 @@ test('configuration editor preserves legacy credentials, overrides and unknown f
   };
   const config = editableConfig(original);
   assert.equal(config.accounts[0].issueToken, 'fixture-url');
+  assert.equal(config.google, undefined, 'removing a migrated account must not resurrect legacy credentials');
   assert.deepEqual(config.devices, [{ serialNumber: 'T', fanDuration: '1h', custom: true }]);
   assert.deepEqual(config.custom, original.custom);
   assert.equal(original.accounts, undefined);
