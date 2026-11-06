@@ -4,11 +4,11 @@ Updated: 2026-11-06
 
 ## Objective and identity
 
-Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `feature/thermostat-dashboard`. Preserve `NestAccfactory`, package identity and accessory UUID namespace during development. Future repository/package name: `homebridge-nest-climate-cntrl`. No npm publication or live installation performed.
+Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `feature/thermostat-dashboard`. Target platform alias is `NestClimateCntrl`; implementation and tested migration from `NestAccfactory` are pending. Preserve existing accessory UUID namespace and bridge pairing during the transition; package identity remains unchanged until its separate migration. Future repository/package name: `homebridge-nest-climate-cntrl`. No npm publication or live installation performed.
 
 ## Implemented
 
-- Restrict discovery to thermostat, Temperature Sensor, Heat Link, Protect, Home/Away and weather modules; bypass video capability probes. Camera source/dependencies are still present pending final package cleanup.
+- Current discovery is restricted to thermostat, Temperature Sensor, Heat Link, Protect, Home/Away and weather modules (weather is now excluded from the agreed product scope and still needs removal); bypass video capability probes. Camera source/dependencies are still present pending final package cleanup.
 - Custom Homebridge settings UI with accounts, thermostat status/actions, associated native sensor selection, optional HomeKit features, schedules, runtime coverage and redacted diagnostics.
 - Optional Eco and 15/30/60-minute HVAC fan-preset switches, disabled by default. Presets do not replace the default duration.
 - Authenticated loopback dashboard, restricted endpoint-file permissions, serialized UI commands, runtime persistence without extrapolating outages.
@@ -32,7 +32,9 @@ Develop Nest Climate Cntrl in `pponce/homebridge-nest-accfactory-plus`, branch `
 5. Approved plum icon exported at 100px and 512px and applied to README/UI.
 6. Room/ceiling-fan coordination remains unimplemented. Investigate reusable accessible main/child bridge discovery from the Harmony Home Control project; do not confuse this with Nest HVAC blower presets.
 7. Preserve and follow `maintenance/FEATURE_PLAN.md` for mixed native/external temperature sensors. Begin with read-only discovery and compensation preview. No external-sensor thermostat writes are enabled.
-8. Plan package/repository rename, migration and Homebridge verification updates separately. Ask before publishing npm.
+8. Implement target alias `NestClimateCntrl` with a tested config/cache transition, preserving the existing UUID prefix and bridge pairing. Guide the maintainer's current-install migration after feature completion and validation; do not assume changing config alone is sufficient. Plan package/repository rename and Homebridge verification updates separately. Ask before publishing npm.
+9. Remove weather from discovery and UI/configuration; account for owned cached weather accessories. Configure upstream and the climate plugin to own disjoint device sets when both are installed.
+10. Sensor-assisted climate presence is proposed, not implemented. Reuse accessible main/child-bridge motion/occupancy sources; distinguish plugin climate presence from Google's read-only Home/Away status. Define manual overrides, Home-assist/inactivity policy and source-health behavior before enabling actions. See `maintenance/FEATURE_PLAN.md`.
 
 ## Review location
 
