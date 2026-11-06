@@ -390,4 +390,3 @@ function persistMigratedConfig(config, log, api) {
 
 // Define exports
 export { processConfig };
-

@@ -85,4 +85,3 @@ export function nextSetpoint(entries, timeZone, now = new Date()) {
       .sort((a, b) => a.distance - b.distance)[0] ?? null
   );
 }
-

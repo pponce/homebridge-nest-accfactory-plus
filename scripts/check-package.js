@@ -10,15 +10,32 @@ const packed = JSON.parse(execFileSync(npm, ['pack', '--ignore-scripts', '--json
 const tarball = path.resolve(packed.filename);
 const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-plus-package-'));
 try {
-  for (const required of ['dist/index.js', 'dist/identity.js', 'dist/HomeKitDevice.js', 'dist/auth.js', 'config.schema.json', 'MIGRATION.md', 'dist/plugins/camera/streamer.js', 'dist/plugins/camera/talkback.js', 'dist/supportdump.js']) {
-    assert.ok(packed.files.some((file) => file.path === required), 'Package missing ' + required);
+  for (const required of [
+    'dist/index.js',
+    'dist/identity.js',
+    'dist/HomeKitDevice.js',
+    'dist/auth.js',
+    'config.schema.json',
+    'MIGRATION.md',
+    'dist/plugins/camera/streamer.js',
+    'dist/plugins/camera/talkback.js',
+    'dist/supportdump.js',
+  ]) {
+    assert.ok(
+      packed.files.some((file) => file.path === required),
+      'Package missing ' + required,
+    );
   }
   fs.writeFileSync(path.join(temporary, 'package.json'), '{"private":true}');
   execFileSync(npm, ['install', '--omit=dev', '--no-audit', '--no-fund', tarball], { cwd: temporary, stdio: 'inherit' });
   const entry = path.join(temporary, 'node_modules/homebridge-nest-accfactory-plus/dist/index.js');
   const plugin = await import(pathToFileURL(entry).href);
   let registered;
-  plugin.default({ registerPlatform: (...args) => { registered = args; } });
+  plugin.default({
+    registerPlatform: (...args) => {
+      registered = args;
+    },
+  });
   assert.equal(registered[0], 'homebridge-nest-accfactory-plus');
   assert.equal(registered[1], 'NestClimateCntrl');
   assert.equal(typeof registered[2], 'function');
@@ -26,4 +43,3 @@ try {
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });
 }
-

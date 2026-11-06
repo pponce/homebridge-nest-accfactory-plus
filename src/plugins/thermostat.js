@@ -2419,4 +2419,3 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
   return devices;
 }
-

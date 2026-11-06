@@ -12,32 +12,94 @@ async function fixture(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'climate-sources-'));
   t.after(() => rm(directory, { force: true, recursive: true }));
   const config = path.join(directory, 'config.json');
-  await writeFile(config, JSON.stringify({ bridge: { username: bridge, name: 'Main', pin: '111-22-333' },
-    platforms: [{ name: 'Rooms', _bridge: { username: 'AA:BB:CC:DD:EE:00', pin: '222-33-444' } }] }));
-  const client = new EventEmitter(); client.startDiscovery = () => {}; client.destroy = () => {};
-  let failed = false; let faulty = false; const requests = [];
-  const access = new ClimateAccess(config, { clientFactory: () => client, request: async (url, options) => {
-    requests.push({ url, options });
-    if (failed) { return { status: 470, ok: false }; }
-    if (url.endsWith('/accessories')) { return { status: 200, ok: true, json: async () => ({ accessories: [{ aid: 2, services: [
-      { iid: 1, type: '3E', characteristics: [{ type: '23', value: 'Bedroom' }, { type: '30', value: 'EXTERNAL' }] },
-      { iid: 10, type: '8A', characteristics: [{ iid: 11, type: '11', perms: ['pr'], value: 15, unit: 'fahrenheit' },
-        { iid: 12, type: '77', perms: ['pr'], value: 0 }] },
-      { iid: 20, type: 'B7', characteristics: [{ iid: 21, type: 'B0', perms: ['pr', 'pw'], value: 0 }] },
-      { iid: 30, type: '85', characteristics: [{ iid: 31, type: '22', perms: ['pr'], value: false }] },
-      { iid: 40, type: '86', characteristics: [{ iid: 41, type: '71', perms: ['pr'], value: 1 }] },
-    ] }] }) }; }
-    return { status: 207, ok: true, json: async () => ({ characteristics: [
-      { aid: 2, iid: 11, value: 68 }, { aid: 2, iid: 12, value: faulty ? 1 : 0 }, { aid: 2, iid: 21, value: 1 }, { aid: 2, iid: 31, value: false }, { aid: 2, iid: 41, value: 1 },
-    ] }) };
-  } });
-  await access.start(); t.after(() => access.close());
+  await writeFile(
+    config,
+    JSON.stringify({
+      bridge: { username: bridge, name: 'Main', pin: '111-22-333' },
+      platforms: [{ name: 'Rooms', _bridge: { username: 'AA:BB:CC:DD:EE:00', pin: '222-33-444' } }],
+    }),
+  );
+  const client = new EventEmitter();
+  client.startDiscovery = () => {};
+  client.destroy = () => {};
+  let failed = false;
+  let faulty = false;
+  const requests = [];
+  const access = new ClimateAccess(config, {
+    clientFactory: () => client,
+    request: async (url, options) => {
+      requests.push({ url, options });
+      if (failed) {
+        return { status: 470, ok: false };
+      }
+      if (url.endsWith('/accessories')) {
+        return {
+          status: 200,
+          ok: true,
+          json: async () => ({
+            accessories: [
+              {
+                aid: 2,
+                services: [
+                  {
+                    iid: 1,
+                    type: '3E',
+                    characteristics: [
+                      { type: '23', value: 'Bedroom' },
+                      { type: '30', value: 'EXTERNAL' },
+                    ],
+                  },
+                  {
+                    iid: 10,
+                    type: '8A',
+                    characteristics: [
+                      { iid: 11, type: '11', perms: ['pr'], value: 15, unit: 'fahrenheit' },
+                      { iid: 12, type: '77', perms: ['pr'], value: 0 },
+                    ],
+                  },
+                  { iid: 20, type: 'B7', characteristics: [{ iid: 21, type: 'B0', perms: ['pr', 'pw'], value: 0 }] },
+                  { iid: 30, type: '85', characteristics: [{ iid: 31, type: '22', perms: ['pr'], value: false }] },
+                  { iid: 40, type: '86', characteristics: [{ iid: 41, type: '71', perms: ['pr'], value: 1 }] },
+                ],
+              },
+            ],
+          }),
+        };
+      }
+      return {
+        status: 207,
+        ok: true,
+        json: async () => ({
+          characteristics: [
+            { aid: 2, iid: 11, value: 68 },
+            { aid: 2, iid: 12, value: faulty ? 1 : 0 },
+            { aid: 2, iid: 21, value: 1 },
+            { aid: 2, iid: 31, value: false },
+            { aid: 2, iid: 41, value: 1 },
+          ],
+        }),
+      };
+    },
+  });
+  await access.start();
+  t.after(() => access.close());
   client.emit('instance-discovered', { username: bridge, ipAddress: '127.0.0.1', port: 12345 });
-  return { access, client, requests, fail: () => { failed = true; }, fault: () => { faulty = true; } };
+  return {
+    access,
+    client,
+    requests,
+    fail: () => {
+      failed = true;
+    },
+    fault: () => {
+      faulty = true;
+    },
+  };
 }
 
 test('discovery reads temperature-only services and fans, normalizes units and retains source identity', async (t) => {
-  const f = await fixture(t); const data = await f.access.refresh();
+  const f = await fixture(t);
+  const data = await f.access.refresh();
   assert.equal(data.sources.length, 4);
   assert.equal(data.sources[2].kind, 'motion');
   assert.equal(data.sources[2].detected, false);
@@ -64,28 +126,46 @@ test('unconfigured discoveries receive no credentials and child bridges use thei
   assert.equal(f.requests.find(({ url }) => url.includes('[::1]')).options.headers.Authorization, '222-33-444');
 });
 test('sensor faults and bridge failures invalidate input instead of reusing cached temperatures', async (t) => {
-  const f = await fixture(t); await f.access.refresh(); f.fault();
+  const f = await fixture(t);
+  await f.access.refresh();
+  f.fault();
   assert.equal((await f.access.refresh()).sources[0].available, false);
-  f.fail(); const result = await f.access.refresh();
+  f.fail();
+  const result = await f.access.refresh();
   assert.ok(result.sources.every((source) => !source.available));
   assert.match(result.bridges[0].error, /accessory control/);
-  f.access.close(); assert.deepEqual(await f.access.refresh(), { sources: [], bridges: [] });
+  f.access.close();
+  assert.deepEqual(await f.access.refresh(), { sources: [], bridges: [] });
 });
 
 function model() {
   const now = Date.now();
-  const thermostat = { serial: 'T', id: 'T', type: 'Thermostat', account: 'A', lastUpdate: now,
-    data: { online: true, physical_temperature: 22, current_temperature: 99, active_rcs_sensor: '', hvac_mode: 'heat', eco_mode: false } };
-  const snapshot = { accounts: [{ id: 'A', authorised: true, observing: true }], devices: [thermostat,
-    { serial: 'S', id: 'S', type: 'TemperatureSensor', account: 'A', lastUpdate: now, data: { current_temperature: 18, online: true } }] };
-  const external = { sources: [
-    { id: 'external', kind: 'temperature', provider: 'homebridge', available: true, temperature: 20, lastReadAt: now, measuredAt: null },
-    { id: 'duplicate', kind: 'temperature', serial: 's', temperature: 18 },
-  ] };
+  const thermostat = {
+    serial: 'T',
+    id: 'T',
+    type: 'Thermostat',
+    account: 'A',
+    lastUpdate: now,
+    data: { online: true, physical_temperature: 22, current_temperature: 99, active_rcs_sensor: '', hvac_mode: 'heat', eco_mode: false },
+  };
+  const snapshot = {
+    accounts: [{ id: 'A', authorised: true, observing: true }],
+    devices: [
+      thermostat,
+      { serial: 'S', id: 'S', type: 'TemperatureSensor', account: 'A', lastUpdate: now, data: { current_temperature: 18, online: true } },
+    ],
+  };
+  const external = {
+    sources: [
+      { id: 'external', kind: 'temperature', provider: 'homebridge', available: true, temperature: 20, lastReadAt: now, measuredAt: null },
+      { id: 'duplicate', kind: 'temperature', serial: 's', temperature: 18 },
+    ],
+  };
   return { sources: sensorSources(snapshot, external), thermostat, now };
 }
 test('mixed preview prefers native identity and the physical reading, supports single and average sources with bounded offset', () => {
-  const f = model(); assert.equal(f.sources.length, 3);
+  const f = model();
+  assert.equal(f.sources.length, 3);
   assert.equal(f.sources[0].temperature, 22);
   const result = previewGroup({ ...f, selected: ['nest:S', 'external', 'external'], desired: 21 });
   assert.equal(result.roomTemperature, 19);
@@ -95,12 +175,15 @@ test('mixed preview prefers native identity and the physical reading, supports s
   assert.equal(previewGroup({ ...f, selected: ['external'], desired: 21 }).roomTemperature, 20);
 });
 test('preview refuses missing, stale and invalid inputs and pauses for native source changes or Eco', () => {
-  const f = model(); const args = { ...f, selected: ['external'], desired: 21 };
+  const f = model();
+  const args = { ...f, selected: ['external'], desired: 21 };
   assert.equal(previewGroup({ ...args, selected: [] }).state, 'empty');
   assert.equal(previewGroup({ ...args, selected: ['missing'] }).state, 'unavailable');
   assert.equal(previewGroup({ ...args, now: f.now + 100000 }).state, 'unavailable');
   assert.equal(previewGroup({ ...args, desired: NaN }).state, 'unavailable');
-  f.thermostat.data.active_rcs_sensor = 'S'; assert.equal(previewGroup(args).state, 'paused');
-  f.thermostat.data.active_rcs_sensor = ''; f.thermostat.data.eco_mode = true;
+  f.thermostat.data.active_rcs_sensor = 'S';
+  assert.equal(previewGroup(args).state, 'paused');
+  f.thermostat.data.active_rcs_sensor = '';
+  f.thermostat.data.eco_mode = true;
   assert.equal(previewGroup(args).state, 'paused');
 });

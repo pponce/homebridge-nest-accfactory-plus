@@ -396,4 +396,3 @@ test('configuration publishes a successfully probed hardware encoder and debug d
   processConfig({ options: { debug: false } }, quiet, {});
   quiet.debug('Fixture message');
 });
-

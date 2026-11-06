@@ -19,4 +19,3 @@ export function configureIdentity(Device) {
   };
   configured.add(Device);
 }
-

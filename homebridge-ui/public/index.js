@@ -9,8 +9,13 @@ let settingsKey = '';
 let saveQueue = Promise.resolve();
 let refreshing = false;
 let liveAvailable = false;
-const roomPreview = mountRoomPreview({ host: $('room-preview'), homebridge: hb,
-  getStatus: () => liveAvailable ? status : undefined, getConfig: () => config, changed });
+const roomPreview = mountRoomPreview({
+  host: $('room-preview'),
+  homebridge: hb,
+  getStatus: () => (liveAvailable ? status : undefined),
+  getConfig: () => config,
+  changed,
+});
 function el(tag, text, className) {
   const node = document.createElement(tag);
   if (text !== undefined) {
@@ -607,4 +612,3 @@ try {
     $(id).disabled = true;
   }
 }
-

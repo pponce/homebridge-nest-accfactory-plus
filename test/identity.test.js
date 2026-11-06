@@ -24,8 +24,7 @@ test('Climate alias retains historical UUIDs across supported backends', () => {
   assert.equal(HomeKitDevice.PLUGIN_NAME, PLUGIN_NAME);
   assert.equal(HomeKitDevice.PLATFORM_NAME, PLATFORM_NAME);
   const configuredGenerate = HomeKitDevice.generateUUID;
-  assert.equal(HomeKitDevice.generateUUID('other-plugin', api, 'serial'),
-    originalGenerate('other-plugin', api, 'serial'));
+  assert.equal(HomeKitDevice.generateUUID('other-plugin', api, 'serial'), originalGenerate('other-plugin', api, 'serial'));
   configureIdentity(HomeKitDevice);
   assert.equal(HomeKitDevice.generateUUID, configuredGenerate);
   assert.throws(() => HomeKitDevice.generateUUID(PLUGIN_NAME, api, ''), TypeError);
@@ -39,17 +38,20 @@ test('real device lifecycle reuses cached accessories and registers new ones und
       this.displayName = name;
       this.UUID = uuid;
       this.context = { preserved: true };
-      this.services = [{
-        UUID: 'info',
-        testCharacteristic() {
-          return false;
+      this.services = [
+        {
+          UUID: 'info',
+          testCharacteristic() {
+            return false;
+          },
+          updateCharacteristic() {},
+          getCharacteristic() {
+            return { value: '' };
+          },
         },
-        updateCharacteristic() {},
-        getCharacteristic() {
-          return { value: '' };
-        },
-      }];
+      ];
     }
+
     getService() {
       return this.services[0];
     }
@@ -61,7 +63,11 @@ test('real device lifecycle reuses cached accessories and registers new ones und
     publishExternalAccessories: (...args) => publications.push(args),
   };
   const data = (serialNumber) => ({
-    serialNumber, softwareVersion: '1', description: 'Nest', model: 'Test', manufacturer: 'Nest',
+    serialNumber,
+    softwareVersion: '1',
+    description: 'Nest',
+    model: 'Test',
+    manufacturer: 'Nest',
   });
   const oldUUID = originalGenerate(IDENTITY_NAMESPACE, api, 'cached-123');
   const cached = new Accessory('Existing', oldUUID);
@@ -84,4 +90,3 @@ test('real device lifecycle reuses cached accessories and registers new ones und
   assert.equal(publications[0][1][0].UUID, originalGenerate(IDENTITY_NAMESPACE, api, 'camera-123'));
   await HomeKitDevice.shutdown();
 });
-

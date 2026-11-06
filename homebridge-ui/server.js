@@ -21,7 +21,11 @@ class ClimateUi extends HomebridgePluginUiServer {
       await this.startingAccess;
       if (!this.readingSources) {
         this.access.client.startDiscovery(3500);
-        this.readingSources = delay(3500).then(() => this.access.refresh()).finally(() => { this.readingSources = undefined; });
+        this.readingSources = delay(3500)
+          .then(() => this.access.refresh())
+          .finally(() => {
+            this.readingSources = undefined;
+          });
       }
       return this.readingSources;
     });
@@ -55,4 +59,3 @@ class ClimateUi extends HomebridgePluginUiServer {
   }
 }
 new ClimateUi();
-

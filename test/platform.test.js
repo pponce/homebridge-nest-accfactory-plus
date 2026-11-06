@@ -100,4 +100,3 @@ test('platform restores valid cached identity, removes stale cache and shuts dow
   assert.deepEqual(platform.cachedAccessories, []);
   await callbacks.get('shutdown')();
 });
-
