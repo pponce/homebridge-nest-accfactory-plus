@@ -2,6 +2,7 @@
 // PINs and bridge endpoints never leave this server-side adapter.
 import { readFile } from 'node:fs/promises';
 import { isIP } from 'node:net';
+import { BridgeDiscovery } from './bridge-discovery.js';
 
 const uuid = (value) => {
   const text = String(value ?? '').toUpperCase();
@@ -38,13 +39,12 @@ export class ClimateAccess {
       }
     }
     if (!this.clientFactory) {
-      const { HapClient } = await import('@homebridge/hap-client');
-      this.clientFactory = (options) => new HapClient(options);
+      const { Bonjour } = await import('bonjour-service');
+      this.clientFactory = (options) => new BridgeDiscovery({ ...options, bonjourFactory: (onError) => new Bonjour(undefined, onError) });
     }
     // Discovery itself receives no pairing credentials and cannot control accessories.
     this.client = this.clientFactory({
-      config: { autoStartDiscovery: false, discoveryTimeout: 3500 },
-      logger: { debug() {}, info() {}, warn() {}, error() {} },
+      usernames: [...this.bridges.keys()],
     });
     this.client.on('error', () => {
       this.discoveryError = 'Homebridge discovery unavailable.';
@@ -66,13 +66,23 @@ export class ClimateAccess {
   }
 
   async get(instance, route) {
-    const host = instance.ipAddress.includes(':') ? '[' + instance.ipAddress + ']' : instance.ipAddress;
-    const response = await this.request('http://' + host + ':' + instance.port + route, {
-      method: 'GET',
-      redirect: 'error',
-      signal: AbortSignal.timeout(5000),
-      headers: { Authorization: this.bridges.get(instance.username).pin },
-    });
+    let response;
+    const addresses = [...new Set([instance.ipAddress, ...(instance.addresses ?? [])])]
+      .filter((address) => typeof address === 'string' && isIP(address)).slice(0, 8);
+    for (const address of addresses) {
+      const host = address.includes(':') ? '[' + address + ']' : address;
+      try {
+        response = await this.request('http://' + host + ':' + instance.port + route, {
+          method: 'GET',
+          redirect: 'error',
+          signal: AbortSignal.timeout(5000),
+          headers: { Authorization: this.bridges.get(instance.username).pin },
+        });
+        instance.ipAddress = address;
+        break;
+      } catch { /* Try another address advertised by this configured bridge. */ }
+    }
+    if (!response) { throw new Error('Bridge unreachable.'); }
     if ([401, 403, 470].includes(response.status)) {
       throw new Error('Enable Homebridge accessory control (-I) and check this bridge’s PIN.');
     }

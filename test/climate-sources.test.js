@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ClimateAccess } from '../homebridge-ui/climate-access.js';
 import { sensorSources, previewGroup } from '../homebridge-ui/public/sensor-preview.js';
+import { BridgeDiscovery } from '../homebridge-ui/bridge-discovery.js';
 
 const bridge = 'AA:BB:CC:DD:EE:FF';
 async function fixture(t) {
@@ -85,6 +86,7 @@ async function fixture(t) {
   t.after(() => access.close());
   client.emit('instance-discovered', { username: bridge, ipAddress: '127.0.0.1', port: 12345 });
   return {
+    config,
     access,
     client,
     requests,
@@ -116,6 +118,93 @@ test('discovery reads temperature-only services and fans, normalizes units and r
   assert.equal(f.requests[0].options.headers.Authorization, '111-22-333');
   assert.ok(!JSON.stringify(data).includes('111-22-333'));
   assert.ok(!JSON.stringify(data).includes('127.0.0.1'));
+});
+
+test('real discovery adapter only browses configured identities and reads them through GET, including alternate addresses', async (t) => {
+  const f = await fixture(t);
+  f.access.close();
+  let found;
+  let searches = 0;
+  const browser = new EventEmitter();
+  browser.stop = () => {};
+  const bonjour = {
+    find(options, onup) {
+      assert.deepEqual(options, { type: 'hap' });
+      found = onup; searches++; return browser;
+    },
+    destroy() {},
+  };
+  const access = new ClimateAccess(f.config, {
+    clientFactory: (options) => {
+      assert.deepEqual(Object.keys(options), ['usernames']);
+      return new BridgeDiscovery({ ...options, bonjourFactory: () => bonjour,
+        resolve: async () => { throw new Error('Unconfigured host must not be resolved'); } });
+    },
+    request: async (url, options) => {
+      assert.equal(options.method, 'GET');
+      if (url.includes('127.0.0.2')) { throw new Error('Wrong interface'); }
+      return f.access.request(url, options);
+    },
+  });
+  t.after(() => access.close());
+  await access.start();
+  access.client.startDiscovery();
+  assert.equal(searches, 1);
+  found({ txt: { id: 'UNKNOWN' }, host: 'unknown.local', port: 123 });
+  found({ txt: { id: bridge }, port: -1, addresses: ['127.0.0.1'] });
+  assert.equal(access.instances.size, 0);
+  found({ txt: { id: bridge.toLowerCase() }, port: 12345, addresses: ['127.0.0.2', '127.0.0.1'] });
+  assert.equal(f.requests.length, 0);
+  const result = await access.refresh();
+  assert.equal(result.sources.length, 4);
+  assert.equal(result.sources[0].available, true);
+  assert.equal(access.instances.get(bridge).ipAddress, '127.0.0.1');
+  assert.ok(f.requests.every(({ options }) => options.method === 'GET'));
+});
+
+test('passive discovery resolves shared hosts and ignores stale lookups after stop or shutdown', async () => {
+  let found;
+  let resolvePending;
+  let stopped = 0;
+  let destroyed = 0;
+  let reportError;
+  const client = new BridgeDiscovery({ usernames: [bridge],
+    resolve: () => new Promise((resolve) => { resolvePending = resolve; }),
+    bonjourFactory: (error) => {
+      reportError = error;
+      return { find(options, onup) { found = onup; const browser = new EventEmitter(); browser.stop = () => stopped++; return browser; },
+        destroy() { destroyed++; } };
+    },
+  });
+  const instances = []; const errors = [];
+  client.on('instance-discovered', (instance) => instances.push(instance));
+  client.on('error', (error) => errors.push(error));
+  try {
+    client.startDiscovery();
+    found({ txt: { id: bridge }, host: 'shared.local', port: 123 });
+    resolvePending([{ address: '::1' }]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(instances[0].ipAddress, '::1');
+    found({ txt: { id: bridge }, host: 'shared.local', port: 123 });
+    client.stopDiscovery();
+    resolvePending([{ address: '127.0.0.2' }]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(instances.length, 1);
+    client.startDiscovery();
+    found({ txt: { id: bridge }, host: 'shared.local', port: 123 });
+    client.destroy();
+    resolvePending([{ address: '127.0.0.3' }]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(instances.length, 1);
+    assert.equal(stopped, 2);
+    assert.equal(destroyed, 1);
+    client.startDiscovery();
+    assert.equal(client.browser, undefined);
+    reportError(new Error('mDNS unavailable'));
+    assert.equal(errors.length, 1);
+  } finally {
+    if (!client.closed) { client.destroy(); }
+  }
 });
 test('unconfigured discoveries receive no credentials and child bridges use their own PIN', async (t) => {
   const f = await fixture(t);
