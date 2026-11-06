@@ -28,7 +28,7 @@ Nest thermostats, associated Nest Temperature Sensors and Nest Heat Links suppor
 
 This edition focuses on climate: **camera, doorbell, floodlight-camera, Nest × Yale lock and weather support have been removed.**
 
-Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). It can run alongside this plugin with separate device ownership; see [coexistence guidance](MIGRATION.md#running-alongside-upstream).
+Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). If you want to install this plugin to use it's added capabilities, Nest Accfactory can run alongside this plugin with separate device ownership; see [coexistence guidance](MIGRATION.md#running-alongside-upstream).
 
 ## Get started
 
