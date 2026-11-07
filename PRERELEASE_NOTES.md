@@ -1,9 +1,16 @@
-## Next beta — unreleased
+## v0.5.0-beta.4
 
-- Add optional HTTP access for the standalone dashboard. HTTPS remains the default.
-- Show that passwords and dashboard data travel unencrypted when HTTP is selected, before sign-in, in the dashboard and in startup logs.
-- Retain authentication, origin checks and CSRF validation in HTTP mode, with separate HTTP and HTTPS session cookies.
-- Add hostname, wildcard certificate, file-access and reverse-proxy setup guidance in [Web dashboard](WEB_DASHBOARD.md).
+**Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and Apple Home pairing.** The package is `homebridge-nest-climate-cntrl` and the platform changes from `NestAccfactory` to **`NestClimateCntrl`**. Recreate affected room assignments, scenes and automations; follow the [cutover instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.4/MIGRATION.md). Existing Climate Cntrl beta installations can update normally.
+
+- **Optional HTTP dashboard access:** choose HTTP under Web dashboard → Network and connection settings, save and restart the Nest child bridge. HTTPS remains the default.
+- **Clear HTTP warnings:** passwords and dashboard data travel unencrypted. The warning appears in setup, before sign-in, inside the dashboard and in startup logs.
+- HTTP keeps the web login, browser-origin checks and CSRF protection, with separate HTTP and HTTPS sessions. HTTP does not generate or read TLS certificates.
+- Expanded guidance for internal DNS hostnames, wildcard certificates, file permissions and HTTPS reverse proxies. See [web dashboard setup](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.4/WEB_DASHBOARD.md).
+- Web passwords continue to support **8–128 characters**.
+
+Temperature, occupancy and room-fan rules remain **inactive drafts**; automatic rule execution is not included. Hardware testing is ongoing.
+
+Compatible existing **legacy Google refresh-token authentication remains supported**; the plugin cannot issue new legacy tokens. For cameras, doorbells, floodlight cameras, Yale locks or weather, use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) with separate device ownership.
 
 ## v0.5.0-beta.3
 

@@ -1,4 +1,4 @@
-## Unreleased
+## v0.5.0-beta.4
 
 - Add optional HTTP dashboard access with visible unencrypted-password warnings and separate HTTP sessions.
 - Keep HTTPS as the default and document trusted certificates and hostname setup.
