@@ -11,6 +11,7 @@ import tarfile
 import tempfile
 
 PROJECT = Path(__file__).resolve().parents[2]
+VERSION = json.loads((PROJECT / 'package.json').read_text())['version']
 MOCK = r'''#!/usr/bin/env python3
 import json, os, pathlib, shutil, subprocess, sys
 name = pathlib.Path(sys.argv[0]).name
@@ -42,7 +43,7 @@ if name == 'npm':
         (root / 'published').write_text('yes')
         sys.exit(0)
     if args[0] == 'view' and args[2] == 'version':
-        print('0.5.0-beta.3')
+        print(os.environ['PUBLISH_VERSION'])
         sys.exit(0)
     if args[0] == 'view':
         counter = root / 'views'
@@ -69,7 +70,7 @@ def run_case(scenario):
         home = root / 'home'
         checkout = home / 'devProjects/homebridge-nest-climate-cntrl'
         (checkout / '.git/info').mkdir(parents=True)
-        pkg = {'name': 'homebridge-nest-climate-cntrl', 'version': '0.5.0-beta.3'}
+        pkg = {'name': 'homebridge-nest-climate-cntrl', 'version': VERSION}
         (checkout / 'package.json').write_text(json.dumps(pkg))
         artifact = checkout / 'maintenance/artifacts/local-result.txt'
         if scenario == 'artifacts':
@@ -79,7 +80,7 @@ def run_case(scenario):
                             'commit', '-m', 'Fixture'], check=True, capture_output=True)
             artifact.parent.mkdir(parents=True)
             artifact.write_text('retain this local artifact')
-        filename = 'homebridge-nest-climate-cntrl-0.5.0-beta.3.tgz'
+        filename = f'homebridge-nest-climate-cntrl-{VERSION}.tgz'
         archive = root / filename
         with tarfile.open(archive, 'w:gz') as tar:
             content = json.dumps(pkg).encode()
@@ -97,8 +98,8 @@ def run_case(scenario):
             script.write_text(MOCK)
             script.chmod(0o755)
         env = dict(os.environ, HOME=str(home), PATH=str(bin_dir) + ':' + os.environ['PATH'],
-                   PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario, REAL_GIT=shutil.which('git'))
-        release = checkout / 'maintenance/releases/v0.5.0-beta.3'
+                   PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario, PUBLISH_VERSION=VERSION, REAL_GIT=shutil.which('git'))
+        release = checkout / f'maintenance/releases/v{VERSION}'
         if scenario == 'pending':
             release.mkdir(parents=True)
             (release / 'npm-upload-accepted').write_text('fixture accepted upload')

@@ -2,7 +2,7 @@ name: Release Climate Cntrl
 on:
   push:
     branches: [main]
-    paths: [.github/release-version]
+    paths: [.github/release-version, .github/workflows/release.yml]
   workflow_dispatch:
 
 permissions:
