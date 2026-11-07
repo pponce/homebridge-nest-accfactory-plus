@@ -2,7 +2,7 @@
 
 The optional standalone dashboard gives Nest Climate Cntrl its own web address over HTTPS or optional HTTP. Use a computer, tablet, or phone to see thermostat status, choose supported controls, inspect sensors, and organize climate rule drafts.
 
-This feature is available in 0.5.0-beta.2 and is under beta testing. Automatic room-temperature control, room-fan actions, and combined occupancy rules are not enabled by saving a draft.
+The dashboard is under beta testing. Automatic room-temperature control, room-fan actions, and combined occupancy rules are not enabled by saving a draft.
 
 ## Enable web access
 
