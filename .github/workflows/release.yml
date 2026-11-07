@@ -62,7 +62,7 @@ jobs:
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/climate-browser/node_modules/playwright" >> "$GITHUB_ENV"
           echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
           echo "REVIEW_OUTPUT_DIR=$RUNNER_TEMP/climate-dashboard-review" >> "$GITHUB_ENV"
-      - name: Check embedded and standalone dashboard behavior
+      - name: Check embedded, standalone and reverse-proxy dashboard behavior
         id: browser
         continue-on-error: true
         run: node maintenance/checks/run-dashboard-browser.mjs

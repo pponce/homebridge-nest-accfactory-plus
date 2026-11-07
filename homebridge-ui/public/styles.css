@@ -11,6 +11,9 @@
 * {
   box-sizing: border-box;
 }
+#web-dashboard [hidden] {
+  display: none !important;
+}
 body {
   margin: 0;
   background: var(--ground);
