@@ -31,6 +31,10 @@ HTTPS is the default. Under **Network and connection settings → Connection pro
 
 A wildcard certificate for `*.example.com` can cover `climate.example.com`. Restart the Nest child bridge after replacing or renewing certificate files; the listener reads them at startup.
 
+For an IPv6 connection to the dashboard, set **Listen address** to `::`, save and restart the Nest bridge. The default `0.0.0.0` listens on IPv4 only. On systems with dual-stack support, `::` accepts IPv4 as well. Keep the hostname under **Address shown in dashboard links**. IPv6 addresses in a proxy URL need brackets, for example `https://[::1]:9444` for a proxy running on the same host.
+
+An IPv6 DNS record and Nginx listener do not require an IPv6 dashboard backend: Nginx on the same host can accept IPv6 clients and forward to `https://127.0.0.1:9444`. If Nginx returns 502, check that its configured backend is reachable and uses the same protocol as the dashboard.
+
 To use `https://climate.example.com` without a port, put Nginx or another reverse proxy on port 443. The plugin listens on ports 1024–65535. Keep the dashboard backend on HTTPS and preserve the external Host header. Verify the backend certificate using a trusted chain or an explicitly trusted local certificate. HTTP mode is for direct HTTP access and does not trust forwarded headers to turn an HTTP connection into an HTTPS browser origin.
 
 ## What you can do
