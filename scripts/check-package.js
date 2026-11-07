@@ -63,6 +63,11 @@ try {
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'config.schema.json')));
   assert.equal(pkg.name, registered[0]);
   assert.equal(schema.pluginAlias, registered[1]);
+  assert.deepEqual(schema.schema.properties.webDashboard.properties.protocol.enum, ['https', 'http', 'proxy']);
+  const web = await import(pathToFileURL(path.join(root, 'dist/web-dashboard.js')).href);
+  const proxy = web.normalizeWebDashboard({ protocol: 'proxy', host: '::', publicOrigin: 'https://climate.example.com' });
+  assert.equal(proxy.host, '127.0.0.1');
+  assert.equal(proxy.publicOrigin, 'https://climate.example.com');
   const preflight = await import(pathToFileURL(path.join(root, 'scripts/migration-preflight.mjs')).href);
   assert.equal(typeof preflight.inspectInstallation, 'function');
   console.log('Production tarball installs and registers successfully:', packed.filename);

@@ -81,7 +81,7 @@ try {
   const denied = await page.evaluate(async () => (await fetch('/api/command', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status);
   assert.equal(denied, 403);
   assert.equal(commands.length, 1);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.locator('#sign-out').click();
   await page.getByRole('heading', { name: 'Welcome home.' }).waitFor();
   assert.equal((await context.cookies()).some((item) => item.name === SESSION_COOKIE), false);
   await page.reload();
