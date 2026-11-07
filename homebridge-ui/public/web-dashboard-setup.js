@@ -156,6 +156,7 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     const network = el('div', undefined, 'grid');
     const protocolLabel = el('label', 'Connection protocol');
     const protocol = el('select');
+    protocol.setAttribute('aria-label', 'Connection protocol');
     for (const [value, text] of [['https', 'HTTPS · encrypted'], ['http', 'HTTP · unencrypted']]) {
       const option = el('option', text);
       option.value = value;
