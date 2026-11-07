@@ -279,7 +279,8 @@
           "host": {
             "type": "string",
             "default": "0.0.0.0",
-            "title": "Listen address"
+            "title": "Listen address",
+            "description": "Direct HTTP/HTTPS listen address. Reverse proxy mode always binds to 127.0.0.1 and accepts only the local proxy."
           },
           "port": {
             "type": "integer",
@@ -294,21 +295,29 @@
           },
           "certificatePath": {
             "type": "string",
-            "title": "TLS certificate file"
+            "title": "TLS certificate file",
+            "description": "Used only for direct HTTPS. Not read or generated in HTTP or reverse proxy mode."
           },
           "keyPath": {
             "type": "string",
-            "title": "TLS private key file"
+            "title": "TLS private key file",
+            "description": "Used only for direct HTTPS. Not read or generated in HTTP or reverse proxy mode."
           },
           "protocol": {
             "type": "string",
-            "title": "Connection protocol",
+            "title": "Connection mode",
             "enum": [
               "https",
-              "http"
+              "http",
+              "proxy"
             ],
             "default": "https",
-            "description": "HTTPS encrypts the connection. HTTP sends passwords and dashboard data unencrypted; use only on a trusted local network."
+            "description": "Choose direct HTTPS with certificates in the plugin, direct HTTP (passwords and data travel unencrypted), or HTTPS through a proxy on the same machine. The proxy handles certificates and the HTTP-to-HTTPS redirect."
+          },
+          "publicOrigin": {
+            "type": "string",
+            "title": "Public HTTPS origin",
+            "description": "Required in reverse proxy mode, for example https://climate.example.com. No path, query or credentials. The public port is optional; the backend port is separate."
           }
         }
       }
@@ -500,7 +509,7 @@
       "title": "Web dashboard",
       "expandable": true,
       "expanded": false,
-      "description": "Open the climate dashboard in its own browser window. HTTPS is the default. HTTP sends passwords and dashboard data unencrypted. Create the separate web account in the custom settings page.",
+      "description": "Choose direct HTTP, direct HTTPS, or HTTPS through a local reverse proxy. Create the separate web account in the custom settings page.",
       "items": [
         {
           "key": "webDashboard.enabled",
@@ -508,11 +517,16 @@
         },
         {
           "key": "webDashboard.protocol",
-          "title": "Connection protocol",
+          "title": "Connection mode",
           "titleMap": {
-            "https": "HTTPS · encrypted",
-            "http": "HTTP · unencrypted"
+            "https": "HTTPS \u00b7 certificates in plugin",
+            "http": "HTTP \u00b7 unencrypted",
+            "proxy": "HTTPS through reverse proxy"
           }
+        },
+        {
+          "key": "webDashboard.publicOrigin",
+          "title": "Public HTTPS origin (reverse proxy mode)"
         },
         {
           "key": "webDashboard.port",

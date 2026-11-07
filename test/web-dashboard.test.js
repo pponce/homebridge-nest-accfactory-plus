@@ -37,9 +37,12 @@ async function fixture(t) {
 async function call(
   server,
   route,
-  { method = 'GET', body, cookie, csrf, host = 'localhost:9444', origin = 'https://localhost:9444', type = 'application/json' } = {},
+  {
+    method = 'GET', body, cookie, csrf, host = 'localhost:9444', origin = 'https://localhost:9444',
+    type = 'application/json', extraHeaders = {}, remoteAddress = '127.0.0.1',
+  } = {},
 ) {
-  const headers = { host };
+  const headers = { ...extraHeaders, host };
   if (origin !== null) {
     headers.origin = origin;
   }
@@ -56,7 +59,7 @@ async function call(
     method,
     url: route,
     headers,
-    socket: { remoteAddress: '127.0.0.1' },
+    socket: { remoteAddress },
     async *[Symbol.asyncIterator]() {
       if (body !== undefined) {
         yield Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
@@ -570,4 +573,204 @@ test('shutdown during HTTPS or source startup prevents late listeners and discov
   assert.equal(closed, true);
   assert.equal(discovered, false);
   await assert.rejects(discovery.sources(), /stopping/);
+});
+
+test('proxy mode requires a valid public HTTPS origin and always binds to IPv4 loopback', async (t) => {
+  const state = await fixture(t);
+  const options = normalizeWebDashboard({ protocol: 'proxy', host: '::', publicOrigin: 'https://Climate.example.com:443/' });
+  assert.equal(options.host, '127.0.0.1');
+  assert.equal(options.publicOrigin, 'https://climate.example.com');
+  for (const publicOrigin of [
+    '', undefined, 'http://climate.example.com', 'https://user@climate.example.com',
+    'https://climate.example.com/path', 'https://climate.example.com/?x', 'https://climate.example.com/#x',
+    'https://climate.example.com/path/..', 'https://climate.example.com\\other',
+    'https://climate.example.com:99999', 'https://climate.example.com?',
+  ]) {
+    const server = new WebDashboard({
+      ...state, platformConfig: { ...state.block, webDashboard: { enabled: true, protocol: 'proxy', publicOrigin } },
+      tlsFactory: () => assert.fail('Proxy must not load TLS'),
+    });
+    const status = await server.start();
+    assert.equal(status.available, false, String(publicOrigin));
+    assert.equal(status.url, null);
+    assert.match(status.error, /public HTTPS origin/);
+    assert.equal(server.server, undefined);
+    await server.stop();
+  }
+});
+
+test('proxy trust comes from the loopback peer and public Host and Origin, never forwarded headers', async (t) => {
+  const state = await fixture(t);
+  const server = new WebDashboard({
+    ...state,
+    platformConfig: { ...state.block, webDashboard: { enabled: true, protocol: 'proxy', publicOrigin: 'https://climate.example.com' } },
+  });
+  t.after(() => server.stop());
+  assert.equal(server.status().url, 'https://climate.example.com');
+  assert.equal(server.status().protocol, 'https');
+  assert.equal(server.status().connectionMode, 'proxy');
+  const base = { host: 'climate.example.com', origin: 'https://climate.example.com' };
+  const spoof = {
+    forwarded: 'for=127.0.0.1;host=climate.example.com;proto=https', 'x-forwarded-for': '127.0.0.1',
+    'x-forwarded-host': 'climate.example.com', 'x-forwarded-proto': 'https',
+  };
+  for (const remoteAddress of ['192.0.2.10', '::ffff:192.0.2.10', '::1', undefined]) {
+    assert.equal(server.safeHost({ headers: { host: base.host, ...spoof }, socket: { remoteAddress } }), false);
+  }
+  for (const host of ['localhost:9444', '127.0.0.1:9444', 'climate.example.com:9444', 'evil.example', 'climate.example.com/']) {
+    assert.equal((await call(server, '/api/session', { ...base, host, extraHeaders: spoof })).status, 403);
+  }
+  for (const origin of [
+    'http://climate.example.com', 'https://climate.example.com:9444', 'https://evil.example', 'null',
+    'https://climate.example.com/#x', 'https://climate.example.com/?x',
+  ]) {
+    assert.equal((await call(server, '/api/session', { ...base, origin, extraHeaders: spoof })).status, 403);
+  }
+  assert.equal((await call(server, '/api/login', { ...base, origin: null, method: 'POST', body: {}, extraHeaders: spoof })).status, 403);
+  assert.equal((await call(server, '/api/session', { ...base, origin: null })).status, 200);
+  assert.equal(
+    (await call(server, '/api/session', {
+      ...base, extraHeaders: { 'x-forwarded-host': 'evil.example', 'x-forwarded-proto': 'http' },
+    })).status,
+    200,
+  );
+  for (const protocol of ['http', 'https']) {
+    const direct = new WebDashboard({ ...state, platformConfig: { ...state.block, webDashboard: { protocol } } });
+    assert.equal(
+      (await call(direct, '/api/login', {
+        method: 'POST', body: {}, origin: protocol === 'http' ? 'https://localhost:9444' : 'http://localhost:9444', extraHeaders: spoof,
+      })).status,
+      403,
+    );
+    await direct.stop();
+  }
+});
+
+test('HTTPS reverse proxy carries secure sessions, actions, configuration and logout to a certificate-free HTTP backend', async (t) => {
+  const state = await fixture(t);
+  const warnings = [];
+  const server = new WebDashboard({
+    ...state,
+    platformConfig: {
+      ...state.block,
+      webDashboard: {
+        enabled: true, protocol: 'proxy', host: '0.0.0.0', publicOrigin: 'https://climate.example.com',
+        certificatePath: '/not-readable', keyPath: '/not-readable',
+      },
+    },
+    tlsFactory: () => assert.fail('Proxy backend must not read or generate certificates'),
+    log: { warn: (value) => warnings.push(value) },
+  });
+  t.after(() => server.stop());
+  await server.setupAccount({ username: 'admin', password: 'eight888' });
+  server.options.port = 0;
+  await server.start();
+  assert.equal(server.status().available, true);
+  assert.equal(server.server.address().address, '127.0.0.1');
+  assert.equal(warnings.length, 0);
+  assert.deepEqual((await fs.readdir(server.directory)).filter((file) => file.endsWith('.pem')), []);
+  server.options.port = server.server.address().port;
+  // TLS belongs solely to this test proxy. The dashboard's TLS factory must never run.
+  const tls = await loadWebCertificate(state.storage, {}, ['localhost', '127.0.0.1']);
+  const proxy = https.createServer(tls, (request, response) => {
+    const upstream = http.request(
+      { hostname: '127.0.0.1', port: server.options.port, path: request.url, method: request.method, headers: request.headers },
+      (reply) => {
+        response.writeHead(reply.statusCode, reply.headers);
+        reply.pipe(response);
+      },
+    );
+    upstream.on('error', () => response.writeHead(502).end());
+    request.pipe(upstream);
+  });
+  t.after(async () => {
+    proxy.closeAllConnections();
+    await new Promise((resolve) => proxy.close(resolve));
+  });
+  await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const publicOrigin = 'https://127.0.0.1:' + proxy.address().port;
+  server.options.publicOrigin = publicOrigin;
+  const request = (route, { method = 'GET', body, headers = {}, origin = publicOrigin } = {}) =>
+    new Promise((resolve, reject) => {
+      const outgoing = https.request(
+        publicOrigin + route,
+        {
+          method, ca: tls.cert, servername: 'localhost',
+          headers: { ...(origin === null ? {} : { origin }), 'content-type': 'application/json', ...headers },
+        },
+        (response) => {
+          let bytes = '';
+          response.on('data', (part) => {
+            bytes += part;
+          });
+          response.on('end', () => {
+            let data;
+            try {
+              data = JSON.parse(bytes);
+            } catch {
+              /* HTML asset */
+            }
+            resolve({ status: response.statusCode, headers: response.headers, data });
+          });
+        },
+      );
+      outgoing.on('error', reject);
+      outgoing.end(body === undefined ? undefined : JSON.stringify(body));
+    });
+  assert.equal((await request('/', { origin: null })).status, 200);
+  assert.equal((await request('/api/status')).status, 401);
+  assert.equal((await request('/api/login', { method: 'POST', body: { username: 'admin', password: 'wrong' } })).status, 401);
+  assert.equal(
+    (await request('/api/login', {
+      method: 'POST', origin: 'http://127.0.0.1:' + proxy.address().port, headers: { 'x-forwarded-proto': 'https' }, body: {},
+    })).status,
+    403,
+  );
+  assert.equal(
+    (await request('/api/session', {
+      headers: { host: 'evil.example', 'x-forwarded-host': new URL(publicOrigin).host },
+    })).status,
+    403,
+  );
+  const login = await request('/api/login', { method: 'POST', body: { username: 'admin', password: 'eight888' } });
+  assert.equal(login.status, 200);
+  assert.match(login.headers['set-cookie'][0], /HttpOnly; Secure; SameSite=Strict/);
+  assert.ok(login.headers['set-cookie'][0].startsWith(SESSION_COOKIE + '='));
+  const headers = { cookie: login.headers['set-cookie'][0].split(';')[0], 'x-csrf-token': login.data.csrfToken };
+  assert.equal((await request('/api/session', { headers })).data.authenticated, true);
+  assert.equal((await request('/api/status', { headers })).status, 200);
+  assert.equal(
+    (await request('/api/command', {
+      method: 'POST', headers: { cookie: headers.cookie }, body: { action: 'eco' },
+    })).status,
+    403,
+  );
+  assert.equal(
+    (await request('/api/command', {
+      method: 'POST', headers, origin: 'https://evil.example', body: { action: 'eco' },
+    })).status,
+    403,
+  );
+  assert.equal((await request('/api/command', { method: 'POST', headers, body: { action: 'eco' } })).data.accepted, true);
+  const config = await request('/api/config', { headers });
+  assert.equal(config.data.web.url, publicOrigin);
+  assert.doesNotMatch(JSON.stringify(config.data), /TOKEN-VERY-SECRET|OTHER-SECRET/);
+  const payload = { revision: config.data.revision, config: { name: 'Proxy dashboard' } };
+  assert.equal(
+    (await request('/api/config', {
+      method: 'PUT', headers: { ...headers, 'x-csrf-token': 'wrong' }, body: payload,
+    })).status,
+    403,
+  );
+  const saved = await request('/api/config', { method: 'PUT', headers, body: payload });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.data.config.name, 'Proxy dashboard');
+  assert.equal(JSON.parse(await fs.readFile(state.configPath, 'utf8')).platforms[1].accounts[0].refreshToken, 'TOKEN-VERY-SECRET');
+  assert.equal((await request('/api/config', { method: 'PUT', headers, body: payload })).status, 409);
+  assert.equal((await request('/api/logout', { method: 'POST', headers: { cookie: headers.cookie }, body: {} })).status, 403);
+  const logout = await request('/api/logout', { method: 'POST', headers, body: {} });
+  assert.equal(logout.status, 200);
+  assert.match(logout.headers['set-cookie'][0], /Secure; SameSite=Strict; Max-Age=0/);
+  assert.equal((await request('/api/session', { headers })).data.authenticated, false);
+  assert.equal((await request('/api/status', { headers })).status, 401);
 });

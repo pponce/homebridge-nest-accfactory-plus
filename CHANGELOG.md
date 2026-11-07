@@ -1,3 +1,10 @@
+## v0.5.0-beta.5
+
+- Offer three dashboard connection modes: direct HTTP, direct HTTPS with plugin certificate settings, and HTTPS through a local reverse proxy.
+- Let the proxy handle certificates and HTTP-to-HTTPS redirects while the dashboard uses HTTP on IPv4 loopback without reading or generating certificates.
+- Validate the public HTTPS origin and Host, retain secure session cookies and CSRF protection, and generate links without the internal port. Forwarded headers cannot change trust decisions.
+- Add reverse-proxy setup guidance and automated coverage for login, sessions, actions, settings, logout, and rejected requests.
+
 ## v0.5.0-beta.4
 
 - Add optional HTTP dashboard access with visible unencrypted-password warnings and separate HTTP sessions.

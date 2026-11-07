@@ -1,3 +1,19 @@
+## v0.5.0-beta.5
+
+**Three web dashboard connection modes:**
+
+- **HTTP · unencrypted:** simple direct access, with visible warnings that passwords and dashboard data travel unencrypted.
+- **HTTPS · certificates in plugin:** direct encrypted access using supplied full-chain/private-key PEM files or a generated local certificate. This remains the default.
+- **HTTPS through reverse proxy:** Nginx or another proxy on the same machine handles the browser certificate and HTTP-to-HTTPS redirect. The plugin listens over HTTP at `127.0.0.1:9444` and needs no certificate files.
+
+For proxy mode, enter the **Public HTTPS origin**, such as `https://climate.example.com`, and preserve that Host header at the proxy. Dashboard links use the public address without the internal backend port. Host, Origin, authentication and CSRF checks remain enforced, cookies retain `Secure`, `HttpOnly`, and `SameSite=Strict`, and forwarded headers cannot bypass the local-proxy restriction. The backend port is configurable; this mode supports a proxy on the same machine, not a remote proxy or a separate container network.
+
+Follow the [web dashboard setup guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.5/WEB_DASHBOARD.md). Save network changes and restart the Nest child bridge. Existing Climate Cntrl beta installations can update normally without re-pairing or changing passwords.
+
+**Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and Apple Home pairing.** Follow the [cutover instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.5/MIGRATION.md). Compatible existing legacy Google refresh-token authentication remains supported.
+
+Temperature, occupancy and room-fan rules remain **inactive drafts**; automatic rule execution is not included. Automated proxy testing does not replace validation on an individual Nginx/Homebridge installation.
+
 ## v0.5.0-beta.4
 
 **Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and Apple Home pairing.** The package is `homebridge-nest-climate-cntrl` and the platform changes from `NestAccfactory` to **`NestClimateCntrl`**. Recreate affected room assignments, scenes and automations; follow the [cutover instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.4/MIGRATION.md). Existing Climate Cntrl beta installations can update normally.

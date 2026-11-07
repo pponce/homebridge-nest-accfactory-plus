@@ -154,17 +154,21 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     const advanced = el('details');
     advanced.append(el('summary', 'Network and connection settings'));
     const network = el('div', undefined, 'grid');
-    const protocolLabel = el('label', 'Connection protocol');
+    const protocolLabel = el('label', 'Connection mode');
     const protocol = el('select');
-    protocol.setAttribute('aria-label', 'Connection protocol');
-    for (const [value, text] of [['https', 'HTTPS · encrypted'], ['http', 'HTTP · unencrypted']]) {
+    protocol.setAttribute('aria-label', 'Connection mode');
+    for (const [value, text] of [['https', 'HTTPS · certificates in plugin'], ['http', 'HTTP · unencrypted'], ['proxy', 'HTTPS through reverse proxy']]) {
       const option = el('option', text);
       option.value = value;
       protocol.append(option);
     }
-    protocol.value = settings().protocol === 'http' ? 'http' : 'https';
+    protocol.value = ['http', 'proxy'].includes(settings().protocol) ? settings().protocol : 'https';
     protocolLabel.append(protocol);
     network.append(protocolLabel);
+    const publicOrigin = input(network, 'Public HTTPS origin', settings().publicOrigin, {
+      type: 'url', placeholder: 'https://climate.example.com',
+    });
+    publicOrigin.onchange = () => update('publicOrigin', publicOrigin.value.trim());
     const bind = input(network, 'Listen address', settings().host ?? '0.0.0.0', { placeholder: '0.0.0.0' });
     bind.onchange = () => update('host', bind.value.trim());
     const port = input(network, 'Web port', settings().port ?? 9444, { type: 'number', min: 1024, max: 65535 });
@@ -188,12 +192,28 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
       'For HTTPS, leave both certificate paths empty to create a local certificate, or supply your full-chain PEM and matching private key. Homebridge must be able to read both files. Restart the Nest bridge after changing or renewing certificates.',
       'help',
     );
+    const proxyHelp = el(
+      'p',
+      'Run Nginx or another proxy on the same machine. The plugin listens over HTTP at 127.0.0.1 on the web port. The proxy handles the HTTPS certificate and HTTP-to-HTTPS redirect, and must preserve the public Host header. Enter the browser’s HTTPS origin without a path. No certificate files are needed in the plugin.',
+      'help',
+    );
     const showProtocol = () => {
       const plain = protocol.value === 'http';
+      const proxy = protocol.value === 'proxy';
       httpWarning.hidden = !plain;
-      certificate.disabled = plain;
-      key.disabled = plain;
-      connectionHelp.hidden = plain;
+      certificate.disabled = plain || proxy;
+      key.disabled = plain || proxy;
+      certificate.parentElement.hidden = proxy;
+      key.parentElement.hidden = proxy;
+      displayHost.parentElement.hidden = proxy;
+      displayHost.disabled = proxy;
+      bind.value = proxy ? '127.0.0.1' : settings().host ?? '0.0.0.0';
+      bind.disabled = proxy;
+      publicOrigin.parentElement.hidden = !proxy;
+      publicOrigin.disabled = !proxy;
+      publicOrigin.required = proxy;
+      connectionHelp.hidden = plain || proxy;
+      proxyHelp.hidden = !proxy;
     };
     protocol.onchange = () => {
       update('protocol', protocol.value);
@@ -203,6 +223,7 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     advanced.append(
       network,
       connectionHelp,
+      proxyHelp,
     );
     host.append(advanced, el('p', 'On iPhone, open the dashboard in Safari and choose Share → Add to Home Screen.', 'help'));
     showStatus();

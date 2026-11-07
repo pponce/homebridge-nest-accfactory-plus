@@ -44,13 +44,33 @@ const ipAddresses = () => {
 };
 const authority = (host, port) => (isIP(host) === 6 ? '[' + host + ']' : host) + ':' + port;
 
+const httpsOrigin = (value) => {
+  if (typeof value !== 'string' || !/^https:\/\/[^/?#\\\s]+\/?$/i.test(value)) {
+    return '';
+  }
+  try {
+    const url = new URL(value);
+    return !url.username && !url.password && hostname(url.hostname.replace(/^\[|\]$/g, '')) ? url.origin : '';
+  } catch {
+    return '';
+  }
+};
+
 export function normalizeWebDashboard(value) {
   const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const protocol = ['http', 'proxy'].includes(input.protocol) ? input.protocol : 'https';
   return {
     enabled: input.enabled === true,
-    protocol: input.protocol === 'http' ? 'http' : 'https',
-    host: typeof input.host === 'string' && (isIP(input.host) || input.host === 'localhost') ? input.host : '0.0.0.0',
+    protocol,
+    // Proxy mode deliberately supports a proxy on this machine only, even with a saved LAN bind address.
+    host:
+      protocol === 'proxy'
+        ? '127.0.0.1'
+        : typeof input.host === 'string' && (isIP(input.host) || input.host === 'localhost')
+          ? input.host
+          : '0.0.0.0',
     port: Number.isInteger(input.port) && input.port >= 1024 && input.port <= 65535 ? input.port : 9444,
+    publicOrigin: httpsOrigin(input.publicOrigin),
     displayHost: hostname(input.displayHost) ? input.displayHost : '',
     certificatePath: typeof input.certificatePath === 'string' ? input.certificatePath : '',
     keyPath: typeof input.keyPath === 'string' ? input.keyPath : '',
@@ -139,7 +159,7 @@ export class WebDashboard {
     this.log = log;
     this.auth = new WebDashboardAuth(this.directory);
     this.sessionCookie = this.options.protocol === 'http' ? HTTP_SESSION_COOKIE : SESSION_COOKIE;
-    this.cookieAttributes = '; Path=/; HttpOnly;' + (this.options.protocol === 'https' ? ' Secure;' : '') + ' SameSite=Strict; Max-Age=';
+    this.cookieAttributes = '; Path=/; HttpOnly;' + (this.options.protocol !== 'http' ? ' Secure;' : '') + ' SameSite=Strict; Max-Age=';
     this.config = new WebDashboardConfig(configPath, platformConfig, { knownDevices: () => [...dashboard.devices.keys()] });
     this.accessFactory = accessFactory ?? (() => new ClimateAccess(configPath));
     this.tlsFactory = tlsFactory;
@@ -163,8 +183,13 @@ export class WebDashboard {
       enabled: this.options.enabled,
       available: this.server?.listening === true,
       port: this.options.port,
-      protocol: this.options.protocol,
-      url: this.options.enabled ? this.options.protocol + '://' + authority(displayHost, this.options.port) : null,
+      protocol: this.options.protocol === 'proxy' ? 'https' : this.options.protocol,
+      connectionMode: this.options.protocol,
+      url: this.options.enabled
+        ? this.options.protocol === 'proxy'
+          ? this.options.publicOrigin || null
+          : this.options.protocol + '://' + authority(displayHost, this.options.port)
+        : null,
       accountConfigured: Boolean(this.auth.account),
       username: this.auth.account?.username,
       error: this.error,
@@ -179,6 +204,11 @@ export class WebDashboard {
   async startListener() {
     await this.auth.load();
     if (this.stopping || !this.options.enabled || this.server?.listening) {
+      return this.status();
+    }
+    if (this.options.protocol === 'proxy' && !this.options.publicOrigin) {
+      this.error = 'Reverse proxy mode requires a public HTTPS origin without a path, query or credentials.';
+      this.log?.warn?.(this.error);
       return this.status();
     }
     try {
@@ -291,6 +321,14 @@ export class WebDashboard {
 
   safeHost(request) {
     try {
+      if (this.options.protocol === 'proxy') {
+        // Trust the socket peer and configured origin, never Forwarded or X-Forwarded-* headers.
+        return (
+          ['127.0.0.1', '::ffff:127.0.0.1'].includes(request.socket?.remoteAddress) &&
+          typeof request.headers.host === 'string' &&
+          request.headers.host.toLowerCase() === new URL(this.options.publicOrigin).host.toLowerCase()
+        );
+      }
       const host = new URL(this.options.protocol + '://' + request.headers.host);
       const defaultPort = this.options.protocol === 'https' ? 443 : 80;
       const name = host.hostname.replace(/^\[|\]$/g, '').toLowerCase();
@@ -311,6 +349,9 @@ export class WebDashboard {
 
   sameOrigin(request) {
     try {
+      if (this.options.protocol === 'proxy') {
+        return Boolean(this.options.publicOrigin) && request.headers.origin === this.options.publicOrigin;
+      }
       const origin = new URL(request.headers.origin);
       return (
         origin.protocol === this.options.protocol + ':' &&
