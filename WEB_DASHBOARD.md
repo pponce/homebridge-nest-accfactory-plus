@@ -1,6 +1,6 @@
 # Climate dashboard
 
-The optional standalone dashboard gives Nest Climate Cntrl its own web address. Use a computer, tablet, or phone to see thermostat status, choose supported controls, inspect sensors, and organize climate rule drafts.
+The optional standalone dashboard gives Nest Climate Cntrl its own web address over HTTPS or optional HTTP. Use a computer, tablet, or phone to see thermostat status, choose supported controls, inspect sensors, and organize climate rule drafts.
 
 This feature is available in 0.5.0-beta.2 and is under beta testing. Automatic room-temperature control, room-fan actions, and combined occupancy rules are not enabled by saving a draft.
 
@@ -11,9 +11,27 @@ This feature is available in 0.5.0-beta.2 and is under beta testing. Automatic r
 3. Select **Enable standalone dashboard**. Save with Homebridge's **Save** button and restart the Nest child bridge.
 4. Select **Refresh web access**, then **Open climate dashboard**. The default HTTPS port is **9444**.
 
-The plugin creates a local self-signed HTTPS certificate when you have not supplied one. OpenSSL must be available on the Homebridge host. Your browser will ask you to trust the certificate before the first visit. Under **Network and HTTPS settings**, you can choose a listen address and port, set the address used in links, or supply both a certificate and private-key file.
+The plugin creates a local self-signed HTTPS certificate when you have not supplied one. OpenSSL must be available on the Homebridge host. Your browser will ask you to trust the certificate before the first visit. Under **Network and connection settings**, you can choose a listen address and port, set the address used in links, or supply both a certificate and private-key file.
 
 The web server is off by default. Enable it on the network where you intend to use it. With a reverse proxy, set the public hostname under **Address shown in dashboard links**, forward to the dashboard's HTTPS port, and preserve that hostname in the upstream Host header. Use a certificate trusted by the proxy or explicitly trust the local certificate. Visit the proxy's HTTPS address directly; the Homebridge link includes the dashboard's listening port.
+
+## HTTP mode
+
+HTTPS is the default. Under **Network and connection settings → Connection protocol**, choose **HTTP · unencrypted**, save and restart the Nest bridge. The port remains configurable; the default is 9444. Open `http://<homebridge-host>:9444`.
+
+**HTTP sends passwords and dashboard data unencrypted. Use it only on a trusted local network.** This warning appears in setup, before sign-in, in the dashboard and in the startup log. HTTP still requires the web login and validates browser origins and changes. It does not generate or read TLS certificates. Certificate paths stay saved for switching back to HTTPS.
+
+## Use a hostname and trusted certificate
+
+1. Point your internal DNS hostname, such as `climate.example.com`, to the Homebridge host's LAN address.
+2. Keep **Connection protocol** set to **HTTPS**. Keep **Listen address** at `0.0.0.0` or select the host's LAN IP. Keep **Web port** at `9444` unless that port is already in use.
+3. Set **Address shown in dashboard links** to the hostname only, without `https://`, a port or a path.
+4. Set **TLS certificate path** to the full-chain PEM file (server certificate followed by its intermediate certificates). Set **TLS private key path** to the matching PEM private-key file. The files must exist on the Homebridge host and be readable by its service user; keep the private key restricted.
+5. Save, restart the Nest child bridge and open `https://climate.example.com:9444`. Use the hostname covered by the certificate, rather than its IP address. A trusted, valid certificate covering the hostname avoids the certificate warning.
+
+A wildcard certificate for `*.example.com` can cover `climate.example.com`. Restart the Nest child bridge after replacing or renewing certificate files; the listener reads them at startup.
+
+To use `https://climate.example.com` without a port, put Nginx or another reverse proxy on port 443. The plugin listens on ports 1024–65535. Keep the dashboard backend on HTTPS and preserve the external Host header. Verify the backend certificate using a trusted chain or an explicitly trusted local certificate. HTTP mode is for direct HTTP access and does not trust forwarded headers to turn an HTTP connection into an HTTPS browser origin.
 
 ## What you can do
 

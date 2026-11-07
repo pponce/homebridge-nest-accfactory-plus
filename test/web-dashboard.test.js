@@ -4,9 +4,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import https from 'node:https';
+import http from 'node:http';
 import net from 'node:net';
 import crypto from 'node:crypto';
-import { WebDashboardAuth, SESSION_COOKIE } from '../src/web-dashboard-auth.js';
+import { WebDashboardAuth, SESSION_COOKIE, HTTP_SESSION_COOKIE } from '../src/web-dashboard-auth.js';
 import { WebDashboardConfig, validateRuleDrafts } from '../src/web-dashboard-config.js';
 import { WebDashboard, normalizeWebDashboard, loadWebCertificate } from '../src/web-dashboard.js';
 
@@ -292,6 +293,102 @@ test('HTTPS API requires allowed hosts, a local session, matching origin and CSR
   assert.equal((await call(server, '/api/logout', { method: 'POST', cookie, csrf, body: {} })).status, 200);
   assert.equal((await call(server, '/api/status', { cookie })).status, 401);
   assert.match(login.headers['content-security-policy'], /frame-ancestors 'none'/);
+});
+
+test('HTTP is explicit and keeps origin, CSRF and session-cookie separation', async (t) => {
+  const state = await fixture(t);
+  assert.equal(normalizeWebDashboard().protocol, 'https');
+  assert.equal(normalizeWebDashboard({ protocol: 'invalid' }).protocol, 'https');
+  const server = new WebDashboard({ ...state, platformConfig: { ...state.block, webDashboard: { enabled: true, protocol: 'http' } } });
+  await server.setupAccount({ username: 'admin', password: 'eight888' });
+  assert.equal(server.status().protocol, 'http');
+  assert.match(server.status().url, /^http:/);
+  const loginOptions = { method: 'POST', body: { username: 'admin', password: 'eight888' }, origin: 'http://localhost:9444' };
+  assert.equal((await call(server, '/api/login', { ...loginOptions, origin: 'https://localhost:9444' })).status, 403);
+  assert.equal((await call(server, '/api/login', { ...loginOptions, origin: null })).status, 403);
+  assert.equal((await call(server, '/api/login', { ...loginOptions, host: 'attacker.example:9444' })).status, 403);
+  const login = await call(server, '/api/login', loginOptions);
+  assert.equal(login.status, 200);
+  assert.ok(login.headers['set-cookie'].startsWith(HTTP_SESSION_COOKIE + '='));
+  assert.match(login.headers['set-cookie'], /HttpOnly; SameSite=Strict/);
+  assert.doesNotMatch(login.headers['set-cookie'], /Secure|Domain=/);
+  const cookie = login.headers['set-cookie'].split(';')[0];
+  const options = { cookie, origin: 'http://localhost:9444' };
+  const csrf = login.data.csrfToken;
+  assert.equal((await call(server, '/api/status', options)).status, 200);
+  assert.equal((await call(server, '/api/command', { ...options, method: 'POST', body: {} })).status, 403);
+  assert.equal(
+    (await call(server, '/api/command', { ...options, method: 'POST', body: {}, csrf, origin: 'http://other.local:9444' })).status,
+    403,
+  );
+  assert.equal((await call(server, '/api/command', { ...options, method: 'POST', body: { action: 'eco' }, csrf })).status, 200);
+  assert.equal(
+    (await call(server, '/api/status', { ...options, cookie: cookie.replace(HTTP_SESSION_COOKIE, SESSION_COOKIE) })).status,
+    401,
+  );
+  const secure = new WebDashboard({ ...state, platformConfig: state.block });
+  secure.auth.sessions = server.auth.sessions;
+  assert.equal((await call(secure, '/api/status', { cookie })).status, 401);
+  const logout = await call(server, '/api/logout', { ...options, method: 'POST', body: {}, csrf });
+  assert.equal(logout.status, 200);
+  assert.equal(logout.headers['set-cookie'], HTTP_SESSION_COOKIE + '=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+  assert.equal((await call(server, '/api/status', options)).status, 401);
+  await server.stop();
+  await secure.stop();
+  for (const protocol of ['http', 'https']) {
+    const custom = new WebDashboard({
+      ...state,
+      platformConfig: { ...state.block, webDashboard: { protocol, displayHost: 'climate.example.com' } },
+    });
+    assert.equal(custom.safeHost({ headers: { host: 'climate.example.com' } }), true);
+    assert.equal(custom.safeHost({ headers: { host: 'climate.example.com:12345' } }), false);
+    assert.equal(custom.sameOrigin({ headers: { host: 'climate.example.com', origin: protocol + '://climate.example.com' } }), true);
+  }
+});
+
+test('HTTP listener works without TLS and warns about unencrypted passwords', async (t) => {
+  const state = await fixture(t);
+  const warnings = [];
+  let tlsCalls = 0;
+  const server = new WebDashboard({
+    ...state,
+    platformConfig: { ...state.block, webDashboard: { enabled: true, protocol: 'http', host: '127.0.0.1', certificatePath: '/unused' } },
+    tlsFactory: async () => {
+      tlsCalls++;
+      throw new Error('TLS must not run in HTTP mode');
+    },
+    log: { warn: (message) => warnings.push(message) },
+  });
+  t.after(() => server.stop());
+  await server.setupAccount({ username: 'admin', password: 'eight888' });
+  server.options.port = 0;
+  await server.start();
+  assert.equal(server.status().available, true);
+  assert.equal(tlsCalls, 0);
+  assert.match(warnings.join(' '), /Passwords.*unencrypted/);
+  await assert.rejects(fs.access(path.join(server.directory, 'web-private-key.pem')));
+  server.options.port = server.server.address().port;
+  const origin = 'http://127.0.0.1:' + server.options.port;
+  const result = await new Promise((resolve, reject) => {
+    const request = http.request(
+      origin + '/api/login',
+      { method: 'POST', headers: { origin, 'content-type': 'application/json' } },
+      (response) => {
+        let body = '';
+        response.on('data', (part) => {
+          body += part;
+        });
+        response.on('end', () => resolve({ status: response.statusCode, body: JSON.parse(body), cookie: response.headers['set-cookie'] }));
+      },
+    );
+    request.on('error', reject);
+    request.end(JSON.stringify({ username: 'admin', password: 'eight888' }));
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.body.authenticated, true);
+  assert.ok(result.cookie[0].startsWith(HTTP_SESSION_COOKIE + '='));
+  await server.stop();
+  assert.equal(server.status().available, false);
 });
 
 test('source discovery is shared, read-only and closed with the dashboard', async (t) => {

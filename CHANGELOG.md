@@ -1,3 +1,8 @@
+## Unreleased
+
+- Add optional HTTP dashboard access with visible unencrypted-password warnings and separate HTTP sessions.
+- Keep HTTPS as the default and document trusted certificates and hostname setup.
+
 ## v0.5.0-beta.3
 
 - Allow web dashboard passwords of 8–128 characters in server validation and Homebridge setup; existing passwords remain valid.

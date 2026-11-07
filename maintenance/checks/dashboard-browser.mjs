@@ -35,7 +35,7 @@ try {
         if (!window.available) { throw new Error('Fixture offline'); }
         if (path === '/sources') { return { bridges: [], sources: [{ id: 'external', provider: 'homebridge', kind: 'temperature', name: 'Office sensor', bridgeName: 'Rooms', available: true, temperature: 19, lastReadAt: Date.now(), measuredAt: null }] }; }
         if (path === '/status') { return structuredClone(status); }
-        if (path === '/web/status') { return { enabled: false, available: false, accountConfigured: window.webAccounts.length > 0 }; }
+        if (path === '/web/status') { return { enabled: false, available: false, accountConfigured: window.webAccounts.length > 0, ...window.webStatus }; }
         if (path === '/web/account') { window.webAccounts.push(data); return { accountConfigured: true }; }
         window.commands.push(data); return { accepted: true, message: 'Accepted' };
       },
@@ -61,6 +61,20 @@ try {
   await page.getByRole('button', { name: 'Update web login', exact: true }).waitFor();
   assert.equal(await page.getByLabel('Web password', { exact: true }).inputValue(), '');
   assert.equal(await page.evaluate(() => window.webAccounts[0].password), 'eight888');
+  await page.getByText('Network and connection settings', { exact: true }).click();
+  assert.equal(await page.getByLabel('Connection protocol', { exact: true }).inputValue(), 'https');
+  await page.getByLabel('Connection protocol', { exact: true }).selectOption('http');
+  await page.waitForFunction(() => window.saved.at(-1)[0].webDashboard?.protocol === 'http');
+  assert.equal(await page.getByText('HTTP sends passwords and dashboard data unencrypted. Use only on a trusted local network.', { exact: true }).isVisible(), true);
+  assert.equal(await page.getByLabel('TLS certificate path', { exact: true }).isDisabled(), true);
+  await page.evaluate(() => { window.webStatus = { enabled: true, available: true, url: 'http://climate.local:9444' }; });
+  await page.getByRole('button', { name: 'Refresh web access', exact: true }).click();
+  await page.getByRole('link', { name: 'Open climate dashboard', exact: false }).waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Open climate dashboard', exact: false }).getAttribute('href'), 'http://climate.local:9444/');
+  await page.getByLabel('Connection protocol', { exact: true }).selectOption('https');
+  await page.waitForFunction(() => window.saved.at(-1)[0].webDashboard?.protocol === 'https');
+  assert.equal(await page.getByText('HTTP sends passwords and dashboard data unencrypted. Use only on a trusted local network.', { exact: true }).isVisible(), false);
+  assert.equal(await page.getByLabel('TLS certificate path', { exact: true }).isEnabled(), true);
   await page.getByLabel('Enable standalone dashboard', { exact: true }).check();
   await page.waitForFunction(() => window.saved.at(-1)[0].webDashboard?.enabled === true);
   assert.equal(await page.evaluate(() => JSON.stringify(window.saved).includes('eight888')), false);

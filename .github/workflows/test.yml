@@ -66,8 +66,22 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - name: Test configuration dashboard in Chromium
+      - name: Prepare dashboard browser checks
         shell: bash
         run: |
           npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
-          PLAYWRIGHT_MODULE="$RUNNER_TEMP/climate-browser/node_modules/playwright" CHROMIUM_PATH="$(command -v google-chrome)" node maintenance/checks/dashboard-browser.mjs
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/climate-browser/node_modules/playwright" >> "$GITHUB_ENV"
+          echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          echo "REVIEW_OUTPUT_DIR=$RUNNER_TEMP/climate-dashboard-review" >> "$GITHUB_ENV"
+      - name: Test embedded and standalone dashboards
+        id: browser
+        continue-on-error: true
+        run: node maintenance/checks/run-dashboard-browser.mjs
+      - name: "${{ steps.browser.outputs.detail }}"
+        if: always() && steps.browser.outcome != 'skipped'
+        run: test '${{ steps.browser.outcome }}' = 'success'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-browser-review
+          path: ${{ runner.temp }}/climate-dashboard-review

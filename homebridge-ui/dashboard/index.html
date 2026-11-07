@@ -28,6 +28,7 @@
           <span class="eyebrow">Your home, connected</span><h2 id="login-title">Welcome home.</h2>
           <p id="login-help">Sign in with your Climate Cntrl web account.</p>
           <p id="login-error" class="callout danger" role="alert" hidden></p>
+          <div id="http-login-warning" class="callout warning" role="note" hidden>HTTP connection: passwords and dashboard data travel unencrypted. Use only on a trusted local network.</div>
           <form id="login-form">
             <label>Username<input id="username" name="username" autocomplete="username" required maxlength="64" /></label>
             <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required maxlength="128" /></label>
@@ -58,6 +59,7 @@
           <div><div class="eyebrow" id="page-eyebrow">Your home at a glance</div><h1 id="page-title" tabindex="-1">Climate overview</h1></div>
           <div class="header-actions"><span id="connection-state" class="status-pill neutral" role="status">Connecting</span><button id="refresh-status" class="icon-button outlined" type="button" aria-label="Refresh status" title="Refresh status"><span data-icon="refresh"></span></button></div>
         </header>
+        <div id="http-session-warning" class="callout warning" role="note" hidden>HTTP connection: passwords and dashboard data travel unencrypted. Use only on a trusted local network.</div>
         <div id="notice" class="callout" role="status" hidden></div>
 
         <section id="page-overview" data-section="overview">

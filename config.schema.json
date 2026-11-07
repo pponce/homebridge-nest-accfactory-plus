@@ -274,7 +274,7 @@
           "enabled": {
             "type": "boolean",
             "default": false,
-            "title": "Enable standalone HTTPS dashboard"
+            "title": "Enable standalone dashboard"
           },
           "host": {
             "type": "string",
@@ -286,7 +286,7 @@
             "default": 9444,
             "minimum": 1024,
             "maximum": 65535,
-            "title": "HTTPS port"
+            "title": "Web port"
           },
           "displayHost": {
             "type": "string",
@@ -299,6 +299,16 @@
           "keyPath": {
             "type": "string",
             "title": "TLS private key file"
+          },
+          "protocol": {
+            "type": "string",
+            "title": "Connection protocol",
+            "enum": [
+              "https",
+              "http"
+            ],
+            "default": "https",
+            "description": "HTTPS encrypts the connection. HTTP sends passwords and dashboard data unencrypted; use only on a trusted local network."
           }
         }
       }
@@ -490,15 +500,23 @@
       "title": "Web dashboard",
       "expandable": true,
       "expanded": false,
-      "description": "Open the climate dashboard in its own browser window. HTTPS uses a local certificate unless certificate files are supplied. Create the separate web account in the custom settings page.",
+      "description": "Open the climate dashboard in its own browser window. HTTPS is the default. HTTP sends passwords and dashboard data unencrypted. Create the separate web account in the custom settings page.",
       "items": [
         {
           "key": "webDashboard.enabled",
-          "title": "Enable standalone HTTPS dashboard"
+          "title": "Enable standalone dashboard"
+        },
+        {
+          "key": "webDashboard.protocol",
+          "title": "Connection protocol",
+          "titleMap": {
+            "https": "HTTPS · encrypted",
+            "http": "HTTP · unencrypted"
+          }
         },
         {
           "key": "webDashboard.port",
-          "title": "HTTPS port"
+          "title": "Web port"
         },
         {
           "key": "webDashboard.host",

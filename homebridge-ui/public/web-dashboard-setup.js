@@ -45,7 +45,7 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     if (live?.available && typeof live.url === 'string') {
       try {
         const url = new URL(live.url);
-        if (url.protocol === 'https:' && !url.username && !url.password) {
+        if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password) {
           openLink.href = url.href;
           openLink.hidden = false;
         }
@@ -100,6 +100,14 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     toggle.onchange = () => update('enabled', toggle.checked);
     enable.append(toggle, document.createTextNode('Enable standalone dashboard'));
     host.append(enable, el('p', 'Save with Homebridge’s Save button and restart the Nest bridge to apply network settings.', 'help'));
+    const httpWarning = el(
+      'p',
+      'HTTP sends passwords and dashboard data unencrypted. Use only on a trusted local network.',
+      'notice',
+    );
+    httpWarning.setAttribute('role', 'note');
+    httpWarning.hidden = settings().protocol !== 'http';
+    host.append(httpWarning);
     const grid = el('div', undefined, 'grid');
     username = input(grid, 'Web username', live?.username ?? 'admin', { autocomplete: 'username', maxLength: 64 });
     password = input(grid, 'Web password', '', { type: 'password', autocomplete: 'new-password', minLength: 8, maxLength: 128 });
@@ -144,11 +152,21 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     message.setAttribute('role', 'status');
     host.append(actions, message);
     const advanced = el('details');
-    advanced.append(el('summary', 'Network and HTTPS settings'));
+    advanced.append(el('summary', 'Network and connection settings'));
     const network = el('div', undefined, 'grid');
+    const protocolLabel = el('label', 'Connection protocol');
+    const protocol = el('select');
+    for (const [value, text] of [['https', 'HTTPS · encrypted'], ['http', 'HTTP · unencrypted']]) {
+      const option = el('option', text);
+      option.value = value;
+      protocol.append(option);
+    }
+    protocol.value = settings().protocol === 'http' ? 'http' : 'https';
+    protocolLabel.append(protocol);
+    network.append(protocolLabel);
     const bind = input(network, 'Listen address', settings().host ?? '0.0.0.0', { placeholder: '0.0.0.0' });
     bind.onchange = () => update('host', bind.value.trim());
-    const port = input(network, 'HTTPS port', settings().port ?? 9444, { type: 'number', min: 1024, max: 65535 });
+    const port = input(network, 'Web port', settings().port ?? 9444, { type: 'number', min: 1024, max: 65535 });
     port.onchange = () => {
       if (port.checkValidity()) {
         update('port', Number(port.value));
@@ -164,13 +182,26 @@ export function mountWebDashboardSetup({ host, homebridge, getConfig, changed })
     certificate.onchange = () => update('certificatePath', certificate.value.trim());
     const key = input(network, 'TLS private key path', settings().keyPath, { placeholder: 'Optional PEM file' });
     key.onchange = () => update('keyPath', key.value.trim());
+    const connectionHelp = el(
+      'p',
+      'For HTTPS, leave both certificate paths empty to create a local certificate, or supply your full-chain PEM and matching private key. Homebridge must be able to read both files. Restart the Nest bridge after changing or renewing certificates.',
+      'help',
+    );
+    const showProtocol = () => {
+      const plain = protocol.value === 'http';
+      httpWarning.hidden = !plain;
+      certificate.disabled = plain;
+      key.disabled = plain;
+      connectionHelp.hidden = plain;
+    };
+    protocol.onchange = () => {
+      update('protocol', protocol.value);
+      showProtocol();
+    };
+    showProtocol();
     advanced.append(
       network,
-      el(
-        'p',
-        'Leave certificate paths empty to use a local self-signed HTTPS certificate. Your browser will ask you to trust it on the first visit. Use both paths when supplying your own certificate.',
-        'help',
-      ),
+      connectionHelp,
     );
     host.append(advanced, el('p', 'On iPhone, open the dashboard in Safari and choose Share → Add to Home Screen.', 'help'));
     showStatus();

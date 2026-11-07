@@ -2,6 +2,7 @@ import { nextSetpoint } from '/shared/climate-utils.js';
 import { sensorSources, previewGroup } from '/shared/sensor-preview.js';
 
 const $ = (id) => document.getElementById(id);
+for (const id of ['http-login-warning', 'http-session-warning']) $(id).hidden = window.location.protocol !== 'http:';
 const iconPaths = {
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
   sensors: '<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4m8.4-8.4a6 6 0 0 1 0 8.4M4.6 4.6a10.5 10.5 0 0 0 0 14.8m14.8-14.8a10.5 10.5 0 0 1 0 14.8"/>',

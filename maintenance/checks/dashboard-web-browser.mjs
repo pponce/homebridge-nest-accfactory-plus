@@ -137,6 +137,7 @@ try {
   const base = 'http://127.0.0.1:' + server.address().port;
   await page.goto(base);
   await page.getByRole('heading', { name: 'Welcome home.' }).waitFor();
+  assert.equal(await page.locator('#http-login-warning').isVisible(), true);
   await capture('login-desktop.png');
   await page.getByLabel('Username', { exact: true }).fill('admin');
   await page.getByLabel('Password', { exact: true }).fill('fixture-password');
@@ -144,6 +145,18 @@ try {
   await page.getByText('Connected', { exact: true }).waitFor();
   await page.getByRole('heading', { name: 'Living room', exact: true }).waitFor();
   await checkTextContrast();
+  assert.equal(await page.locator('#http-session-warning').isVisible(), true);
+  const securePage = await browser.newPage();
+  await securePage.route('https://climate.example.test/**', async (route) => {
+    const url = new URL(route.request().url());
+    const response = await route.fetch({ url: base + url.pathname + url.search });
+    await route.fulfill({ response });
+  });
+  await securePage.goto('https://climate.example.test/');
+  await securePage.locator('#app').waitFor({ state: 'visible' });
+  assert.equal(await securePage.locator('#http-login-warning').isVisible(), false);
+  assert.equal(await securePage.locator('#http-session-warning').isVisible(), false);
+  await securePage.close();
   await capture('overview-desktop.png');
   assert.equal(await page.locator('#password').inputValue(), '');
   assert.equal(await page.getByLabel('Turn Eco on for Living room').isEnabled(), true);

@@ -11,7 +11,7 @@ Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a clima
 ## What's included
 
 - **Climate dashboard:** thermostat temperature, target, heating/cooling state, connection status and diagnostics.
-- **Web dashboard:** optional direct HTTPS access from a computer or phone, separate sign-in, saved settings, sensor discovery and draft rule editors. See [web dashboard setup](WEB_DASHBOARD.md).
+- **Web dashboard:** optional direct HTTPS or HTTP access from a computer or phone, separate sign-in, saved settings, sensor discovery and draft rule editors. See [web dashboard setup](WEB_DASHBOARD.md).
 - **Legacy Google authentication:** keeps support for compatible existing refresh tokens. If you already have a working legacy token, you can continue using it; this plugin cannot issue a new one.
 - **Eco switches:** optional Apple Home switches to enter and leave Eco mode.
 - **Native room sensors:** readings from associated Nest Temperature Sensors and a **Temperature controlled by** selector.
@@ -52,7 +52,7 @@ Open **Plugins → Nest Climate Cntrl → Settings → Web dashboard**, create a
 
 The phone-friendly interface shows thermostat status, native controls, sensors, schedules and runtime. It also lets you save supported settings and prepare temperature, occupancy and room-fan rule drafts. **These drafts are inactive; saving one does not control your devices.**
 
-On iPhone, open the address in Safari and choose **Share → Add to Home Screen** for the plum app icon. The default local HTTPS certificate needs browser trust; you can supply a trusted certificate instead. Web access is off by default. See [complete setup and network options](WEB_DASHBOARD.md).
+On iPhone, open the address in Safari and choose **Share → Add to Home Screen** for the plum app icon. The default local HTTPS certificate needs browser trust; you can supply a trusted certificate instead. Web access is off by default. Optional HTTP mode displays a warning because passwords and dashboard data travel unencrypted; HTTPS remains the default. See [complete setup and network options](WEB_DASHBOARD.md).
 
 ## Help and credits
 

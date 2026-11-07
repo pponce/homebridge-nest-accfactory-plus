@@ -1,4 +1,5 @@
 import https from 'node:https';
+import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -8,7 +9,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { WebDashboardAuth, SESSION_COOKIE } from './web-dashboard-auth.js';
+import { WebDashboardAuth, SESSION_COOKIE, HTTP_SESSION_COOKIE } from './web-dashboard-auth.js';
 import { WebDashboardConfig, DashboardConfigError } from './web-dashboard-config.js';
 import { ClimateAccess } from '../homebridge-ui/climate-access.js';
 
@@ -47,6 +48,7 @@ export function normalizeWebDashboard(value) {
   const input = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   return {
     enabled: input.enabled === true,
+    protocol: input.protocol === 'http' ? 'http' : 'https',
     host: typeof input.host === 'string' && (isIP(input.host) || input.host === 'localhost') ? input.host : '0.0.0.0',
     port: Number.isInteger(input.port) && input.port >= 1024 && input.port <= 65535 ? input.port : 9444,
     displayHost: hostname(input.displayHost) ? input.displayHost : '',
@@ -136,6 +138,8 @@ export class WebDashboard {
     this.dashboard = dashboard;
     this.log = log;
     this.auth = new WebDashboardAuth(this.directory);
+    this.sessionCookie = this.options.protocol === 'http' ? HTTP_SESSION_COOKIE : SESSION_COOKIE;
+    this.cookieAttributes = '; Path=/; HttpOnly;' + (this.options.protocol === 'https' ? ' Secure;' : '') + ' SameSite=Strict; Max-Age=';
     this.config = new WebDashboardConfig(configPath, platformConfig, { knownDevices: () => [...dashboard.devices.keys()] });
     this.accessFactory = accessFactory ?? (() => new ClimateAccess(configPath));
     this.tlsFactory = tlsFactory;
@@ -159,7 +163,8 @@ export class WebDashboard {
       enabled: this.options.enabled,
       available: this.server?.listening === true,
       port: this.options.port,
-      url: this.options.enabled ? 'https://' + authority(displayHost, this.options.port) : null,
+      protocol: this.options.protocol,
+      url: this.options.enabled ? this.options.protocol + '://' + authority(displayHost, this.options.port) : null,
       accountConfigured: Boolean(this.auth.account),
       username: this.auth.account?.username,
       error: this.error,
@@ -178,11 +183,14 @@ export class WebDashboard {
     }
     try {
       await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
-      const tls = await this.tlsFactory(this.directory, this.options, [...this.allowedHosts], this.closing.signal);
+      const tls =
+        this.options.protocol === 'https'
+          ? await this.tlsFactory(this.directory, this.options, [...this.allowedHosts], this.closing.signal)
+          : undefined;
       if (this.stopping) {
         return this.status();
       }
-      this.server = https.createServer({ ...tls, minVersion: 'TLSv1.2' }, (request, response) => {
+      const listener = (request, response) => {
         this.handle(request, response).catch(() => {
           if (!response.headersSent) {
             this.send(response, 500, { error: 'The dashboard request could not be completed.' });
@@ -190,7 +198,9 @@ export class WebDashboard {
             response.destroy();
           }
         });
-      });
+      };
+      this.server =
+        this.options.protocol === 'https' ? https.createServer({ ...tls, minVersion: 'TLSv1.2' }, listener) : http.createServer(listener);
       this.server.requestTimeout = 15000;
       this.server.headersTimeout = 10000;
       this.server.keepAliveTimeout = 5000;
@@ -199,13 +209,21 @@ export class WebDashboard {
         this.server.listen(this.options.port, this.options.host, resolve);
       });
       this.server.on('error', () => {
-        this.error = 'The HTTPS listener is unavailable.';
+        this.error = 'The ' + this.options.protocol.toUpperCase() + ' listener is unavailable.';
       });
       this.error = undefined;
       this.log?.info?.('Climate web dashboard: %s', this.status().url);
+      if (this.options.protocol === 'http') {
+        this.log?.warn?.(
+          'Climate dashboard uses HTTP. Passwords and dashboard data travel unencrypted; use only on a trusted local network.',
+        );
+      }
     } catch {
       if (!this.stopping) {
-        this.error = 'HTTPS dashboard could not start. Check the selected port, OpenSSL and certificate settings.';
+        this.error =
+          this.options.protocol === 'https'
+            ? 'HTTPS dashboard could not start. Check the selected port, OpenSSL and certificate settings.'
+            : 'HTTP dashboard could not start. Check the selected port and listen address.';
         this.log?.warn?.(this.error);
       }
       if (this.server?.listening) {
@@ -273,7 +291,8 @@ export class WebDashboard {
 
   safeHost(request) {
     try {
-      const host = new URL('https://' + request.headers.host);
+      const host = new URL(this.options.protocol + '://' + request.headers.host);
+      const defaultPort = this.options.protocol === 'https' ? 443 : 80;
       const name = host.hostname.replace(/^\[|\]$/g, '').toLowerCase();
       return (
         this.allowedHosts.has(name) &&
@@ -282,8 +301,8 @@ export class WebDashboard {
         host.pathname === '/' &&
         !host.search &&
         !host.hash &&
-        (Number(host.port || 443) === this.options.port ||
-          (name === this.options.displayHost.toLowerCase() && Number(host.port || 443) === 443))
+        (Number(host.port || defaultPort) === this.options.port ||
+          (name === this.options.displayHost.toLowerCase() && Number(host.port || defaultPort) === defaultPort))
       );
     } catch {
       return false;
@@ -294,7 +313,7 @@ export class WebDashboard {
     try {
       const origin = new URL(request.headers.origin);
       return (
-        origin.protocol === 'https:' &&
+        origin.protocol === this.options.protocol + ':' &&
         origin.host.toLowerCase() === request.headers.host.toLowerCase() &&
         origin.pathname === '/' &&
         !origin.username &&
@@ -333,7 +352,7 @@ export class WebDashboard {
         response.end(bytes);
         return;
       }
-      const { token, session } = this.auth.session(request.headers.cookie);
+      const { token, session } = this.auth.session(request.headers.cookie, this.sessionCookie);
       if (request.method === 'GET' && route === '/api/session') {
         this.send(response, 200, {
           authenticated: Boolean(session),
@@ -356,7 +375,7 @@ export class WebDashboard {
         }
         response.setHeader(
           'Set-Cookie',
-          SESSION_COOKIE + '=' + result.token + '; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800',
+          this.sessionCookie + '=' + result.token + this.cookieAttributes + '28800',
         );
         this.send(response, 200, {
           authenticated: true,
@@ -380,7 +399,7 @@ export class WebDashboard {
       }
       if (request.method === 'POST' && route === '/api/logout') {
         this.auth.revoke(token);
-        response.setHeader('Set-Cookie', SESSION_COOKIE + '=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0');
+        response.setHeader('Set-Cookie', this.sessionCookie + '=' + this.cookieAttributes + '0');
         this.send(response, 200, { authenticated: false });
         return;
       }

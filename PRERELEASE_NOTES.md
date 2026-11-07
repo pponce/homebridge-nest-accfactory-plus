@@ -1,3 +1,10 @@
+## Next beta — unreleased
+
+- Add optional HTTP access for the standalone dashboard. HTTPS remains the default.
+- Show that passwords and dashboard data travel unencrypted when HTTP is selected, before sign-in, in the dashboard and in startup logs.
+- Retain authentication, origin checks and CSRF validation in HTTP mode, with separate HTTP and HTTPS session cookies.
+- Add hostname, wildcard certificate, file-access and reverse-proxy setup guidance in [Web dashboard](WEB_DASHBOARD.md).
+
 ## v0.5.0-beta.3
 
 **Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and Apple Home pairing.** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Recreate affected room assignments, scenes and automations; follow the [cutover instructions](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.3/MIGRATION.md). Existing Climate Cntrl beta.1/beta.2 installations can update normally.

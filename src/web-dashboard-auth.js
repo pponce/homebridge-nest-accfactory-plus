@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 const scrypt = promisify(crypto.scrypt);
 const SESSION_AGE = 8 * 60 * 60 * 1000;
 export const SESSION_COOKIE = '__Host-nest-climate';
+export const HTTP_SESSION_COOKIE = 'nest-climate-http';
 
 export class WebDashboardAuth {
   constructor(directory, { now = Date.now } = {}) {
@@ -129,13 +130,13 @@ export class WebDashboardAuth {
     }
   }
 
-  session(cookie = '') {
+  session(cookie = '', cookieName = SESSION_COOKIE) {
     this.prune();
     const token = cookie
       .split(';')
       .map((entry) => entry.trim())
-      .find((entry) => entry.startsWith(SESSION_COOKIE + '='))
-      ?.slice(SESSION_COOKIE.length + 1);
+      .find((entry) => entry.startsWith(cookieName + '='))
+      ?.slice(cookieName.length + 1);
     return /^[a-f0-9]{64}$/.test(token ?? '') ? { token, session: this.sessions.get(token) } : {};
   }
 
