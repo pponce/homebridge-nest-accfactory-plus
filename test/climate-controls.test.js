@@ -162,4 +162,3 @@ test('preset switch awaits command, resets after acceptance, and propagates erro
   await assert.rejects(service.onSet(true), /failed/);
   await assert.rejects(f.device.runFanPreset(999));
 });
-

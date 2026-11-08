@@ -38,9 +38,13 @@ async function fixture(t) {
           throw new Error('Write timed out after delivery');
         }
         fanValue = JSON.parse(options.body).characteristics[0].value;
-        return { status: putStatus, ok: putStatus < 300, json: async () => ({
-          characteristics: [{ aid: 2, iid: 21, status: putStatus === 207 ? 0 : -70402 }],
-        }) };
+        return {
+          status: putStatus,
+          ok: putStatus < 300,
+          json: async () => ({
+            characteristics: [{ aid: 2, iid: 21, status: putStatus === 207 ? 0 : -70402 }],
+          }),
+        };
       }
       if (failed) {
         return { status: 470, ok: false };
@@ -102,9 +106,15 @@ async function fixture(t) {
     access,
     client,
     requests,
-    fanValue: (value) => { fanValue = value; },
-    putStatus: (value) => { putStatus = value; },
-    failWrite: () => { writeFailure = true; },
+    fanValue: (value) => {
+      fanValue = value;
+    },
+    putStatus: (value) => {
+      putStatus = value;
+    },
+    failWrite: () => {
+      writeFailure = true;
+    },
     fail: () => {
       failed = true;
     },

@@ -32,7 +32,8 @@ export class ClimatePresence {
       }
       const { Service, Characteristic } = this.api.hap;
       accessory.displayName = rule.name;
-      accessory.getService(Service.AccessoryInformation)
+      accessory
+        .getService(Service.AccessoryInformation)
         .setCharacteristic(Characteristic.Manufacturer, 'Nest Climate Cntrl')
         .setCharacteristic(Characteristic.Model, 'Combined climate presence')
         .setCharacteristic(Characteristic.SerialNumber, 'CLIMATE-PRESENCE-' + id)

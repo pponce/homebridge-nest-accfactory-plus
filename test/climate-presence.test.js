@@ -12,9 +12,12 @@ function fixture(cached = []) {
       this.context = {};
     }
   }
-  const api = { hap, platformAccessory: PlatformAccessory,
+  const api = {
+    hap,
+    platformAccessory: PlatformAccessory,
     registerPlatformAccessories: (...args) => registered.push(args),
-    unregisterPlatformAccessories: (...args) => removed.push(args) };
+    unregisterPlatformAccessories: (...args) => removed.push(args),
+  };
   return { registered, removed, api, presence: new ClimatePresence(api, cached, 'AA:BB:CC:DD:EE:FF') };
 }
 

@@ -977,19 +977,26 @@ export default class NestAccfactory {
   }
 
   async #set(uuid, nest_google_device_uuid, values, origin) {
-    if (!origin?.automation && values && ['target_temperature', 'target_temperature_low', 'target_temperature_high',
-      'hvac_mode', 'eco_mode', 'temperature_sensor'].some((key) => Object.hasOwn(values, key))) {
+    if (
+      !origin?.automation &&
+      values &&
+      ['target_temperature', 'target_temperature_low', 'target_temperature_high', 'hvac_mode', 'eco_mode', 'temperature_sensor'].some(
+        (key) => Object.hasOwn(values, key),
+      )
+    ) {
       await this.automation?.manualThermostat(nest_google_device_uuid);
     }
     const previous = this.climateWrites.get(nest_google_device_uuid) ?? Promise.resolve();
-    const operation = previous.catch(() => {}).then(() => {
-      if (origin?.guard && !origin.guard()) {
-        const error = new Error('Thermostat changed before the queued command.');
-        error.code = 'CLIMATE_CONFLICT';
-        throw error;
-      }
-      return this.#performSet(uuid, nest_google_device_uuid, values);
-    });
+    const operation = previous
+      .catch(() => {})
+      .then(() => {
+        if (origin?.guard && !origin.guard()) {
+          const error = new Error('Thermostat changed before the queued command.');
+          error.code = 'CLIMATE_CONFLICT';
+          throw error;
+        }
+        return this.#performSet(uuid, nest_google_device_uuid, values);
+      });
     this.climateWrites.set(nest_google_device_uuid, operation);
     try {
       return await operation;

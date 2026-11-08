@@ -136,8 +136,10 @@ export function validateRuleDrafts(value) {
         if (kind === 'temperature') {
           assert(text(rule.thermostatId, 256) && sources.length > 0, 'Select a thermostat and temperature sources before enabling.');
           assert(rule.aggregation !== 'single' || sources.length === 1, 'Single-sensor control requires exactly one source.');
-          assert(Number.isFinite(rule.desiredTemperature) && rule.desiredTemperature >= 9 && rule.desiredTemperature <= 32,
-            'Live heating targets must be between 9 and 32 °C.');
+          assert(
+            Number.isFinite(rule.desiredTemperature) && rule.desiredTemperature >= 9 && rule.desiredTemperature <= 32,
+            'Live heating targets must be between 9 and 32 °C.',
+          );
         } else if (kind === 'fan') {
           assert(targets.length > 0, 'Select at least one room fan before enabling.');
           if (['heating', 'cooling'].includes(rule.action)) {
@@ -242,8 +244,8 @@ export class WebDashboardConfig {
           account?.authMethod === 'refreshToken' || account?.refreshToken
             ? 'refreshToken'
             : account?.type === 'nest'
-            ? 'accessToken'
-            : 'issueTokenCookie',
+              ? 'accessToken'
+              : 'issueTokenCookie',
         configured: Boolean(account?.refreshToken || account?.access_token || (account?.issueToken && account?.cookie)),
       })),
       executionEnabled: true,

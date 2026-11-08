@@ -414,10 +414,7 @@ export class WebDashboard {
           this.send(response, 401, { error: 'Username or password not accepted.' });
           return;
         }
-        response.setHeader(
-          'Set-Cookie',
-          this.sessionCookie + '=' + result.token + this.cookieAttributes + '28800',
-        );
+        response.setHeader('Set-Cookie', this.sessionCookie + '=' + result.token + this.cookieAttributes + '28800');
         this.send(response, 200, {
           authenticated: true,
           setupRequired: false,

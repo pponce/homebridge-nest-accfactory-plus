@@ -8,12 +8,39 @@ import { ClimateDashboard } from '../src/climate-dashboard.js';
 import { validateRuleDrafts } from '../src/web-dashboard-config.js';
 
 const minute = 60000;
-const temperatureRule = { id: 'rooms', kind: 'temperature', name: 'Downstairs', enabled: true, thermostatId: 'T',
-  sourceIds: ['nest:S', 'room'], aggregation: 'average', desiredTemperature: 21, maximumOffset: 1.5, minimumIntervalMinutes: 5 };
-const fanRule = { id: 'fans', kind: 'fan', name: 'Room fan', enabled: true, targetIds: ['fan'], sourceIds: ['room'],
-  action: 'temperature', threshold: 24, hysteresis: 1 };
-const presenceRule = { id: 'presence', kind: 'presence', name: 'Climate Home', enabled: true, sourceIds: ['motion', 'occupancy'],
-  logic: 'any', holdMinutes: 2, awayDelayMinutes: 3 };
+const temperatureRule = {
+  id: 'rooms',
+  kind: 'temperature',
+  name: 'Downstairs',
+  enabled: true,
+  thermostatId: 'T',
+  sourceIds: ['nest:S', 'room'],
+  aggregation: 'average',
+  desiredTemperature: 21,
+  maximumOffset: 1.5,
+  minimumIntervalMinutes: 5,
+};
+const fanRule = {
+  id: 'fans',
+  kind: 'fan',
+  name: 'Room fan',
+  enabled: true,
+  targetIds: ['fan'],
+  sourceIds: ['room'],
+  action: 'temperature',
+  threshold: 24,
+  hysteresis: 1,
+};
+const presenceRule = {
+  id: 'presence',
+  kind: 'presence',
+  name: 'Climate Home',
+  enabled: true,
+  sourceIds: ['motion', 'occupancy'],
+  logic: 'any',
+  holdMinutes: 2,
+  awayDelayMinutes: 3,
+};
 
 async function fixture(t, initial = { temperature: [temperatureRule] }) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'climate-engine-'));
@@ -23,20 +50,39 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
   const accounts = [{ id: 'A', authorised: true, observing: true }];
   let failCommand = false;
   let acknowledge = true;
-  const dashboard = new ClimateDashboard(directory, { accounts: () => accounts, command: async (id, values, origin) => {
-    assert.equal(origin.automation, true);
-    assert.equal(origin.guard(), true);
-    commands.push({ id, ...values });
-    if (failCommand) {
-      throw new Error('cloud unavailable');
-    }
-    if (acknowledge) {
-      dashboard.update('T', 'Thermostat', { target_temperature_low: values.target_temperature_low }, 'A');
-    }
-  } });
-  dashboard.update('T', 'Thermostat', { nest_google_device_uuid: 'thermostat', description: 'Downstairs', online: true,
-    physical_temperature: 22, target_temperature_low: 19, temperature_scale: 'C', hvac_mode: 'heat', hvac_state: 'off',
-    can_heat: true, eco_mode: false, active_rcs_sensor: '', schedules: {} }, 'A');
+  const dashboard = new ClimateDashboard(directory, {
+    accounts: () => accounts,
+    command: async (id, values, origin) => {
+      assert.equal(origin.automation, true);
+      assert.equal(origin.guard(), true);
+      commands.push({ id, ...values });
+      if (failCommand) {
+        throw new Error('cloud unavailable');
+      }
+      if (acknowledge) {
+        dashboard.update('T', 'Thermostat', { target_temperature_low: values.target_temperature_low }, 'A');
+      }
+    },
+  });
+  dashboard.update(
+    'T',
+    'Thermostat',
+    {
+      nest_google_device_uuid: 'thermostat',
+      description: 'Downstairs',
+      online: true,
+      physical_temperature: 22,
+      target_temperature_low: 19,
+      temperature_scale: 'C',
+      hvac_mode: 'heat',
+      hvac_state: 'off',
+      can_heat: true,
+      eco_mode: false,
+      active_rcs_sensor: '',
+      schedules: {},
+    },
+    'A',
+  );
   dashboard.update('S', 'TemperatureSensor', { nest_google_device_uuid: 'S', current_temperature: 20, online: true }, 'A');
   const external = [
     { id: 'room', kind: 'temperature', temperature: 20, available: true },
@@ -44,27 +90,58 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
     { id: 'motion', kind: 'motion', detected: false, available: true },
     { id: 'occupancy', kind: 'occupancy', detected: false, available: true },
   ];
-  const access = { start: async () => {}, close() {}, refresh: async () => ({ sources: external.map((source) => ({ ...source,
-    lastReadAt: source.stale ? clock - 100000 : clock })), bridges: [] }), setFan: async (id, running, expected) => {
-    const source = external.find((entry) => entry.id === id);
-    assert.equal(source.running, expected);
-    fanCommands.push({ id, running });
-    source.running = running;
-  } };
+  const access = {
+    start: async () => {},
+    close() {},
+    refresh: async () => ({
+      sources: external.map((source) => ({ ...source, lastReadAt: source.stale ? clock - 100000 : clock })),
+      bridges: [],
+    }),
+    setFan: async (id, running, expected) => {
+      const source = external.find((entry) => entry.id === id);
+      assert.equal(source.running, expected);
+      fanCommands.push({ id, running });
+      source.running = running;
+    },
+  };
   let rules = validateRuleDrafts(initial);
   const devices = [];
   const config = { snapshot: async () => ({ config: { rules: structuredClone(rules), devices } }) };
   const originalSnapshot = dashboard.snapshot.bind(dashboard);
   dashboard.snapshot = () => ({ ...originalSnapshot(), generatedAt: clock });
   const engine = new ClimateAutomation({ directory, dashboard, config, accessFactory: () => access, now: () => clock });
-  t.after(async () => { await engine.stop(); await fs.rm(directory, { recursive: true, force: true }); });
+  t.after(async () => {
+    await engine.stop();
+    await fs.rm(directory, { recursive: true, force: true });
+  });
   await engine.start({ schedule: false });
-  return { engine, dashboard, config, directory, access, commands, fanCommands, accounts, external, devices,
+  return {
+    engine,
+    dashboard,
+    config,
+    directory,
+    access,
+    commands,
+    fanCommands,
+    accounts,
+    external,
+    devices,
     rule: (id) => engine.snapshot().rules.find((rule) => rule.id === id),
-    advance: (ms) => { clock += ms; }, now: () => clock,
-    rules: (value) => { rules = validateRuleDrafts(value); },
-    fail: () => { failCommand = true; }, noAck: () => { acknowledge = false; },
-    source: (id) => external.find((source) => source.id === id) };
+    advance: (ms) => {
+      clock += ms;
+    },
+    now: () => clock,
+    rules: (value) => {
+      rules = validateRuleDrafts(value);
+    },
+    fail: () => {
+      failCommand = true;
+    },
+    noAck: () => {
+      acknowledge = false;
+    },
+    source: (id) => external.find((source) => source.id === id),
+  };
 }
 
 test('mixed sensor heating writes a bounded target, waits for feedback and rate limits later adjustments', async (t) => {
@@ -283,8 +360,13 @@ test('restart retains presence overrides, faults unknown initial readings and pa
   const f = await fixture(t, { temperature: [temperatureRule], occupancy: [presenceRule] });
   await f.engine.control({ id: 'presence', action: 'home', minutes: 60 });
   await f.engine.stop();
-  const replacement = new ClimateAutomation({ directory: f.directory, dashboard: f.dashboard, config: f.config,
-    accessFactory: () => f.access, now: f.now });
+  const replacement = new ClimateAutomation({
+    directory: f.directory,
+    dashboard: f.dashboard,
+    config: f.config,
+    accessFactory: () => f.access,
+    now: f.now,
+  });
   await replacement.start({ schedule: false });
   assert.equal(replacement.snapshot().rules.find((rule) => rule.id === 'rooms').paused, true);
   assert.equal(replacement.snapshot().rules.find((rule) => rule.id === 'presence').home, true);
@@ -296,7 +378,10 @@ test('command guards reject stale targets, invalid bounds and cancelled ownershi
   const f = await fixture(t, {});
   await assert.rejects(f.dashboard.setAutomationTarget('T', 22, 18), { code: 'CLIMATE_CONFLICT' });
   await assert.rejects(f.dashboard.setAutomationTarget('T', 33, 19), { code: 'CLIMATE_CONFLICT' });
-  await assert.rejects(f.dashboard.setAutomationTarget('T', 22, 19, () => false), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(
+    f.dashboard.setAutomationTarget('T', 22, 19, () => false),
+    { code: 'CLIMATE_CONFLICT' },
+  );
   await assert.rejects(f.dashboard.setAutomationTarget('missing', 22, 19), { code: 'CLIMATE_CONFLICT' });
   assert.equal(f.commands.length, 0);
 });
@@ -305,7 +390,9 @@ test('storage failures and invalid configuration prevent enabled rules from issu
   const f = await fixture(t, {});
   f.rules({ temperature: [temperatureRule] });
   const persist = f.engine.persist.bind(f.engine);
-  f.engine.persist = async () => { throw new Error('Disk full'); };
+  f.engine.persist = async () => {
+    throw new Error('Disk full');
+  };
   await f.engine.tick();
   assert.equal(f.commands.length, 0);
   assert.match(f.engine.snapshot().error, /checks/);
@@ -321,8 +408,13 @@ test('unreadable recovery state requires explicit resume, and invalid runtime co
   await f.engine.stop();
   await fs.writeFile(path.join(f.directory, 'automation.json'), '{broken');
   f.rules({ temperature: [temperatureRule] });
-  const engine = new ClimateAutomation({ directory: f.directory, dashboard: f.dashboard, config: f.config,
-    accessFactory: () => f.access, now: f.now });
+  const engine = new ClimateAutomation({
+    directory: f.directory,
+    dashboard: f.dashboard,
+    config: f.config,
+    accessFactory: () => f.access,
+    now: f.now,
+  });
   await engine.start({ schedule: true });
   assert.equal(engine.snapshot().rules[0].paused, true);
   assert.equal(f.commands.length, 0);

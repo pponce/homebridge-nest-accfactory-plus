@@ -6,9 +6,9 @@ import { sensorSources } from '../homebridge-ui/public/sensor-preview.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
-const equal = (a, b) => typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 0.15 : a === b;
-const fresh = (source, now) => source?.available === true && Number.isFinite(source.lastReadAt) &&
-  source.lastReadAt <= now + 1000 && now - source.lastReadAt <= 90000;
+const equal = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 0.15 : a === b);
+const fresh = (source, now) =>
+  source?.available === true && Number.isFinite(source.lastReadAt) && source.lastReadAt <= now + 1000 && now - source.lastReadAt <= 90000;
 const target = (device) => device?.data.target_temperature_low ?? device?.data.target_temperature;
 const flatten = (rules) => [...rules.temperature, ...rules.fans, ...rules.occupancy];
 
@@ -16,35 +16,77 @@ function schedulePosition(entries, timeZone, now) {
   if (!entries.length) {
     return null;
   }
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: 'numeric',
-    day: 'numeric', weekday: 'short', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' })
-    .formatToParts(new Date(now)).map((part) => [part.type, part.value]));
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric',
+      second: 'numeric',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(now))
+      .map((part) => [part.type, part.value]),
+  );
   const weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
   const seconds = Number(parts.hour) * 3600 + Number(parts.minute) * 60 + Number(parts.second);
   const today = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
   // Compare local calendar events rather than extrapolating seconds across daylight-saving changes.
-  return Math.max(...entries.filter((entry) => Number.isInteger(entry.day) && entry.day >= 0 && entry.day <= 6 &&
-    Number.isFinite(entry.time) && entry.time >= 0 && entry.time < 86400).map((entry) => {
-    let days = (weekday - entry.day + 7) % 7;
-    if (days === 0 && entry.time > seconds) {
-      days = 7;
-    }
-    return today - days * 86400000 + entry.time * 1000;
-  }));
+  return Math.max(
+    ...entries
+      .filter(
+        (entry) =>
+          Number.isInteger(entry.day) &&
+          entry.day >= 0 &&
+          entry.day <= 6 &&
+          Number.isFinite(entry.time) &&
+          entry.time >= 0 &&
+          entry.time < 86400,
+      )
+      .map((entry) => {
+        let days = (weekday - entry.day + 7) % 7;
+        if (days === 0 && entry.time > seconds) {
+          days = 7;
+        }
+        return today - days * 86400000 + entry.time * 1000;
+      }),
+  );
 }
 
 export function automationSources(snapshot, external) {
   const temperatures = sensorSources(snapshot, external);
   const serials = new Set(snapshot.devices.map((device) => device.serial));
-  const presence = snapshot.devices.filter((device) => device.type === 'HomeAway').map((device) => {
-    const account = snapshot.accounts.find((entry) => entry.id === device.account);
-    return { id: 'nest:' + device.id, kind: 'occupancy', detected: device.data.occupancy, lastReadAt: snapshot.generatedAt,
-      available: Boolean(account?.authorised && account.observing && !device.needsUpdate && device.data.online !== false &&
-        typeof device.data.occupancy === 'boolean') };
-  });
-  return [...temperatures, ...presence, ...(external.sources ?? []).filter((source) => source.kind !== 'temperature' &&
-    !String(source.serial ?? '').startsWith('CLIMATE-PRESENCE-') &&
-    !(source.kind === 'fan' && (serials.has(source.serial) || /nest|google/i.test(source.manufacturer ?? ''))))];
+  const presence = snapshot.devices
+    .filter((device) => device.type === 'HomeAway')
+    .map((device) => {
+      const account = snapshot.accounts.find((entry) => entry.id === device.account);
+      return {
+        id: 'nest:' + device.id,
+        kind: 'occupancy',
+        detected: device.data.occupancy,
+        lastReadAt: snapshot.generatedAt,
+        available: Boolean(
+          account?.authorised &&
+          account.observing &&
+          !device.needsUpdate &&
+          device.data.online !== false &&
+          typeof device.data.occupancy === 'boolean',
+        ),
+      };
+    });
+  return [
+    ...temperatures,
+    ...presence,
+    ...(external.sources ?? []).filter(
+      (source) =>
+        source.kind !== 'temperature' &&
+        !String(source.serial ?? '').startsWith('CLIMATE-PRESENCE-') &&
+        !(source.kind === 'fan' && (serials.has(source.serial) || /nest|google/i.test(source.manufacturer ?? ''))),
+    ),
+  ];
 }
 
 export function heatingTarget(desired, physical, room, maximumOffset = 1.5, scale = 'C') {
@@ -52,8 +94,8 @@ export function heatingTarget(desired, physical, room, maximumOffset = 1.5, scal
   const high = Math.min(32, desired + maximumOffset);
   const proposed = Math.max(low, Math.min(high, desired + physical - room));
   // Round on the device's display grid without crossing either the offset or absolute bounds.
-  const toGrid = (value) => scale === 'F' ? value * 1.8 + 32 : value * 2;
-  const fromGrid = (value) => scale === 'F' ? (value - 32) / 1.8 : value / 2;
+  const toGrid = (value) => (scale === 'F' ? value * 1.8 + 32 : value * 2);
+  const fromGrid = (value) => (scale === 'F' ? (value - 32) / 1.8 : value / 2);
   const minimum = Math.ceil(toGrid(low) - 1e-8);
   const maximum = Math.floor(toGrid(high) + 1e-8);
   return minimum > maximum ? null : fromGrid(Math.max(minimum, Math.min(maximum, Math.round(toGrid(proposed)))));
@@ -83,8 +125,14 @@ export class ClimateAutomation {
     try {
       const bytes = await fs.readFile(path.join(this.directory, 'automation.json'), 'utf8');
       const data = JSON.parse(bytes);
-      if (bytes.length > 1048576 || data.version !== 1 || !Array.isArray(data.states) || !Array.isArray(data.leases) ||
-          data.states.length > 96 || data.leases.length > 256) {
+      if (
+        bytes.length > 1048576 ||
+        data.version !== 1 ||
+        !Array.isArray(data.states) ||
+        !Array.isArray(data.leases) ||
+        data.states.length > 96 ||
+        data.leases.length > 256
+      ) {
         throw new Error('Invalid automation state');
       }
       for (const [id, state] of data.states) {
@@ -100,11 +148,17 @@ export class ClimateAutomation {
       }
       for (const [key, lease] of data.leases) {
         const isTemperature = lease?.kind === 'temperature';
-        const validValue = (value) => isTemperature ? Number.isFinite(value) && value >= 9 && value <= 32 : typeof value === 'boolean';
-        if (!['temperature', 'fan'].includes(lease?.kind) || typeof lease.targetId !== 'string' ||
-            key !== lease.kind + ':' + lease.targetId || !this.states.has(lease.owner) ||
-            !validValue(lease.baseline) || !validValue(lease.expected) || !validValue(lease.before) ||
-            !Number.isFinite(lease.sentAt)) {
+        const validValue = (value) => (isTemperature ? Number.isFinite(value) && value >= 9 && value <= 32 : typeof value === 'boolean');
+        if (
+          !['temperature', 'fan'].includes(lease?.kind) ||
+          typeof lease.targetId !== 'string' ||
+          key !== lease.kind + ':' + lease.targetId ||
+          !this.states.has(lease.owner) ||
+          !validValue(lease.baseline) ||
+          !validValue(lease.expected) ||
+          !validValue(lease.before) ||
+          !Number.isFinite(lease.sentAt)
+        ) {
           throw new Error('Invalid saved command');
         }
         this.leases.set(key, lease);
@@ -120,7 +174,9 @@ export class ClimateAutomation {
     this.dashboard.automation = this;
     await this.tick();
     if (schedule && !this.stopping) {
-      this.timer = setInterval(() => { this.tick(); }, this.intervalMs);
+      this.timer = setInterval(() => {
+        this.tick();
+      }, this.intervalMs);
       this.timer.unref();
     }
   }
@@ -153,13 +209,30 @@ export class ClimateAutomation {
   }
 
   snapshot() {
-    return { available: !this.stopping, error: this.error ?? null, intervalSeconds: this.intervalMs / 1000,
-      rules: [...this.states.values()].map((state) => ({ id: state.rule.id, enabled: state.rule.enabled,
-        kind: state.rule.kind, name: state.rule.name, phase: state.phase ?? 'waiting', reason: state.reason,
-        paused: state.paused === true, roomTemperature: state.roomTemperature, desiredTemperature: state.rule.desiredTemperature,
-        nestTarget: state.nestTarget, proposedTarget: state.proposedTarget, nextChangeAt: state.nextChangeAt,
-        home: state.home, fault: state.fault, override: state.override, lastAction: state.lastAction })),
-      pendingRestorations: [...this.leases.values()].filter((lease) => lease.restoring).length };
+    return {
+      available: !this.stopping,
+      error: this.error ?? null,
+      intervalSeconds: this.intervalMs / 1000,
+      rules: [...this.states.values()].map((state) => ({
+        id: state.rule.id,
+        enabled: state.rule.enabled,
+        kind: state.rule.kind,
+        name: state.rule.name,
+        phase: state.phase ?? 'waiting',
+        reason: state.reason,
+        paused: state.paused === true,
+        roomTemperature: state.roomTemperature,
+        desiredTemperature: state.rule.desiredTemperature,
+        nestTarget: state.nestTarget,
+        proposedTarget: state.proposedTarget,
+        nextChangeAt: state.nextChangeAt,
+        home: state.home,
+        fault: state.fault,
+        override: state.override,
+        lastAction: state.lastAction,
+      })),
+      pendingRestorations: [...this.leases.values()].filter((lease) => lease.restoring).length,
+    };
   }
 
   async readSources() {
@@ -181,10 +254,14 @@ export class ClimateAutomation {
     if (this.stopping) {
       return Promise.resolve();
     }
-    this.pending ??= this.serialize(() => this.evaluate()).catch(() => {
-      this.error = 'Automation could not complete its checks. No new commands will run until checks succeed.';
-      this.log?.warn?.('Climate automation could not complete its checks. Review the rule status.');
-    }).finally(() => { this.pending = undefined; });
+    this.pending ??= this.serialize(() => this.evaluate())
+      .catch(() => {
+        this.error = 'Automation could not complete its checks. No new commands will run until checks succeed.';
+        this.log?.warn?.('Climate automation could not complete its checks. Review the rule status.');
+      })
+      .finally(() => {
+        this.pending = undefined;
+      });
     return this.pending;
   }
 
@@ -203,8 +280,11 @@ export class ClimateAutomation {
     const currentIds = new Set(this.rules.map((rule) => rule.id));
     for (const rule of this.rules) {
       const old = this.states.get(rule.id);
-      const state = old ?? { paused: this.recoveryRequired === true, holds: {}, reason: this.recoveryRequired ?
-        'Review equipment and Resume after recovery.' : 'Waiting for current readings.' };
+      const state = old ?? {
+        paused: this.recoveryRequired === true,
+        holds: {},
+        reason: this.recoveryRequired ? 'Review equipment and Resume after recovery.' : 'Waiting for current readings.',
+      };
       if (old && !old.rule.enabled && rule.enabled) {
         state.paused = false;
         state.awaySince = null;
@@ -221,8 +301,10 @@ export class ClimateAutomation {
         state.rule.enabled = false;
       }
     }
-    if (this.rules.some((rule) => rule.enabled && [...rule.sourceIds, ...rule.targetIds].some((id) => !id.startsWith('nest:'))) ||
-        [...this.leases.values()].some((lease) => lease.kind === 'fan')) {
+    if (
+      this.rules.some((rule) => rule.enabled && [...rule.sourceIds, ...rule.targetIds].some((id) => !id.startsWith('nest:'))) ||
+      [...this.leases.values()].some((lease) => lease.kind === 'fan')
+    ) {
       try {
         await this.readSources();
       } catch {
@@ -235,8 +317,11 @@ export class ClimateAutomation {
     await this.persist();
     for (const [key, lease] of this.leases) {
       const owner = this.states.get(lease.owner);
-      const assigned = owner?.rule.enabled && owner.rule.kind === lease.kind && !owner.paused && (lease.kind === 'temperature' ?
-        owner.rule.thermostatId === lease.targetId : owner.rule.targetIds.includes(lease.targetId));
+      const assigned =
+        owner?.rule.enabled &&
+        owner.rule.kind === lease.kind &&
+        !owner.paused &&
+        (lease.kind === 'temperature' ? owner.rule.thermostatId === lease.targetId : owner.rule.targetIds.includes(lease.targetId));
       if (!assigned || lease.restoring) {
         await this.release(key, lease);
       }
@@ -299,8 +384,17 @@ export class ClimateAutomation {
 
   temperatureInputs(rule) {
     const chosen = rule.sourceIds.map((id) => this.sources.get(id));
-    if (!chosen.length || chosen.some((source) => source?.kind !== 'temperature' || !fresh(source, this.now()) ||
-        !Number.isFinite(source.temperature) || source.temperature < -100 || source.temperature > 100)) {
+    if (
+      !chosen.length ||
+      chosen.some(
+        (source) =>
+          source?.kind !== 'temperature' ||
+          !fresh(source, this.now()) ||
+          !Number.isFinite(source.temperature) ||
+          source.temperature < -100 ||
+          source.temperature > 100,
+      )
+    ) {
       return null;
     }
     return chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length;
@@ -315,9 +409,14 @@ export class ClimateAutomation {
   schedule(device, serial) {
     const zone = this.deviceOptions.find((entry) => entry.serialNumber === serial)?.scheduleTimeZone;
     const entries = Object.entries(device.data.schedules ?? {}).flatMap(([day, points]) =>
-      Object.values(points ?? {}).map((point) => ({ day: Number(day), ...point })));
-    return { zone, entries, signature: JSON.stringify([entries, zone]),
-      position: zone ? schedulePosition(entries, zone, this.now()) : null };
+      Object.values(points ?? {}).map((point) => ({ day: Number(day), ...point })),
+    );
+    return {
+      zone,
+      entries,
+      signature: JSON.stringify([entries, zone]),
+      position: zone ? schedulePosition(entries, zone, this.now()) : null,
+    };
   }
 
   observe(key, lease, value, state) {
@@ -347,8 +446,13 @@ export class ClimateAutomation {
       state.reason = 'Thermostat connection unavailable. Nest may retain its last target.';
       return;
     }
-    if (device.data.hvac_mode !== 'heat' || device.data.eco_mode !== false || device.data.active_rcs_sensor !== '' ||
-        device.data.can_heat === false || device.data.temperature_lock === true) {
+    if (
+      device.data.hvac_mode !== 'heat' ||
+      device.data.eco_mode !== false ||
+      device.data.active_rcs_sensor !== '' ||
+      device.data.can_heat === false ||
+      device.data.temperature_lock === true
+    ) {
       if (lease) {
         this.leases.delete(key);
         this.pause(state, 'Nest mode, Eco, lock or active sensor changed. Native Nest control takes priority; Resume when ready.');
@@ -376,8 +480,14 @@ export class ClimateAutomation {
       this.pause(state, 'The Nest target changed. Resume to start a new room-temperature hold.');
       return;
     }
-    if (state.roomTemperature === null || !Number.isFinite(device.data.physical_temperature) ||
-        Math.abs(device.data.physical_temperature) > 100 || !Number.isFinite(target(device)) || target(device) < 9 || target(device) > 32) {
+    if (
+      state.roomTemperature === null ||
+      !Number.isFinite(device.data.physical_temperature) ||
+      Math.abs(device.data.physical_temperature) > 100 ||
+      !Number.isFinite(target(device)) ||
+      target(device) < 9 ||
+      target(device) > 32
+    ) {
       state.phase = 'waiting';
       state.reason = 'A selected temperature is unavailable. Returning an owned target to its previous setting when possible.';
       if (lease) {
@@ -385,8 +495,13 @@ export class ClimateAutomation {
       }
       return;
     }
-    const proposed = heatingTarget(rule.desiredTemperature, device.data.physical_temperature, state.roomTemperature,
-      rule.maximumOffset ?? 1.5, device.data.temperature_scale);
+    const proposed = heatingTarget(
+      rule.desiredTemperature,
+      device.data.physical_temperature,
+      state.roomTemperature,
+      rule.maximumOffset ?? 1.5,
+      device.data.temperature_scale,
+    );
     state.proposedTarget = proposed;
     if (proposed === null) {
       state.phase = 'waiting';
@@ -498,8 +613,13 @@ export class ClimateAutomation {
     const rule = state.rule;
     const now = this.now();
     state.holds ??= {};
-    if (state.override && Number.isFinite(state.override.until) && state.override.until > now &&
-        state.override.until <= now + 1440 * MINUTE && typeof state.override.home === 'boolean') {
+    if (
+      state.override &&
+      Number.isFinite(state.override.until) &&
+      state.override.until > now &&
+      state.override.until <= now + 1440 * MINUTE &&
+      typeof state.override.home === 'boolean'
+    ) {
       state.home = state.override.home;
       state.fault = false;
       state.phase = 'override';
@@ -517,8 +637,7 @@ export class ClimateAutomation {
         if (source.detected) {
           state.holds[id] = now + (rule.holdMinutes ?? 10) * MINUTE;
         }
-        return source.detected || (Number.isFinite(state.holds[id]) && state.holds[id] > now &&
-          state.holds[id] <= now + 1440 * MINUTE);
+        return source.detected || (Number.isFinite(state.holds[id]) && state.holds[id] > now && state.holds[id] <= now + 1440 * MINUTE);
       }
       return source.detected;
     });
@@ -562,8 +681,13 @@ export class ClimateAutomation {
       return;
     }
     const current = lease.kind === 'temperature' ? target(device) : source.running;
-    if (lease.kind === 'temperature' && (device.data.hvac_mode !== 'heat' || device.data.eco_mode !== false ||
-        device.data.active_rcs_sensor !== '' || device.data.temperature_lock === true)) {
+    if (
+      lease.kind === 'temperature' &&
+      (device.data.hvac_mode !== 'heat' ||
+        device.data.eco_mode !== false ||
+        device.data.active_rcs_sensor !== '' ||
+        device.data.temperature_lock === true)
+    ) {
       this.leases.delete(key);
       return;
     }
@@ -642,7 +766,9 @@ export class ClimateAutomation {
         state.paused = false;
       } else {
         state.paused = payload.action === 'pause';
-        state.reason = state.paused ? 'Paused by you. Owned equipment settings are restored when reachable.' : 'Resuming automatic control.';
+        state.reason = state.paused
+          ? 'Paused by you. Owned equipment settings are restored when reachable.'
+          : 'Resuming automatic control.';
         delete state.override;
         state.awaySince = null;
         if (!state.paused) {
