@@ -340,7 +340,7 @@ function inputField(host, title, value, change, { type = 'text', min, max, step,
 function toggle(host, title, description, value, change) {
   const label = el('label', undefined, 'toggle-row'); const text = el('span'); text.append(el('strong', title), el('small', description));
   const input = el('input'); input.type = 'checkbox'; input.setAttribute('role', 'switch'); input.checked = value === true;
-  input.addEventListener('change', () => { change(input.checked); markDirty(); }); label.append(text, input); host.append(label);
+  input.addEventListener('change', () => { change(input.checked); markDirty(); renderRulePreview(); }); label.append(text, input); host.append(label);
 }
 function renderSettings() {
   if (!state.config) return;

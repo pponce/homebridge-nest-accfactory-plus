@@ -30,6 +30,15 @@ let traits = {
   },
   device_info: { typeName: 'google.resource.SpencerResource', pairerId: { resourceId: 'STRUCTURE_HOME' } },
 };
+test('native thermostat commands pause software control before reaching the cloud', async (context) => {
+  const flow = await platformHarness(context, { value: traits });
+  const manual = [];
+  flow.platform.automation = { manualThermostat: async (id) => { manual.push(id); assert.equal(flow.commands.length, 0); },
+    stop: async () => {} };
+  await flow.device.set({ uuid: 'DEVICE_TEST', target_temperature_low: 21 });
+  assert.deepEqual(manual, ['DEVICE_TEST']);
+  assert.equal(flow.commands.length, 1);
+});
 for (let [values, label, expected] of [
   [{ hvac_mode: 'off' }, 'target_temperature_settings', { enabled: { value: false } }],
   [{ hvac_mode: 'heat' }, 'target_temperature_settings', { enabled: { value: true } }],
@@ -205,3 +214,4 @@ for (let unavailable of ['account', 'authorisation', 'transport', 'resource']) {
     assert.deepEqual(flow.commands, []);
   });
 }
+

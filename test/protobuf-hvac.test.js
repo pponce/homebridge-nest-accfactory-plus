@@ -136,7 +136,7 @@ let createCommandHost = new Function(
   'fetchWrapper',
   'USER_AGENT',
   'URL',
-  'return new class { #rawData = raw; #connections = new Map([["account", connection]]);' +
+  'return new class { climateWrites = new Map(); #rawData = raw; #connections = new Map([["account", connection]]);' +
     'log = { debug: (...args) => { throw new Error(args.join(" ")); } };' +
     'run(id, values) { return this.#set("account", id, values); }' +
     systemSource.slice(setBegin, setEnd) +
@@ -253,3 +253,4 @@ for (let association of [null, {}, { deviceId: { resourceId: '' } }, { deviceId:
     assert.deepEqual(tempsensor(undefined, raw, { options: {} }), {});
   });
 }
+

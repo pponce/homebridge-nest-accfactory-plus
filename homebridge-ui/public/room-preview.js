@@ -165,7 +165,7 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
         ),
       );
     }
-    fans.append(node('small', 'Automatic fan coordination is not enabled in this preview.'));
+    fans.append(node('small', 'Enable automatic room-fan control in Climate rules in the standalone dashboard.'));
     fans.append(node('h3', 'Discovered presence sensors'));
     for (const source of external.sources.filter((entry) => ['motion', 'occupancy'].includes(entry.kind))) {
       fans.append(
@@ -181,7 +181,7 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
         ),
       );
     }
-    fans.append(node('small', 'Combined Climate Home/Away rules are not enabled in this preview.'));
+    fans.append(node('small', 'Configure combined Home/Away sensing in Climate rules in the standalone dashboard.'));
     calculate();
   }
   thermostatSelect.onchange = () => {

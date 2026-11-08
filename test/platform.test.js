@@ -106,3 +106,39 @@ test('platform restores valid cached identity, removes stale cache and shuts dow
   assert.deepEqual(platform.cachedAccessories, []);
   await callbacks.get('shutdown')();
 });
+
+test('automation runs with web access disabled and restores a separate cached presence accessory', async (context) => {
+  const directory = await mkdtemp(path.join(tmpdir(), 'climate-platform-'));
+  const configPath = path.join(directory, 'config.json');
+  const callbacks = new Map();
+  const removed = [];
+  class PlatformAccessory extends hap.Accessory {
+    constructor(...args) {
+      super(...args);
+      this.context = {};
+    }
+  }
+  const api = { hap, platformAccessory: PlatformAccessory, on: (event, callback) => callbacks.set(event, callback),
+    user: { storagePath: () => directory, configPath: () => configPath },
+    registerPlatformAccessories: () => assert.fail('Cached presence must not be registered twice'),
+    unregisterPlatformAccessories: (...args) => removed.push(args) };
+  const config = { platform: 'NestClimateCntrl', accounts: [], webDashboard: { enabled: false },
+    climateRuleDrafts: { occupancy: [{ id: 'home', name: 'Climate Home', kind: 'presence', enabled: true,
+      sourceIds: ['nest:home'], logic: 'any', awayDelayMinutes: 1 }] } };
+  await writeFile(configPath, JSON.stringify({ platforms: [config] }));
+  const platform = new Platform(log, config, api);
+  const accessory = new PlatformAccessory('Climate Home', hap.uuid.generate('homebridge-nest-climate-cntrl:presence:main:home'));
+  accessory.context = { climatePresence: true, ruleId: 'home' };
+  platform.configureAccessory(accessory);
+  assert.equal(platform.cachedAccessories.length, 0);
+  context.after(async () => { await callbacks.get('shutdown')(); await rm(directory, { recursive: true, force: true }); });
+  await callbacks.get('didFinishLaunching')();
+  assert.equal(platform.webDashboard.status().enabled, false);
+  assert.equal(platform.dashboard.snapshot().automation.available, true);
+  assert.equal(platform.automation.snapshot().rules[0].phase, 'degraded');
+  assert.equal(accessory.getService(hap.Service.OccupancySensor).getCharacteristic(hap.Characteristic.StatusFault).value, 1);
+  config.climateRuleDrafts.occupancy[0].enabled = false;
+  await writeFile(configPath, JSON.stringify({ platforms: [config] }));
+  await platform.automation.tick();
+  assert.equal(removed[0][2][0], accessory);
+});

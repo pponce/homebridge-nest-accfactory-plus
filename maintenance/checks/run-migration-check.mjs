@@ -16,6 +16,9 @@ try {
   const errorStart = lines.findIndex((line) => /AssertionError|Error \[|Error:|Cannot find/.test(line));
   detail = (errorStart >= 0 ? lines.slice(errorStart, errorStart + 18).join(' ') : lines.filter((line) => /✖|error:|code:/.test(line)).join(' '))
     .replaceAll(process.cwd(), '').replace(/\s+/g, ' ').slice(0, 480) || 'Validation failed; inspect the job log';
+  if (failureStart < 0 && output.includes('Coverage gate failed:')) {
+    detail = output.slice(output.lastIndexOf('Coverage gate failed:')).replace(/\s+/g, ' ').slice(0, 480);
+  }
   process.exitCode = 1;
 }
 if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'detail=' + detail.replace(/[\r\n]/g, ' ') + '\n');

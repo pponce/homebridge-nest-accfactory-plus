@@ -4,7 +4,7 @@
 
 Bring Nest thermostats, room temperatures and climate controls into Apple Home, with a visual admin interface in Homebridge and an optional dashboard for your computer or phone.
 
-See how different rooms feel, use supported Nest controls, and prepare temperature groups, Homebridge room-fan rules and Home/Away rules from multiple sensors.
+Use temperatures from the rooms that matter, coordinate Homebridge room fans, and combine multiple presence sensors into a separate Climate Home/Away accessory.
 
 **Public beta:** this version is still being tested on real equipment. Install the `beta` release and report issues with your thermostat model and Homebridge version.
 
@@ -15,13 +15,13 @@ See how different rooms feel, use supported Nest controls, and prepare temperatu
 | Feature | What you can do in this beta |
 | --- | --- |
 | **Visual setup and admin dashboard** | Configure accounts and accessories in Homebridge. Open a separate web dashboard with sign-in, thermostat status, sensor search, settings and guided rule editors. |
-| **Temperature groups with Nest and other sensors** | Select one sensor or average multiple readings from associated Nest sensors, other Homebridge temperature sensors, or both. Save a desired room temperature and preview the group; automatic thermostat adjustments are **not yet available**. |
-| **Homebridge ceiling and room fans** | Discover fans and draft temperature-based or heating/cooling-based rules. Preview whether a run condition is met; automatic room-fan commands are **not yet available**. |
-| **Home/Away from multiple signals** | Combine available Nest Home/Away, motion and occupancy inputs in a saved rule draft. Preview “any” or “all” logic; combined Home/Away automation is **not yet available**. |
+| **Temperature groups with Nest and other sensors** | Use one sensor or average associated Nest sensors, other Homebridge temperature sensors, or both. Enable bounded Nest target adjustments to follow the group's desired temperature in **Heat mode**. |
+| **Homebridge ceiling and room fans** | Run compatible fans above a room-temperature threshold or during Nest heating/cooling activity. Use a turn-off gap to prevent chatter; manual fan changes pause the rule. |
+| **Home/Away from multiple signals** | Combine Nest Home/Away, motion and occupancy using any/all logic, motion holds and an Away delay. Publish a separate read-only Apple Home occupancy sensor, with timed dashboard overrides. |
 | **Live Nest controls** | Use supported Eco controls, select a native Nest temperature source, and run the thermostat's HVAC blower with timed actions. |
 | **Schedules and runtime** | Inspect reported weekly setpoints, the next planned change and observed heating/cooling totals with a weekly chart. |
 
-**Rule drafts are inactive.** You can test discovery, readings and condition previews now. Saving or restarting does not enable automatic temperature, room-fan or combined Home/Away actions. See the [first-rule walkthroughs](WEB_DASHBOARD.md#try-your-first-rules).
+**Execution is opt-in for each rule.** Review the inputs, select **Enable automatic execution**, and **Save changes**. Disabled rules remain drafts. The dashboard shows execution status, reasons for waiting or pausing, and immediate pause/resume controls. Temperature and fan rules require explicit Resume after a bridge restart. See the [first-rule walkthroughs](WEB_DASHBOARD.md#try-your-first-rules).
 
 ### Temperature groups: choose the rooms that matter
 
@@ -33,21 +33,25 @@ A temperature group represents the rooms whose readings you want to consider tog
 | Other Homebridge sensors only | Office sensor at 19 °C and study sensor at 21 °C | Equal average: 20 °C |
 | Nest and other sensors together | Living-room Nest sensor at 20 °C and a Homebridge-exposed desk sensor at 22 °C | Equal average: 21 °C |
 
-Choose **One selected sensor** to focus on a single room, or **Equal average of selected sensors** for a group. The readings and desired temperature are available as a preview and saved draft. Having Nest maintain that group temperature automatically is planned; the draft does not change the thermostat's setpoint.
+Choose **One selected sensor** to focus on a single room, or **Equal average of selected sensors** for a group. An enabled group adjusts Nest's heating target using the difference between the built-in thermostat temperature and the group's reading. The default adjustment limit is **±1.5 °C** around the desired room target, with at least **5 minutes** between adjustments.
+
+Heating control requires **Heat mode**, **Eco off**, and the **built-in Nest sensor** as the actual control source. Native sensor selection, manual target/mode changes and Nest schedule boundaries take priority and pause an active hold. Change the desired room target in the dashboard; Apple Home continues to show and control Nest's physical target. Cooling/range compensation, weighted averages and scheduled groups are outside this heating pilot.
 
 A group does not create a separate physical heating/cooling zone or turn third-party sensors into native Nest sensors. For a live native Nest option, use **Temperature controlled by** to select one associated Nest Temperature Sensor where supported. [Create your first temperature group](WEB_DASHBOARD.md#temperature-group-example).
 
-### Room fans: plan comfort around temperature or HVAC activity
+### Room fans: coordinate comfort with temperature or HVAC activity
 
-For a ceiling fan exposed by another Homebridge plugin, draft a rule to run when the selected rooms average above **24 °C**, with a **1 °C turn-off gap** intended to prevent repeated on/off changes near the threshold. Alternatively, select **Thermostat is heating** or **Thermostat is cooling** as the run condition.
+For a ceiling fan exposed by another Homebridge plugin, create a rule to run when the selected rooms average above **24 °C**, with a **1 °C turn-off gap**. A fan started by this rule returns to its previous state when the average reaches **23 °C** or below. Alternatively, select **Thermostat is heating** or **Thermostat is cooling** as the run condition.
 
-The dashboard discovers compatible fans and previews the current condition. Fan switching and the turn-off behavior are not executed by drafts. These room fans are separate from the **Nest HVAC blower**, whose supported timer controls work now. [Create a room-fan draft](WEB_DASHBOARD.md#room-fan-example).
+A rule does not turn off a fan that was already running before it took control. Normal fan changes are separated by at least a minute. These room fans are separate from the **Nest HVAC blower**, which has its own timer controls. [Create and test a room-fan rule](WEB_DASHBOARD.md#room-fan-example).
 
 ### Home/Away: bring several presence signals together
 
-Draft a **Home presence** rule using Nest Home/Away, a hallway motion sensor and an office occupancy sensor. Choose **Any selected source is positive** so the preview reports a Home condition when any one of those signals is positive, or choose **All selected sources are positive** for a stricter condition.
+Create a **Home presence** rule using Nest Home/Away, a hallway motion sensor and an office occupancy sensor. Choose **Any selected source is positive** so any one of those signals can establish Home, or choose **All selected sources are positive** for a stricter condition.
 
-Motion holds and an Away delay can be saved in the draft, for example **10 minutes** and **20 minutes**. The current preview checks the latest readings; it does not run those timers, change Eco or Google's Home/Away state, or create a combined HomeKit occupancy accessory. Existing native Nest Home/Away support remains available. [Explore a presence draft](WEB_DASHBOARD.md#homeaway-example).
+For example, keep a motion detection positive for **10 minutes**, then require **20 minutes** without a matching Home condition before reporting Away. Continuously occupied sensors keep reporting Home; missing inputs cannot establish Away. Each enabled presence rule exposes a separate **Climate occupancy sensor** in Apple Home. Use **Force Home · 1 hour**, **Force Away · 1 hour**, or **Resume automatic presence** in the dashboard.
+
+The combined sensor does not change Google's Home/Away or Eco settings. You can use its occupancy state in your own Apple Home automations. Existing native Nest Home/Away remains available separately. [Create and test a presence rule](WEB_DASHBOARD.md#homeaway-example).
 
 ### Admin interface and visual configuration
 
@@ -55,7 +59,7 @@ Use **Homebridge → Plugins → Nest Climate Cntrl → Settings** for account s
 
 - **Overview:** thermostat cards, supported live controls, schedules and runtime.
 - **Sensors & fans:** searchable temperature, motion, occupancy and fan sources, with bridge availability.
-- **Climate rules:** guided editors for temperature groups, Home/Away and room-fan drafts, with current-signal previews.
+- **Climate rules:** guided editors, previews, execution status, enable switches, pause/resume controls and presence overrides.
 - **Settings:** dashboard and supported accessory options, saved with a clear indication when a bridge restart is needed.
 
 The layout adapts to desktop and phone screens. Web access has its own sign-in and supports direct HTTP, direct HTTPS with certificates in the plugin, or HTTPS through a local reverse proxy such as Nginx. [Set up the web dashboard](WEB_DASHBOARD.md).
@@ -95,7 +99,9 @@ Schedule entries show planned changes, not guaranteed hold-expiry times. Runtime
 
 Open **Plugins → Nest Climate Cntrl → Settings → Web dashboard**, create a web username/password, then enable web access, save and restart the Nest child bridge. Select **Open climate dashboard** to visit its address, usually `https://<homebridge-host>:9444`.
 
-The phone-friendly interface shows thermostat status, native controls, sensors, schedules and runtime. It also lets you save supported settings and prepare temperature, occupancy and room-fan rule drafts. **These drafts are inactive; saving one does not control your devices.**
+The phone-friendly interface shows thermostat status, native controls, sensors, schedules and runtime. It also lets you save supported settings and enable temperature, occupancy and room-fan rules. The engine runs in the Nest bridge independently of an open browser.
+
+On pause, disable or loss of usable inputs, the engine returns settings it still owns to their previous values when the equipment is reachable. It does not overwrite a newer manual change. **If the Homebridge host stops or its connection fails, Nest or a room fan may retain the last commanded state.** Keep the adjustment limit appropriate for your home and review execution status during initial testing.
 
 On iPhone, open the address in Safari and choose **Share → Add to Home Screen** for the plum app icon. Choose direct **HTTP** for simple local access (passwords and dashboard data travel unencrypted), direct **HTTPS** with certificate settings in the plugin, or **HTTPS through reverse proxy** so Nginx handles certificates and redirects. Proxy mode uses HTTP on `127.0.0.1:9444`, requires your public HTTPS origin, and generates links without the internal port. Direct HTTPS is the default; its generated local certificate needs browser trust unless you supply a trusted certificate. Web access is off by default. See [complete setup and network options](WEB_DASHBOARD.md).
 

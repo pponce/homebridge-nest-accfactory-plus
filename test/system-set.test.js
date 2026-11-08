@@ -18,7 +18,7 @@ let createHost = new Function(
   'DATA_SOURCE',
   'crypto',
   'USER_AGENT',
-  'return new class {' +
+  'return new class { climateWrites = new Map();' +
     '#connections = new Map([["account", connection]]); #rawData = rawData;' +
     'run(id, values) { return this.#set("account", id, values); }' +
     source.slice(begin, end) +
@@ -190,3 +190,4 @@ for (let [reason, options] of [
     assert.equal(flow.requests.length, 0);
   });
 }
+
