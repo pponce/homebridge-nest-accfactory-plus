@@ -1,4 +1,4 @@
-// Read-only HAP discovery adapted from pponce/homebridge-harmony-home-control.
+// Configured-bridge HAP access adapted from pponce/homebridge-harmony-home-control.
 // PINs and bridge endpoints never leave this server-side adapter.
 import { readFile } from 'node:fs/promises';
 import { isIP } from 'node:net';
@@ -20,6 +20,7 @@ export class ClimateAccess {
     this.instances = new Map();
     this.bridges = new Map();
     this.sources = [];
+    this.fanControls = new Map();
     this.closed = false;
   }
 
@@ -109,6 +110,7 @@ export class ClimateAccess {
   async load() {
     const sources = [];
     const bridges = [];
+    const fanControls = new Map();
     for (const [id, configured] of this.bridges) {
       if (this.closed) {
         break;
@@ -133,6 +135,9 @@ export class ClimateAccess {
         const candidates = [];
         for (const accessory of payload.accessories) {
           const information = accessory.services?.find((service) => uuid(service.type) === '3E');
+          if (String(value(information ?? {}, '30') ?? '').startsWith('CLIMATE-PRESENCE-')) {
+            continue;
+          }
           for (const service of accessory.services ?? []) {
             const type = uuid(service.type);
             if (!['8A', '40', 'B7', '85', '86'].includes(type)) {
@@ -180,8 +185,13 @@ export class ClimateAccess {
             const temperature = type === '8A' && reading.unit === 'fahrenheit' ? (sample?.value - 32) / 1.8 : sample?.value;
             const sensor = type === '8A';
             const unitSupported = !sensor || [undefined, 'celsius', 'fahrenheit'].includes(reading.unit);
+            const sourceId = 'hap:' + id + '/' + accessory.aid + '/' + service.iid;
+            if (['40', 'B7'].includes(type) && reading.perms.includes('pw') &&
+                !reading.perms.includes('tw') && !reading.perms.includes('aa')) {
+              fanControls.set(sourceId, { bridge: id, aid: accessory.aid, iid: reading.iid, type });
+            }
             bridgeSources.push({
-              id: 'hap:' + id + '/' + accessory.aid + '/' + service.iid,
+              id: sourceId,
               kind: { '8A': 'temperature', 40: 'fan', B7: 'fan', 85: 'motion', 86: 'occupancy' }[type],
               provider: 'homebridge',
               bridge: id,
@@ -229,7 +239,44 @@ export class ClimateAccess {
       return { sources: [], bridges: [] };
     }
     this.sources = sources;
+    this.fanControls = fanControls;
     return { sources, bridges, discoveryError: this.discoveryError ?? null };
+  }
+
+  async setFan(id, running, expected) {
+    if (this.closed || typeof running !== 'boolean' || typeof expected !== 'boolean') {
+      throw new Error('Invalid room-fan command.');
+    }
+    // Resolve the service and permissions again before each write; the browser never supplies endpoints or IIDs.
+    await this.refresh();
+    const source = this.sources.find((entry) => entry.id === id);
+    const control = this.fanControls.get(id);
+    const instance = control && this.instances.get(control.bridge);
+    if (!source?.available || !source.canControl || !instance || source.running !== expected) {
+      const error = new Error('Room fan changed or is unavailable.');
+      error.code = 'CLIMATE_CONFLICT';
+      throw error;
+    }
+    const host = instance.ipAddress.includes(':') ? '[' + instance.ipAddress + ']' : instance.ipAddress;
+    const response = await this.request('http://' + host + ':' + instance.port + '/characteristics', {
+      method: 'PUT',
+      redirect: 'error',
+      signal: AbortSignal.timeout(5000),
+      headers: { Authorization: this.bridges.get(control.bridge).pin, 'Content-Type': 'application/hap+json' },
+      body: JSON.stringify({ characteristics: [{ aid: control.aid, iid: control.iid, value: control.type === '40' ? running : Number(running) }] }),
+    });
+    // Never retry a write at an alternate address: a timeout may follow an accepted command.
+    if (response.status === 204) {
+      return;
+    }
+    if (response.status === 207) {
+      const result = await response.json();
+      const status = result.characteristics?.find((item) => item.aid === control.aid && item.iid === control.iid);
+      if (status?.status === 0) {
+        return;
+      }
+    }
+    throw new Error('Room-fan command was not confirmed by Homebridge.');
   }
 
   close() {

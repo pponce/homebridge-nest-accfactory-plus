@@ -34,6 +34,8 @@ const FIELDS = [
   'humiditySensor',
   'ecoSwitch',
   'fanPresetSwitches',
+  'can_heat',
+  'temperature_lock',
 ];
 const DAY = 86400000;
 export class RuntimeLedger {
@@ -205,7 +207,26 @@ export class ClimateDashboard {
         runtime: device.type === 'Thermostat' ? this.ledger.summary(device.serial) : undefined,
       })),
       runtimeTimezone: 'UTC',
+      automation: this.automation?.snapshot(),
     };
+  }
+
+  async setAutomationTarget(serial, value, expected, permitted = () => true) {
+    const ready = () => {
+      const device = this.devices.get(serial);
+      const account = this.accounts().find((entry) => entry.id === device?.account);
+      const actual = device?.data.target_temperature_low ?? device?.data.target_temperature;
+      return permitted() && device?.type === 'Thermostat' && account?.authorised && account.observing &&
+        !device.needsUpdate && device.data.online === true && device.data.hvac_mode === 'heat' &&
+        device.data.eco_mode === false && device.data.active_rcs_sensor === '' && device.data.temperature_lock !== true &&
+        Number.isFinite(actual) && Math.abs(actual - expected) < 0.15 && Number.isFinite(value) && value >= 9 && value <= 32;
+    };
+    if (!ready()) {
+      const error = new Error('Thermostat changed before the automated command.');
+      error.code = 'CLIMATE_CONFLICT';
+      throw error;
+    }
+    await this.command(this.devices.get(serial).id, { target_temperature_low: value }, { automation: true, guard: ready });
   }
 
   async control(payload) {

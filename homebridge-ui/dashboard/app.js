@@ -110,7 +110,7 @@ function sources() {
 }
 function markDirty() {
   state.dirty = true; $('save-bar').hidden = false; $('save-title').textContent = 'You have unsaved changes';
-  $('save-detail').textContent = 'Draft rules stay inactive after saving.'; $('save').disabled = state.saving;
+  $('save-detail').textContent = 'Saving applies enabled rules. Disabled rules remain drafts.'; $('save').disabled = state.saving;
 }
 async function api(route, { method = 'GET', body, anonymous = false } = {}) {
   const headers = { Accept: 'application/json' };
@@ -351,6 +351,7 @@ function renderSettings() {
     const options = deviceOptions(device.serial); const group = el('div', undefined, 'device-setting'); group.append(el('h3', device.data.description || 'Thermostat'));
     toggle(group, 'Eco switch', 'A dedicated Eco control in Apple Home.', options.ecoSwitch ?? device.data.ecoSwitch, (value) => { deviceOptions(device.serial, true).ecoSwitch = value; });
     toggle(group, 'Separate humidity sensor', 'Show humidity as its own Apple Home sensor.', options.humiditySensor ?? device.data.humiditySensor, (value) => { deviceOptions(device.serial, true).humiditySensor = value; });
+    inputField(group, 'Nest schedule time zone', options.scheduleTimeZone || '', (value) => { deviceOptions(device.serial, true).scheduleTimeZone = value || null; }, { description: 'Use the thermostat’s IANA time zone, for example America/Los_Angeles. Required for automatic heating when Nest reports a schedule.' });
     if (device.data.has_fan) {
       toggle(group, 'HVAC fan preset switches', 'Optional 15, 30 and 60 minute switches. Off by default.', options.fanPresetSwitches ?? device.data.fanPresetSwitches, (value) => { deviceOptions(device.serial, true).fanPresetSwitches = value; });
       const durations = [['', 'Use Nest duration'], ...[15, 30, 45, 60, 120, 240, 480, 720, 1440, 4320, 7200, 10080].map((minutes) => [minutes + 'm', minutes + ' minutes'])];
@@ -385,7 +386,7 @@ function newRule() {
   const rule = { id: crypto.randomUUID(), kind: state.ruleKind, enabled: false, sourceIds: [],
     name: state.ruleKind === 'temperature' ? 'New temperature group' : state.ruleKind === 'presence' ? 'Home presence' : 'Room fan comfort' };
   if (state.ruleKind === 'temperature') { rule.aggregation = 'average'; rule.desiredTemperature = 21; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
-  else if (state.ruleKind === 'presence') { rule.logic = 'any'; rule.holdMinutes = 10; rule.awayDelayMinutes = 20; }
+  else if (state.ruleKind === 'presence') { rule.logic = 'any'; rule.holdMinutes = 10; rule.awayDelayMinutes = 20; const home = sources().find((source) => source.provider === 'nest' && source.kind === 'occupancy'); if (home) rule.sourceIds = [home.id]; }
   else { rule.targetIds = []; rule.action = 'temperature'; rule.threshold = 24; rule.hysteresis = 1; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
   ((state.config.rules ??= {})[ruleKey[state.ruleKind]] ??= []).push(rule); state.ruleId = rule.id; markDirty(); renderRules();
   $('rule-editor').querySelector('input')?.focus();
@@ -402,9 +403,9 @@ function renderRules() {
   $('rule-list-title').textContent = { temperature: 'Temperature groups', presence: 'Presence rules', fan: 'Fan rules' }[state.ruleKind];
   const items = rules(); if (!items.some((rule) => rule.id === state.ruleId)) state.ruleId = items[0]?.id || null;
   $('rule-list').replaceChildren();
-  for (const rule of items) { const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item'); item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · Draft')); item.setAttribute('aria-pressed', String(rule.id === state.ruleId)); $('rule-list').append(item); }
+  for (const rule of items) { const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item'); item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · ' + (rule.enabled ? 'Enabled' : 'Disabled'))); item.setAttribute('aria-pressed', String(rule.id === state.ruleId)); $('rule-list').append(item); }
   if (!items.length) {
-    $('rule-list').append(el('p', 'No drafts yet. Add a rule to get started.', 'small-note'));
+    $('rule-list').append(el('p', 'No rules yet. Add one to get started.', 'small-note'));
     const details = { temperature: ['Comfort starts with the right room.', 'Select Nest and Homebridge temperature sensors to plan a room-based temperature group.', 'thermometer'], presence: ['Home is more than one signal.', 'Bring motion and occupancy sensors together to explore a Home/Away rule.', 'home'], fan: ['Put room fans in the picture.', 'Choose accessible Homebridge ceiling or room fans and plan when they would run.', 'fan'] }[state.ruleKind];
     empty($('rule-editor'), ...details, button('Create ' + (state.ruleKind === 'temperature' ? 'temperature group' : state.ruleKind === 'presence' ? 'presence rule' : 'fan rule'), newRule, 'button primary')); return;
   }
@@ -439,13 +440,17 @@ function picker(host, rule, key, kinds) {
 function renderRuleEditor() {
   const rule = selectedRule(); if (!rule) return;
   const host = $('rule-editor'); host.replaceChildren();
-  const head = el('div', undefined, 'editor-header'); head.append(el('h3', { temperature: 'A temperature group', presence: 'A sense of home', fan: 'Air, when you want it' }[rule.kind]), el('span', 'Draft · inactive', 'draft-chip')); host.append(head);
+  const head = el('div', undefined, 'editor-header'); head.append(el('h3', { temperature: 'A temperature group', presence: 'A sense of home', fan: 'Air, when you want it' }[rule.kind]), el('span', rule.enabled ? 'Execution enabled' : 'Disabled draft', 'draft-chip')); host.append(head);
   inputField(host, 'Rule name', rule.name, (value) => { rule.name = value; const active = $('rule-list').querySelector('[aria-pressed="true"] strong'); if (active) active.textContent = value; });
+  toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Temperature and fan rules require Resume after a bridge restart.', rule.enabled, (value) => { rule.enabled = value; renderRules(); });
   if (rule.kind === 'temperature') {
     const target = editorSection(host, '01', 'Choose the room target', 'Pair a thermostat with the temperature you want the selected rooms to reach.');
-    const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); inputField(fields, 'Desired room temperature (°C)', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { type: 'number', min: 5, max: 35, step: .5 }); target.append(fields);
-    const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Use the thermostat, native Nest sensors, other Homebridge sensors, or a mix.');
+    const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); inputField(fields, 'Desired room temperature (°C)', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { type: 'number', min: rule.enabled ? 9 : 5, max: rule.enabled ? 32 : 35, step: .5 }); target.append(fields);
+    const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Use the thermostat, native Nest sensors, other Homebridge sensors, or a mix. Automatic control supports Heat mode, Eco off and Nest’s built-in control sensor.');
     inputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
+    const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from the target sent to Nest. Manual changes and Nest schedule boundaries pause the rule. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
+    inputField(limits, 'Maximum target adjustment (°C)', rule.maximumOffset ?? 1.5, (value) => { rule.maximumOffset = value; }, { type: 'number', min: 0, max: 3, step: .5 });
+    inputField(limits, 'Minimum update interval (minutes)', rule.minimumIntervalMinutes ?? 5, (value) => { rule.minimumIntervalMinutes = value; }, { type: 'number', min: 1, max: 60, step: 1 });
   } else if (rule.kind === 'presence') {
     const inputs = editorSection(host, '01', 'Listen for signs of home', 'Choose the motion and occupancy sources to include. Native Nest Home/Away appears when its state is available.'); picker(inputs, rule, 'sourceIds', ['motion', 'occupancy']);
     const behavior = editorSection(host, '02', 'Give arrivals and departures some time', 'Continuous occupancy remains positive while reported. A motion hold keeps a brief detection useful.');
@@ -453,16 +458,41 @@ function renderRuleEditor() {
     const fields = el('div', undefined, 'form-grid'); inputField(fields, 'Motion hold (minutes)', rule.holdMinutes ?? 10, (value) => { rule.holdMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); inputField(fields, 'Delay before Away (minutes)', rule.awayDelayMinutes ?? 20, (value) => { rule.awayDelayMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); behavior.append(fields);
   } else {
     const outputs = editorSection(host, '01', 'Choose your room fans', 'These are ceiling or room fans exposed by Homebridge. Nest’s HVAC blower has its own controls on Overview.'); picker(outputs, rule, 'targetIds', ['fan']);
-    const behavior = editorSection(host, '02', 'Plan when the fans would run', 'Use temperature or the heating/cooling activity reported by a Nest thermostat.');
+    const behavior = editorSection(host, '02', 'Choose when the fans run', 'Use temperature or the heating/cooling activity reported by a Nest thermostat. Only fans started by the rule are stopped when the condition clears. Manual changes pause the rule.');
     inputField(behavior, 'Run condition', rule.action || 'temperature', (value) => { rule.action = value; renderRuleEditor(); }, { choices: [['temperature', 'Temperature above threshold'], ['heating', 'Thermostat is heating'], ['cooling', 'Thermostat is cooling']] });
     if (rule.action === 'heating' || rule.action === 'cooling') thermostatSelect(behavior, rule);
     else { const fields = el('div', undefined, 'form-grid'); inputField(fields, 'Above temperature (°C)', rule.threshold ?? 24, (value) => { rule.threshold = value; }, { type: 'number', min: 5, max: 35, step: .5 }); inputField(fields, 'Turn-off gap (°C)', rule.hysteresis ?? 1, (value) => { rule.hysteresis = value; }, { type: 'number', min: .1, max: 10, step: .1 }); behavior.append(fields); picker(behavior, rule, 'sourceIds', ['temperature']); }
   }
+  const runtime = el('div', undefined, 'preview-box'); runtime.id = 'rule-runtime'; runtime.setAttribute('role', 'status'); host.append(runtime);
   const preview = el('div', undefined, 'preview-box'); preview.id = 'rule-preview'; preview.setAttribute('role', 'status'); host.append(preview);
-  const footer = el('div', undefined, 'editor-footer'); footer.append(el('span', 'Saving a draft does not enable automation.', 'small-note'), button('Delete draft', () => { if (!window.confirm('Delete this rule draft?')) return; state.config.rules[ruleKey[state.ruleKind]] = rules().filter((entry) => entry.id !== rule.id); state.ruleId = null; markDirty(); renderRules(); }, 'button danger')); host.append(footer); renderRulePreview();
+  const footer = el('div', undefined, 'editor-footer'); footer.append(el('span', 'Save changes to apply this rule’s configuration.', 'small-note'), button('Delete rule', () => { if (!window.confirm('Delete this rule? Saving releases its equipment controls and removes a combined presence sensor.')) return; state.config.rules[ruleKey[state.ruleKind]] = rules().filter((entry) => entry.id !== rule.id); state.ruleId = null; markDirty(); renderRules(); }, 'button danger')); host.append(footer); renderRulePreview();
+}
+async function ruleCommand(id, action) {
+  try { state.status.automation = await api('/rules/command', { method: 'POST', body: { id, action, ...(['home', 'away'].includes(action) ? { minutes: 60 } : {}) } }); renderRulePreview(); }
+  catch (error) { notice(error.message, 'danger'); }
+}
+function renderRuleRuntime(rule) {
+  const host = $('rule-runtime'); if (!host) return;
+  const runtime = state.status.automation; const current = runtime?.rules?.find((entry) => entry.id === rule.id);
+  host.replaceChildren(el('h4', 'Execution status'));
+  if (!state.live || !runtime?.available) { host.append(el('p', 'Execution status unavailable. Refresh after the Nest bridge starts.')); return; }
+  if (runtime.error) host.append(el('p', runtime.error));
+  host.append(el('strong', current?.phase || 'Not saved'), el('p', current?.reason || 'Save this rule to apply its settings.'));
+  if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Nest target: ' + formatTemp(current.nestTarget) + ' · Room target: ' + formatTemp(current.desiredTemperature)));
+  if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
+  if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
+  if (current?.lastAction) host.append(el('p', current.lastAction.message + ' ' + new Date(current.lastAction.at).toLocaleTimeString()));
+  if (current?.enabled) {
+    const actions = el('div', undefined, 'timer-buttons');
+    for (const [label, action] of [[current.paused ? 'Resume automatic control' : 'Pause rule', current.paused ? 'resume' : 'pause'], ...(rule.kind === 'presence' ? [['Force Home · 1 hour', 'home'], ['Force Away · 1 hour', 'away'], ['Resume automatic presence', 'resume']] : [])]) {
+      const item = button(label, () => ruleCommand(rule.id, action), 'button secondary'); item.disabled = state.dirty; actions.append(item);
+    }
+    host.append(actions); if (state.dirty) host.append(el('p', 'Save or discard your edits before using immediate rule controls.', 'small-note'));
+  }
 }
 function renderRulePreview() {
   const host = $('rule-preview'); const rule = selectedRule(); if (!host || !rule) return;
+  renderRuleRuntime(rule);
   host.replaceChildren(el('h4', 'Current signals · preview only'));
   const all = sources(); const chosen = (rule.sourceIds || []).map((id) => all.find((source) => source.id === id));
   const fresh = (source) => source?.available && Number.isFinite(source.lastReadAt) && Date.now() - source.lastReadAt <= 90000 && source.lastReadAt <= Date.now() + 1000;
@@ -482,11 +512,11 @@ function renderRulePreview() {
     const targets = (rule.targetIds || []).map((id) => all.find((source) => source.id === id));
     if (!targets.length) { headline = 'Choose your room fans'; detail = 'Select at least one fan exposed by Homebridge.'; }
     else if (targets.some((source) => !fresh(source) || !source.canControl)) { headline = 'A fan needs attention'; detail = 'A selected fan is unavailable or does not expose standard on/off control. No fan command is sent.'; }
-    else if (rule.action === 'heating' || rule.action === 'cooling') { const thermostat = thermostats().find((device) => device.serial === rule.thermostatId); if (thermostat && usable(thermostat)) { const matched = thermostat.data.hvac_state === rule.action; headline = matched ? 'Run condition met now' : 'Run condition not met'; detail = (thermostat.data.description || 'Thermostat') + ' reports ' + (thermostat.data.hvac_state || 'unknown state') + '. ' + targets.length + ' selected fan' + (targets.length === 1 ? '' : 's') + ' stay unchanged.'; } else { headline = 'Choose an available thermostat'; detail = 'A connected thermostat is needed to preview heating or cooling activity.'; } }
-    else if (chosen.length && chosen.every((source) => fresh(source) && Number.isFinite(source.temperature))) { const average = chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length; const matches = average > (rule.threshold ?? 24); headline = matches ? 'Run condition met now' : 'Run condition not met'; detail = 'Selected rooms average ' + formatTemp(average) + '; threshold ' + formatTemp(rule.threshold ?? 24) + '. The turn-off gap is a draft setting; no fan state is changed.'; }
+    else if (rule.action === 'heating' || rule.action === 'cooling') { const thermostat = thermostats().find((device) => device.serial === rule.thermostatId); if (thermostat && usable(thermostat)) { const matched = thermostat.data.hvac_state === rule.action; headline = matched ? 'Run condition met now' : 'Run condition not met'; detail = (thermostat.data.description || 'Thermostat') + ' reports ' + (thermostat.data.hvac_state || 'unknown state') + '. ' + targets.length + ' selected fan' + (targets.length === 1 ? '' : 's') + ' selected for this rule. See Execution status for live control.'; } else { headline = 'Choose an available thermostat'; detail = 'A connected thermostat is needed to preview heating or cooling activity.'; } }
+    else if (chosen.length && chosen.every((source) => fresh(source) && Number.isFinite(source.temperature))) { const average = chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length; const matches = average > (rule.threshold ?? 24); headline = matches ? 'Run condition met now' : 'Run condition not met'; detail = 'Selected rooms average ' + formatTemp(average) + '; threshold ' + formatTemp(rule.threshold ?? 24) + '. This snapshot does not simulate the turn-off gap. See Execution status for live control.'; }
     else if (chosen.length) { headline = 'Waiting for reliable readings'; detail = 'A selected temperature source is missing or stale. Refresh the sources.'; }
   }
-  host.append(el('strong', headline), el('p', detail), el('span', 'Draft only · no automatic actions · sensor measurement age may be unknown', 'preview-label'));
+  host.append(el('strong', headline), el('p', detail), el('span', 'This preview sends no commands. Enabled rules execute separately; see Execution status. Sensor measurement age may be unknown.', 'preview-label'));
 }
 async function save() {
   if (!state.dirty || state.saving || !state.config || !state.envelope) return;
@@ -496,8 +526,9 @@ async function save() {
   try {
     const envelope = await api('/config', { method: 'PUT', body: { revision: state.envelope.revision, config: state.config } });
     state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true;
-    notice(envelope.restartRequired ? 'Saved. Restart the Nest child bridge in Homebridge to apply accessory settings. Rule drafts remain inactive.' : 'Saved. Your rule drafts remain inactive.');
-    renderAll(); toast(envelope.restartRequired ? 'Setup saved · child-bridge restart required' : 'Drafts saved');
+    notice(envelope.restartRequired ? 'Saved. Enabled rules apply now. Restart the Nest child bridge in Homebridge to apply accessory settings; resume equipment rules afterward.' : 'Saved. Enabled rules run automatically; disabled rules remain drafts.');
+    renderAll(); toast(envelope.restartRequired ? 'Setup saved · child-bridge restart required' : 'Rules saved');
+    api('/status').then((status) => { state.status = status; renderLive(); }).catch(() => {});
   } catch (error) {
     notice(error.status === 409 ? 'The configuration changed elsewhere. Your edits are still here, but nothing was saved. Discard to load the latest setup, then reapply your changes.' : error.message, error.status === 409 ? 'warning' : 'danger');
     $('save-title').textContent = error.status === 409 ? 'Newer configuration found' : 'Changes not saved';

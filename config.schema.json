@@ -267,6 +267,16 @@
           }
         }
       },
+      "climateRuleDrafts": {
+        "type": "object",
+        "title": "Climate automation rules",
+        "description": "Manage named rules in the standalone dashboard. Rules run only when enabled. Heating groups use bounded target adjustments; room fans and combined presence use selected Homebridge inputs.",
+        "properties": {
+          "temperature": { "type": "array", "items": { "type": "object" } },
+          "fans": { "type": "array", "items": { "type": "object" } },
+          "occupancy": { "type": "array", "items": { "type": "object" } }
+        }
+      },
       "webDashboard": {
         "type": "object",
         "title": "Web dashboard",

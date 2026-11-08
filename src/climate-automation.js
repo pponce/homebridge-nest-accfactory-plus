@@ -1,0 +1,678 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { ClimateAccess } from '../homebridge-ui/climate-access.js';
+import { sensorSources } from '../homebridge-ui/public/sensor-preview.js';
+
+const MINUTE = 60000;
+const ACK_TIMEOUT = 2 * MINUTE;
+const equal = (a, b) => typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 0.15 : a === b;
+const fresh = (source, now) => source?.available === true && Number.isFinite(source.lastReadAt) &&
+  source.lastReadAt <= now + 1000 && now - source.lastReadAt <= 90000;
+const target = (device) => device?.data.target_temperature_low ?? device?.data.target_temperature;
+const flatten = (rules) => [...rules.temperature, ...rules.fans, ...rules.occupancy];
+
+function schedulePosition(entries, timeZone, now) {
+  if (!entries.length) {
+    return null;
+  }
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: 'numeric',
+    day: 'numeric', weekday: 'short', hour: 'numeric', minute: 'numeric', second: 'numeric', hourCycle: 'h23' })
+    .formatToParts(new Date(now)).map((part) => [part.type, part.value]));
+  const weekday = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
+  const seconds = Number(parts.hour) * 3600 + Number(parts.minute) * 60 + Number(parts.second);
+  const today = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+  // Compare local calendar events rather than extrapolating seconds across daylight-saving changes.
+  return Math.max(...entries.filter((entry) => Number.isInteger(entry.day) && entry.day >= 0 && entry.day <= 6 &&
+    Number.isFinite(entry.time) && entry.time >= 0 && entry.time < 86400).map((entry) => {
+    let days = (weekday - entry.day + 7) % 7;
+    if (days === 0 && entry.time > seconds) {
+      days = 7;
+    }
+    return today - days * 86400000 + entry.time * 1000;
+  }));
+}
+
+export function automationSources(snapshot, external) {
+  const temperatures = sensorSources(snapshot, external);
+  const serials = new Set(snapshot.devices.map((device) => device.serial));
+  const presence = snapshot.devices.filter((device) => device.type === 'HomeAway').map((device) => {
+    const account = snapshot.accounts.find((entry) => entry.id === device.account);
+    return { id: 'nest:' + device.id, kind: 'occupancy', detected: device.data.occupancy, lastReadAt: snapshot.generatedAt,
+      available: Boolean(account?.authorised && account.observing && !device.needsUpdate && device.data.online !== false &&
+        typeof device.data.occupancy === 'boolean') };
+  });
+  return [...temperatures, ...presence, ...(external.sources ?? []).filter((source) => source.kind !== 'temperature' &&
+    !String(source.serial ?? '').startsWith('CLIMATE-PRESENCE-') &&
+    !(source.kind === 'fan' && (serials.has(source.serial) || /nest|google/i.test(source.manufacturer ?? ''))))];
+}
+
+export function heatingTarget(desired, physical, room, maximumOffset = 1.5, scale = 'C') {
+  const low = Math.max(9, desired - maximumOffset);
+  const high = Math.min(32, desired + maximumOffset);
+  const proposed = Math.max(low, Math.min(high, desired + physical - room));
+  // Round on the device's display grid without crossing either the offset or absolute bounds.
+  const toGrid = (value) => scale === 'F' ? value * 1.8 + 32 : value * 2;
+  const fromGrid = (value) => scale === 'F' ? (value - 32) / 1.8 : value / 2;
+  const minimum = Math.ceil(toGrid(low) - 1e-8);
+  const maximum = Math.floor(toGrid(high) + 1e-8);
+  return minimum > maximum ? null : fromGrid(Math.max(minimum, Math.min(maximum, Math.round(toGrid(proposed)))));
+}
+
+export class ClimateAutomation {
+  constructor({ directory, dashboard, config, accessFactory, presence, now = Date.now, intervalMs = 15000, log }) {
+    this.directory = directory;
+    this.dashboard = dashboard;
+    this.config = config;
+    this.accessFactory = accessFactory ?? (() => new ClimateAccess(config.file));
+    this.presence = presence;
+    this.now = now;
+    this.intervalMs = intervalMs;
+    this.log = log;
+    this.states = new Map();
+    this.leases = new Map();
+    this.queue = Promise.resolve();
+    this.saving = Promise.resolve();
+    this.external = { sources: [], bridges: [] };
+    this.rules = [];
+    this.stopping = false;
+  }
+
+  async start({ schedule = true } = {}) {
+    await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
+    try {
+      const bytes = await fs.readFile(path.join(this.directory, 'automation.json'), 'utf8');
+      const data = JSON.parse(bytes);
+      if (bytes.length > 1048576 || data.version !== 1 || !Array.isArray(data.states) || !Array.isArray(data.leases) ||
+          data.states.length > 96 || data.leases.length > 256) {
+        throw new Error('Invalid automation state');
+      }
+      for (const [id, state] of data.states) {
+        if (!/^[a-zA-Z0-9_-]{1,80}$/.test(id) || !state || typeof state !== 'object' || !state.rule || state.rule.id !== id) {
+          throw new Error('Invalid saved rule');
+        }
+        state.awaySince = null;
+        if (state.rule.kind !== 'presence' && state.rule.enabled) {
+          state.paused = true;
+          state.reason = 'Bridge restarted. Review the equipment, then Resume automatic control.';
+        }
+        this.states.set(id, state);
+      }
+      for (const [key, lease] of data.leases) {
+        const isTemperature = lease?.kind === 'temperature';
+        const validValue = (value) => isTemperature ? Number.isFinite(value) && value >= 9 && value <= 32 : typeof value === 'boolean';
+        if (!['temperature', 'fan'].includes(lease?.kind) || typeof lease.targetId !== 'string' ||
+            key !== lease.kind + ':' + lease.targetId || !this.states.has(lease.owner) ||
+            !validValue(lease.baseline) || !validValue(lease.expected) || !validValue(lease.before) ||
+            !Number.isFinite(lease.sentAt)) {
+          throw new Error('Invalid saved command');
+        }
+        this.leases.set(key, lease);
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        this.states.clear();
+        this.leases.clear();
+        this.recoveryRequired = true;
+        this.error = 'Saved automation state could not be read. Review equipment and Resume each rule.';
+      }
+    }
+    this.dashboard.automation = this;
+    await this.tick();
+    if (schedule && !this.stopping) {
+      this.timer = setInterval(() => { this.tick(); }, this.intervalMs);
+      this.timer.unref();
+    }
+  }
+
+  serialize(operation) {
+    const next = this.queue.then(operation);
+    this.queue = next.catch(() => {});
+    return next;
+  }
+
+  async persist() {
+    const bytes = JSON.stringify({ version: 1, states: [...this.states], leases: [...this.leases] });
+    const operation = this.saving.then(async () => {
+      const temporary = path.join(this.directory, 'automation-' + crypto.randomUUID() + '.tmp');
+      let file;
+      try {
+        file = await fs.open(temporary, 'wx', 0o600);
+        await file.writeFile(bytes);
+        await file.sync();
+        await file.close();
+        file = undefined;
+        await fs.rename(temporary, path.join(this.directory, 'automation.json'));
+      } finally {
+        await file?.close();
+        await fs.rm(temporary, { force: true });
+      }
+    });
+    this.saving = operation.catch(() => {});
+    return operation;
+  }
+
+  snapshot() {
+    return { available: !this.stopping, error: this.error ?? null, intervalSeconds: this.intervalMs / 1000,
+      rules: [...this.states.values()].map((state) => ({ id: state.rule.id, enabled: state.rule.enabled,
+        kind: state.rule.kind, name: state.rule.name, phase: state.phase ?? 'waiting', reason: state.reason,
+        paused: state.paused === true, roomTemperature: state.roomTemperature, desiredTemperature: state.rule.desiredTemperature,
+        nestTarget: state.nestTarget, proposedTarget: state.proposedTarget, nextChangeAt: state.nextChangeAt,
+        home: state.home, fault: state.fault, override: state.override, lastAction: state.lastAction })),
+      pendingRestorations: [...this.leases.values()].filter((lease) => lease.restoring).length };
+  }
+
+  async readSources() {
+    if (!this.access) {
+      const access = this.accessFactory();
+      try {
+        await access.start();
+        this.access = access;
+      } catch (error) {
+        access.close();
+        throw error;
+      }
+    }
+    this.external = await this.access.refresh();
+    return this.external;
+  }
+
+  tick() {
+    if (this.stopping) {
+      return Promise.resolve();
+    }
+    this.pending ??= this.serialize(() => this.evaluate()).catch(() => {
+      this.error = 'Automation could not complete its checks. No new commands will run until checks succeed.';
+      this.log?.warn?.('Climate automation could not complete its checks. Review the rule status.');
+    }).finally(() => { this.pending = undefined; });
+    return this.pending;
+  }
+
+  async evaluate() {
+    const envelope = await this.config.snapshot();
+    if (envelope.rulesError) {
+      this.error = envelope.rulesError;
+      for (const state of this.states.values()) {
+        this.pause(state, envelope.rulesError);
+      }
+      return;
+    }
+    this.error = null;
+    this.rules = flatten(envelope.config.rules);
+    this.deviceOptions = envelope.config.devices;
+    const currentIds = new Set(this.rules.map((rule) => rule.id));
+    for (const rule of this.rules) {
+      const old = this.states.get(rule.id);
+      const state = old ?? { paused: this.recoveryRequired === true, holds: {}, reason: this.recoveryRequired ?
+        'Review equipment and Resume after recovery.' : 'Waiting for current readings.' };
+      if (old && !old.rule.enabled && rule.enabled) {
+        state.paused = false;
+        state.awaySince = null;
+      }
+      if (old && JSON.stringify(old.rule.sourceIds) !== JSON.stringify(rule.sourceIds)) {
+        state.holds = {};
+        state.awaySince = null;
+      }
+      state.rule = rule;
+      this.states.set(rule.id, state);
+    }
+    for (const [id, state] of this.states) {
+      if (!currentIds.has(id)) {
+        state.rule.enabled = false;
+      }
+    }
+    if (this.rules.some((rule) => rule.enabled && [...rule.sourceIds, ...rule.targetIds].some((id) => !id.startsWith('nest:'))) ||
+        [...this.leases.values()].some((lease) => lease.kind === 'fan')) {
+      try {
+        await this.readSources();
+      } catch {
+        this.external = { sources: this.external.sources.map((source) => ({ ...source, available: false })), bridges: [] };
+      }
+    }
+    this.refreshSnapshot();
+    this.presence?.sync(this.rules.filter((rule) => rule.kind === 'presence' && rule.enabled));
+    // Persist configuration intent before permitting any side effects.
+    await this.persist();
+    for (const [key, lease] of this.leases) {
+      const owner = this.states.get(lease.owner);
+      const assigned = owner?.rule.enabled && owner.rule.kind === lease.kind && !owner.paused && (lease.kind === 'temperature' ?
+        owner.rule.thermostatId === lease.targetId : owner.rule.targetIds.includes(lease.targetId));
+      if (!assigned || lease.restoring) {
+        await this.release(key, lease);
+      }
+    }
+    for (const state of this.states.values()) {
+      if (!state.rule.enabled) {
+        state.phase = 'disabled';
+        state.reason = 'Rule is disabled.';
+        if (!currentIds.has(state.rule.id) && ![...this.leases.values()].some((lease) => lease.owner === state.rule.id)) {
+          this.states.delete(state.rule.id);
+        }
+        continue;
+      }
+      if (state.paused) {
+        state.phase = 'paused';
+        if (state.rule.kind === 'presence') {
+          state.fault = true;
+          this.presence?.update(state.rule, state);
+        }
+        continue;
+      }
+      try {
+        if (state.rule.kind === 'temperature') {
+          await this.temperature(state);
+        } else if (state.rule.kind === 'fan') {
+          await this.fan(state);
+        } else {
+          this.occupancy(state);
+          this.presence?.update(state.rule, state);
+        }
+      } catch (error) {
+        if (error.code === 'CLIMATE_CONFLICT') {
+          for (const [key, lease] of this.leases) {
+            if (lease.owner === state.rule.id) {
+              this.leases.delete(key);
+            }
+          }
+        }
+        state.paused = true;
+        state.phase = 'paused';
+        state.reason = 'Command or state storage failed. Check the equipment before resuming; no automatic retry is made.';
+      }
+    }
+    await this.persist();
+  }
+
+  refreshSnapshot() {
+    this.live = this.dashboard.snapshot();
+    this.sources = new Map(automationSources(this.live, this.external).map((source) => [source.id, source]));
+  }
+
+  device(serial) {
+    return this.live.devices.find((device) => device.serial === serial && device.type === 'Thermostat');
+  }
+
+  connected(device) {
+    const account = this.live.accounts.find((entry) => entry.id === device?.account);
+    return Boolean(device && account?.authorised && account.observing && !device.needsUpdate && device.data.online === true);
+  }
+
+  temperatureInputs(rule) {
+    const chosen = rule.sourceIds.map((id) => this.sources.get(id));
+    if (!chosen.length || chosen.some((source) => source?.kind !== 'temperature' || !fresh(source, this.now()) ||
+        !Number.isFinite(source.temperature) || source.temperature < -100 || source.temperature > 100)) {
+      return null;
+    }
+    return chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length;
+  }
+
+  pause(state, reason) {
+    state.paused = true;
+    state.phase = 'paused';
+    state.reason = reason;
+  }
+
+  schedule(device, serial) {
+    const zone = this.deviceOptions.find((entry) => entry.serialNumber === serial)?.scheduleTimeZone;
+    const entries = Object.entries(device.data.schedules ?? {}).flatMap(([day, points]) =>
+      Object.values(points ?? {}).map((point) => ({ day: Number(day), ...point })));
+    return { zone, entries, signature: JSON.stringify([entries, zone]),
+      position: zone ? schedulePosition(entries, zone, this.now()) : null };
+  }
+
+  observe(key, lease, value, state) {
+    if (equal(value, lease.expected)) {
+      lease.pending = false;
+      return true;
+    }
+    if (lease.pending && equal(value, lease.before) && this.now() - lease.sentAt < ACK_TIMEOUT) {
+      state.phase = 'waiting';
+      state.reason = 'Waiting for the device to report the accepted command.';
+      return false;
+    }
+    this.leases.delete(key);
+    this.pause(state, 'The device target/state changed or did not confirm a command. Review it, then Resume automatic control.');
+    return false;
+  }
+
+  async temperature(state) {
+    const rule = state.rule;
+    const device = this.device(rule.thermostatId);
+    const key = 'temperature:' + rule.thermostatId;
+    let lease = this.leases.get(key);
+    state.nestTarget = target(device);
+    state.roomTemperature = this.temperatureInputs(rule);
+    if (!this.connected(device)) {
+      state.phase = 'waiting';
+      state.reason = 'Thermostat connection unavailable. Nest may retain its last target.';
+      return;
+    }
+    if (device.data.hvac_mode !== 'heat' || device.data.eco_mode !== false || device.data.active_rcs_sensor !== '' ||
+        device.data.can_heat === false || device.data.temperature_lock === true) {
+      if (lease) {
+        this.leases.delete(key);
+        this.pause(state, 'Nest mode, Eco, lock or active sensor changed. Native Nest control takes priority; Resume when ready.');
+      } else {
+        state.phase = 'waiting';
+        state.reason = 'Heating control requires Heat mode, Eco off, no temperature lock and the built-in Nest sensor.';
+      }
+      return;
+    }
+    const { zone, entries, signature: scheduleSignature, position: scheduleKey } = this.schedule(device, rule.thermostatId);
+    if (state.controlStarted && (state.scheduleKey !== scheduleKey || state.scheduleSignature !== scheduleSignature)) {
+      this.leases.delete(key);
+      this.pause(state, 'A Nest schedule boundary or schedule change takes priority. Resume to start a new room-temperature hold.');
+      return;
+    }
+    if (entries.length && !zone) {
+      state.phase = 'waiting';
+      state.reason = 'Set this thermostat’s schedule time zone in Settings before enabling scheduled heating control.';
+      return;
+    }
+    if (lease && (lease.owner !== rule.id || lease.restoring || !this.observe(key, lease, target(device), state))) {
+      return;
+    }
+    if (!lease && state.controlStarted && !equal(state.referenceTarget, target(device))) {
+      this.pause(state, 'The Nest target changed. Resume to start a new room-temperature hold.');
+      return;
+    }
+    if (state.roomTemperature === null || !Number.isFinite(device.data.physical_temperature) ||
+        Math.abs(device.data.physical_temperature) > 100 || !Number.isFinite(target(device)) || target(device) < 9 || target(device) > 32) {
+      state.phase = 'waiting';
+      state.reason = 'A selected temperature is unavailable. Returning an owned target to its previous setting when possible.';
+      if (lease) {
+        await this.release(key, lease);
+      }
+      return;
+    }
+    const proposed = heatingTarget(rule.desiredTemperature, device.data.physical_temperature, state.roomTemperature,
+      rule.maximumOffset ?? 1.5, device.data.temperature_scale);
+    state.proposedTarget = proposed;
+    if (proposed === null) {
+      state.phase = 'waiting';
+      state.reason = 'The offset limit has no valid target on this thermostat’s temperature grid.';
+      return;
+    }
+    if (!lease) {
+      state.scheduleSignature = scheduleSignature;
+      state.scheduleKey = scheduleKey;
+      state.controlStarted = true;
+      state.referenceTarget = target(device);
+    }
+    state.phase = 'active';
+    state.reason = 'Heating follows the selected room temperature within the configured adjustment limit.';
+    state.nextChangeAt = lease ? lease.sentAt + (rule.minimumIntervalMinutes ?? 5) * MINUTE : null;
+    if (equal(target(device), proposed) || (lease && this.now() < state.nextChangeAt)) {
+      return;
+    }
+    lease ??= { kind: 'temperature', targetId: rule.thermostatId, owner: rule.id, baseline: target(device) };
+    lease.before = target(device);
+    lease.expected = proposed;
+    lease.sentAt = this.now();
+    lease.pending = true;
+    this.leases.set(key, lease);
+    await this.persist();
+    if (state.paused || this.stopping) {
+      return;
+    }
+    await this.dashboard.setAutomationTarget(rule.thermostatId, proposed, lease.before, () => !state.paused && !this.stopping);
+    state.lastAction = { at: this.now(), value: proposed, message: 'Heating target accepted; awaiting device feedback.' };
+    state.phase = 'waiting';
+  }
+
+  async fan(state) {
+    const rule = state.rule;
+    let demand;
+    if (['heating', 'cooling'].includes(rule.action)) {
+      const device = this.device(rule.thermostatId);
+      if (this.connected(device) && ['heating', 'cooling', 'off'].includes(device.data.hvac_state)) {
+        demand = device.data.hvac_state === rule.action;
+      }
+    } else {
+      state.roomTemperature = this.temperatureInputs(rule);
+      if (state.roomTemperature !== null) {
+        if (state.roomTemperature > rule.threshold) {
+          demand = true;
+        } else if (state.roomTemperature <= rule.threshold - (rule.hysteresis ?? 1)) {
+          demand = false;
+        } else {
+          demand = state.demand ?? false;
+        }
+      }
+    }
+    if (demand === undefined) {
+      state.phase = 'waiting';
+      state.reason = 'Run-condition readings are unavailable. Returning owned fans to their previous state when possible.';
+      for (const [key, lease] of this.leases) {
+        if (lease.owner === rule.id) {
+          await this.release(key, lease);
+        }
+      }
+      return;
+    }
+    state.demand = demand;
+    state.fanObserved ??= {};
+    state.phase = 'active';
+    state.reason = demand ? 'Run condition is met.' : 'Run condition is clear.';
+    for (const id of rule.targetIds) {
+      const source = this.sources.get(id);
+      const key = 'fan:' + id;
+      let lease = this.leases.get(key);
+      if (source?.kind !== 'fan' || !fresh(source, this.now()) || !source.canControl) {
+        state.phase = 'waiting';
+        state.reason = 'A selected fan is unavailable or no longer exposes standard on/off control.';
+        continue;
+      }
+      if (lease && (lease.owner !== rule.id || lease.restoring || !this.observe(key, lease, source.running, state))) {
+        if (state.paused) {
+          return;
+        }
+        continue;
+      }
+      if (!lease && typeof state.fanObserved[id] === 'boolean' && state.fanObserved[id] !== source.running) {
+        this.pause(state, 'A selected fan changed outside this rule. Resume when ready for automatic fan control.');
+        return;
+      }
+      state.fanObserved[id] = source.running;
+      // Never switch off a fan that the rule did not turn on.
+      const desired = demand ? true : lease?.baseline;
+      if (desired === undefined || source.running === desired || (lease && this.now() - lease.sentAt < MINUTE)) {
+        continue;
+      }
+      lease ??= { kind: 'fan', targetId: id, owner: rule.id, baseline: source.running };
+      lease.before = source.running;
+      lease.expected = desired;
+      lease.sentAt = this.now();
+      lease.pending = true;
+      this.leases.set(key, lease);
+      await this.persist();
+      if (state.paused || this.stopping) {
+        return;
+      }
+      await this.access.setFan(id, desired, lease.before);
+      state.lastAction = { at: this.now(), value: desired, message: 'Room-fan command accepted; awaiting device feedback.' };
+    }
+  }
+
+  occupancy(state) {
+    const rule = state.rule;
+    const now = this.now();
+    state.holds ??= {};
+    if (state.override && Number.isFinite(state.override.until) && state.override.until > now &&
+        state.override.until <= now + 1440 * MINUTE && typeof state.override.home === 'boolean') {
+      state.home = state.override.home;
+      state.fault = false;
+      state.phase = 'override';
+      state.reason = 'Manual presence override is active until its displayed expiry.';
+      state.nextChangeAt = state.override.until;
+      return;
+    }
+    delete state.override;
+    const inputs = rule.sourceIds.map((id) => {
+      const source = this.sources.get(id);
+      if (!fresh(source, now) || !['motion', 'occupancy'].includes(source?.kind) || typeof source.detected !== 'boolean') {
+        return null;
+      }
+      if (source.kind === 'motion') {
+        if (source.detected) {
+          state.holds[id] = now + (rule.holdMinutes ?? 10) * MINUTE;
+        }
+        return source.detected || (Number.isFinite(state.holds[id]) && state.holds[id] > now &&
+          state.holds[id] <= now + 1440 * MINUTE);
+      }
+      return source.detected;
+    });
+    const unknown = inputs.includes(null) || !inputs.length;
+    const positive = rule.logic === 'all' ? inputs.length > 0 && inputs.every((value) => value === true) : inputs.includes(true);
+    state.fault = unknown;
+    if (positive) {
+      state.home = true;
+      state.awaySince = null;
+      state.phase = unknown ? 'degraded' : 'active';
+      state.reason = 'Home condition is met' + (unknown ? '; another selected source is unavailable.' : '.');
+      state.nextChangeAt = null;
+    } else if (unknown) {
+      state.awaySince = null;
+      state.phase = 'degraded';
+      state.reason = 'A presence source is unavailable. Last confirmed state is retained; Away cannot be established.';
+      state.nextChangeAt = null;
+    } else {
+      state.awaySince ??= now;
+      if (state.awaySince > now) {
+        state.awaySince = now;
+      }
+      state.nextChangeAt = state.awaySince + (rule.awayDelayMinutes ?? 20) * MINUTE;
+      if (now >= state.nextChangeAt) {
+        state.home = false;
+        state.phase = 'active';
+        state.reason = 'Away delay elapsed with no matching Home condition.';
+      } else {
+        state.phase = 'waiting';
+        state.reason = 'Waiting for the Away delay; the previous confirmed state remains in effect.';
+        state.fault = typeof state.home !== 'boolean';
+      }
+    }
+  }
+
+  async release(key, lease) {
+    const device = lease.kind === 'temperature' ? this.device(lease.targetId) : undefined;
+    const source = lease.kind === 'fan' ? this.sources.get(lease.targetId) : undefined;
+    if (lease.kind === 'temperature' ? !this.connected(device) : !fresh(source, this.now()) || !source.canControl) {
+      lease.restoring = true;
+      return;
+    }
+    const current = lease.kind === 'temperature' ? target(device) : source.running;
+    if (lease.kind === 'temperature' && (device.data.hvac_mode !== 'heat' || device.data.eco_mode !== false ||
+        device.data.active_rcs_sensor !== '' || device.data.temperature_lock === true)) {
+      this.leases.delete(key);
+      return;
+    }
+    if (lease.kind === 'temperature') {
+      const owner = this.states.get(lease.owner);
+      const schedule = this.schedule(device, lease.targetId);
+      if (owner?.controlStarted && (owner.scheduleKey !== schedule.position || owner.scheduleSignature !== schedule.signature)) {
+        this.leases.delete(key);
+        return;
+      }
+    }
+    if (!equal(current, lease.expected)) {
+      if (lease.pending && equal(current, lease.before) && this.now() - lease.sentAt < ACK_TIMEOUT) {
+        lease.restoring = true;
+        return;
+      }
+      this.leases.delete(key);
+      return;
+    }
+    if (equal(current, lease.baseline)) {
+      this.leases.delete(key);
+      const state = this.states.get(lease.owner);
+      if (state && lease.kind === 'temperature') {
+        state.controlStarted = false;
+      } else if (state?.fanObserved) {
+        state.fanObserved[lease.targetId] = current;
+      }
+      return;
+    }
+    lease.before = current;
+    lease.expected = lease.baseline;
+    lease.pending = true;
+    lease.restoring = true;
+    lease.sentAt = this.now();
+    await this.persist();
+    if (lease.kind === 'temperature') {
+      await this.dashboard.setAutomationTarget(lease.targetId, lease.baseline, current);
+    } else {
+      await this.access.setFan(lease.targetId, lease.baseline, current);
+    }
+  }
+
+  // Called before direct HomeKit/dashboard commands. Native user intent wins even before cloud feedback arrives.
+  async manualThermostat(deviceId) {
+    let changed = false;
+    for (const state of this.states.values()) {
+      const device = this.dashboard.devices.get(state.rule.thermostatId);
+      if (state.rule.kind === 'temperature' && state.rule.enabled && device?.id === deviceId) {
+        this.pause(state, 'A manual Nest control was used. Resume when ready to use the room-temperature group again.');
+        this.leases.delete('temperature:' + state.rule.thermostatId);
+        changed = true;
+      }
+    }
+    if (changed) {
+      await this.persist().catch(() => {
+        this.error = 'The manual override is active, but its state could not be saved.';
+      });
+    }
+  }
+
+  control(payload) {
+    return this.serialize(async () => {
+      if (this.stopping || !payload || Object.keys(payload).some((key) => !['id', 'action', 'minutes'].includes(key))) {
+        throw new Error('Invalid automation command.');
+      }
+      const state = this.states.get(payload.id);
+      if (!state?.rule.enabled || !['pause', 'resume', 'home', 'away'].includes(payload.action)) {
+        throw new Error('Select an enabled rule and supported action.');
+      }
+      if (['home', 'away'].includes(payload.action)) {
+        const minutes = payload.minutes ?? 60;
+        if (state.rule.kind !== 'presence' || !Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+          throw new Error('Presence overrides must last from 1 to 1440 minutes.');
+        }
+        state.override = { home: payload.action === 'home', until: this.now() + minutes * MINUTE };
+        state.paused = false;
+      } else {
+        state.paused = payload.action === 'pause';
+        state.reason = state.paused ? 'Paused by you. Owned equipment settings are restored when reachable.' : 'Resuming automatic control.';
+        delete state.override;
+        state.awaySince = null;
+        if (!state.paused) {
+          state.controlStarted = false;
+          state.fanObserved = {};
+        }
+      }
+      await this.persist();
+      await this.evaluate();
+      return this.snapshot();
+    });
+  }
+
+  async stop() {
+    this.stopping = true;
+    clearInterval(this.timer);
+    await this.queue;
+    try {
+      if (this.access) {
+        await this.readSources();
+      }
+      this.refreshSnapshot();
+      for (const [key, lease] of this.leases) {
+        await this.release(key, lease);
+      }
+      await this.persist();
+    } catch {
+      this.log?.warn?.('Climate automation could not restore every owned setting during shutdown. Check the equipment.');
+    }
+    this.access?.close();
+    await this.saving;
+  }
+}

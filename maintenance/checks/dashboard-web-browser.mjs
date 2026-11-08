@@ -18,10 +18,16 @@ let statusAvailable = true;
 let conflict = false;
 const commands = [];
 const saves = [];
+const ruleActions = [];
+const pausedRules = new Set();
+const automation = () => ({ available: true, rules: Object.values(config.rules).flat().map((rule) => ({ ...rule,
+  paused: pausedRules.has(rule.id), phase: !rule.enabled ? 'disabled' : pausedRules.has(rule.id) ? 'paused' : 'active',
+  reason: !rule.enabled ? 'Rule is disabled.' : pausedRules.has(rule.id) ? 'Paused by you.' : 'Automatic rule is running.' })) });
 const day = 86400000;
 const runtime = Array.from({ length: 7 }, (_, index) => ({ date: new Date(Date.now() - (6 - index) * day).toISOString().slice(0, 10), heating: [4700, 6500, 3800, 7200, 5100, 6100, 4200][index], cooling: [0, 900, 1200, 0, 600, 0, 700][index], observed: index === 6 ? 33000 : 86400 }));
 const snapshot = () => ({
   generatedAt: Date.now(), runtimeTimezone: 'UTC', lastCommand: null,
+  automation: automation(),
   accounts: [{ id: 'A', name: 'Google Home', authorised: true, observing: true, authMethod: 'refreshToken', lastUpdate: Date.now() }],
   devices: [
     { serial: 'T1', id: 'thermostat-living', type: 'Thermostat', account: 'A', lastUpdate: Date.now(), data: {
@@ -56,7 +62,7 @@ let config = {
   },
 };
 let revision = 1;
-const envelope = () => ({ revision: String(revision), config: structuredClone(config), accounts: [{ name: 'Google Home', type: 'google', authMethod: 'refreshToken', configured: true }], web: { enabled: true, port: 9444, url: 'https://homebridge.local:9444', username: 'admin' }, executionEnabled: false, restartRequired: false });
+const envelope = () => ({ revision: String(revision), config: structuredClone(config), accounts: [{ name: 'Google Home', type: 'google', authMethod: 'refreshToken', configured: true }], web: { enabled: true, port: 9444, url: 'https://homebridge.local:9444', username: 'admin' }, executionEnabled: true, restartRequired: false });
 const assets = new Set(['index.html', 'app.js', 'styles.css', 'manifest.webmanifest', 'favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png']);
 const server = http.createServer(async (request, response) => {
   response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self'");
@@ -82,6 +88,7 @@ const server = http.createServer(async (request, response) => {
       saves.push(structuredClone(body)); config = structuredClone(body.config); revision++; json(200, envelope()); return;
     }
     if (route === '/api/command') { commands.push(structuredClone(body)); json(200, { accepted: true, message: 'Command accepted.' }); return; }
+    if (route === '/api/rules/command') { ruleActions.push(body); if (body.action === 'pause') pausedRules.add(body.id); else pausedRules.delete(body.id); json(200, automation()); return; }
     json(404, { error: 'Not found.' }); return;
   }
   let file; let name;
@@ -170,7 +177,7 @@ try {
   await capture('rules-desktop.png');
   assert.equal(commands.length, 0, 'Rule previews must never call live commands');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Saved. Your rule drafts remain inactive.', { exact: true }).waitFor();
+  await page.getByText('Saved. Enabled rules run automatically; disabled rules remain drafts.', { exact: true }).waitFor();
   assert.equal(saves.length, 1);
   assert.equal(saves[0].config.rules.temperature[0].desiredTemperature, 22);
   assert.equal(saves[0].config.rules.temperature[0].enabled, false);
@@ -192,6 +199,16 @@ try {
   conflict = false;
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).check();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Pause rule', exact: true }).waitFor();
+  assert.equal(saves.at(-1).config.rules.fans[0].enabled, true);
+  await page.getByRole('button', { name: 'Pause rule', exact: true }).click();
+  await page.getByRole('button', { name: 'Resume automatic control', exact: true }).waitFor();
+  assert.deepEqual(ruleActions.at(-1), { id: 'fan-1', action: 'pause' });
+  await page.getByRole('button', { name: 'Resume automatic control', exact: true }).click();
+  await page.getByRole('button', { name: 'Pause rule', exact: true }).waitFor();
+  assert.deepEqual(ruleActions.at(-1), { id: 'fan-1', action: 'resume' });
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await Promise.all([page.waitForResponse((response) => response.url().endsWith('/api/command')), page.getByLabel('Turn Eco on for Living room').click()]);
   await page.waitForFunction(() => !document.querySelector('[aria-label="Turn Eco on for Living room"]').disabled);
@@ -249,7 +266,7 @@ try {
   assert.equal(apple.readUInt32BE(20), 180);
   assert.deepEqual(errors, []);
   assert.deepEqual(cspErrors, []);
-  console.log('PASS standalone dashboard: login, live controls, draft-only previews, durable config payload, preserved custom durations, revision conflicts, offline controls, 360px layout, mobile save workflow, text contrast, phone hit targets, dark mode, CSP, iOS icons');
+  console.log('PASS standalone dashboard: login, live controls, preview isolation, opt-in execution, pause/resume, durable config payload, preserved custom durations, revision conflicts, offline controls, 360px layout, mobile save workflow, text contrast, phone hit targets, dark mode, CSP, iOS icons');
   console.log('Screenshots:', output);
 } finally {
   await browser?.close();

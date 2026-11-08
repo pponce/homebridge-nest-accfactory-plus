@@ -64,6 +64,8 @@ import { getProtoTypes } from './protobuf.js';
 import { createSupportDump } from './supportdump.js';
 import { ClimateDashboard } from './climate-dashboard.js';
 import { WebDashboard } from './web-dashboard.js';
+import { ClimateAutomation } from './climate-automation.js';
+import { ClimatePresence } from './climate-presence.js';
 import { rememberCachedIdentity } from './identity.js';
 
 // Define constants
@@ -91,6 +93,8 @@ export default class NestAccfactory {
   dashboard = undefined;
   webDashboard = undefined;
   cachedAccessories = []; // Track restored cached accessories
+  presenceAccessories = [];
+  climateWrites = new Map();
 
   // Internal data only for this class
   #connections = undefined; // Connections manager
@@ -165,7 +169,7 @@ export default class NestAccfactory {
               observing: account.climateObserving === true,
               lastUpdate: account.climateLastUpdate ?? null,
             })),
-          command: (id, values) => this.#set(this.#rawData?.[id]?.connection, id, values),
+          command: (id, values, origin) => this.#set(this.#rawData?.[id]?.connection, id, values, origin),
           log: this.log,
         });
         try {
@@ -183,6 +187,18 @@ export default class NestAccfactory {
           });
           this.dashboard.webDashboard = this.webDashboard;
           await this.webDashboard.start();
+          this.automation = new ClimateAutomation({
+            directory: this.webDashboard.directory,
+            dashboard: this.dashboard,
+            config: this.webDashboard.config,
+            presence: new ClimatePresence(this.api, this.presenceAccessories, this.config?._bridge?.username ?? 'main'),
+            log: this.log,
+          });
+          try {
+            await this.automation.start();
+          } catch {
+            this.log.warn('Climate automation could not start. Native thermostat controls remain available.');
+          }
         }
       }
 
@@ -195,6 +211,7 @@ export default class NestAccfactory {
     api?.on?.('shutdown', async () => {
       // We got notified that Homebridge is shutting down
       // Perform cleanup of internal state
+      await this.automation?.stop();
       await this.webDashboard?.stop();
       await this.dashboard?.stop();
       this.#connections?.shutdown?.();
@@ -210,6 +227,10 @@ export default class NestAccfactory {
   }
 
   configureAccessory(accessory) {
+    if (accessory?.context?.climatePresence === true) {
+      this.presenceAccessories.push(accessory);
+      return;
+    }
     const removedTypes = ['CameraRTPStreamManagement', 'Doorbell', 'LockMechanism']
       .map((name) => this.api?.hap?.Service?.[name]?.UUID)
       .filter(Boolean);
@@ -955,7 +976,31 @@ export default class NestAccfactory {
     }
   }
 
-  async #set(uuid, nest_google_device_uuid, values) {
+  async #set(uuid, nest_google_device_uuid, values, origin) {
+    if (!origin?.automation && values && ['target_temperature', 'target_temperature_low', 'target_temperature_high',
+      'hvac_mode', 'eco_mode', 'temperature_sensor'].some((key) => Object.hasOwn(values, key))) {
+      await this.automation?.manualThermostat(nest_google_device_uuid);
+    }
+    const previous = this.climateWrites.get(nest_google_device_uuid) ?? Promise.resolve();
+    const operation = previous.catch(() => {}).then(() => {
+      if (origin?.guard && !origin.guard()) {
+        const error = new Error('Thermostat changed before the queued command.');
+        error.code = 'CLIMATE_CONFLICT';
+        throw error;
+      }
+      return this.#performSet(uuid, nest_google_device_uuid, values);
+    });
+    this.climateWrites.set(nest_google_device_uuid, operation);
+    try {
+      return await operation;
+    } finally {
+      if (this.climateWrites.get(nest_google_device_uuid) === operation) {
+        this.climateWrites.delete(nest_google_device_uuid);
+      }
+    }
+  }
+
+  async #performSet(uuid, nest_google_device_uuid, values) {
     const timestamp = (milliseconds) => ({
       // Derive both protobuf timestamp fields from the same millisecond value.
       seconds: Math.floor(milliseconds / 1000),

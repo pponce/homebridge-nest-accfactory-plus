@@ -90,17 +90,16 @@ export function validateRuleDrafts(value) {
         'action',
         'enabled',
         'desiredTemperature',
+        'maximumOffset',
+        'minimumIntervalMinutes',
       ]);
       assert(
         typeof rule.id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(rule.id) && !known.has(rule.id),
         'Each rule needs a unique identifier.',
       );
       known.add(rule.id);
-      assert(
-        text(rule.name, 80) && rule.kind === kind && rule.enabled !== true,
-        'Rules are saved as drafts; automatic execution is unavailable.',
-      );
-      assert(rule.enabled === undefined || rule.enabled === false, 'Automatic rule execution is unavailable.');
+      assert(text(rule.name, 80) && rule.kind === kind, 'Enter a rule name and supported rule type.');
+      assert(rule.enabled === undefined || typeof rule.enabled === 'boolean', 'Choose whether this rule is enabled.');
       for (const field of ['sourceIds', 'targetIds']) {
         if (rule[field] !== undefined) {
           assert(ids(rule[field]), 'Select valid rule sources.');
@@ -124,13 +123,47 @@ export function validateRuleDrafts(value) {
         ['holdMinutes', 0, 1440],
         ['awayDelayMinutes', 0, 1440],
         ['desiredTemperature', 5, 35],
+        ['maximumOffset', 0, 3],
+        ['minimumIntervalMinutes', 1, 60],
       ]) {
         if (rule[field] !== undefined) {
           assert(Number.isFinite(rule[field]) && rule[field] >= low && rule[field] <= high, 'A rule value is outside its supported range.');
         }
       }
-      return { ...rule, sourceIds: [...new Set(rule.sourceIds ?? [])], targetIds: [...new Set(rule.targetIds ?? [])], enabled: false };
+      const sources = [...new Set(rule.sourceIds ?? [])];
+      const targets = [...new Set(rule.targetIds ?? [])];
+      if (rule.enabled === true) {
+        if (kind === 'temperature') {
+          assert(text(rule.thermostatId, 256) && sources.length > 0, 'Select a thermostat and temperature sources before enabling.');
+          assert(rule.aggregation !== 'single' || sources.length === 1, 'Single-sensor control requires exactly one source.');
+          assert(Number.isFinite(rule.desiredTemperature) && rule.desiredTemperature >= 9 && rule.desiredTemperature <= 32,
+            'Live heating targets must be between 9 and 32 °C.');
+        } else if (kind === 'fan') {
+          assert(targets.length > 0, 'Select at least one room fan before enabling.');
+          if (['heating', 'cooling'].includes(rule.action)) {
+            assert(text(rule.thermostatId, 256), 'Select the thermostat that the fans should follow.');
+          } else {
+            assert(sources.length > 0 && Number.isFinite(rule.threshold), 'Select temperature sources and a fan threshold.');
+          }
+        } else {
+          assert(sources.length > 0, 'Select presence sources before enabling.');
+        }
+      }
+      return { ...rule, sourceIds: sources, targetIds: targets, enabled: rule.enabled === true };
     });
+  }
+  const thermostatOwners = new Set();
+  const fanOwners = new Set();
+  for (const rule of result.temperature.filter((entry) => entry.enabled)) {
+    const id = rule.thermostatId.toUpperCase();
+    assert(!thermostatOwners.has(id), 'Only one enabled temperature group can control each thermostat.');
+    thermostatOwners.add(id);
+  }
+  for (const rule of result.fans.filter((entry) => entry.enabled)) {
+    for (const id of rule.targetIds) {
+      assert(!fanOwners.has(id), 'Only one enabled rule can control each room fan.');
+      fanOwners.add(id);
+    }
   }
   return result;
 }
@@ -187,10 +220,12 @@ export class WebDashboardConfig {
       return safe;
     });
     let rules;
+    let rulesError;
     try {
       rules = validateRuleDrafts(block.climateRuleDrafts ?? {});
     } catch {
       rules = { occupancy: [], temperature: [], fans: [] };
+      rulesError = 'Climate rules are invalid. Review their configuration in Homebridge before running automation.';
     }
     return {
       revision: state.revision,
@@ -211,7 +246,8 @@ export class WebDashboardConfig {
             : 'issueTokenCookie',
         configured: Boolean(account?.refreshToken || account?.access_token || (account?.issueToken && account?.cookie)),
       })),
-      executionEnabled: false,
+      executionEnabled: true,
+      rulesError,
       restartRequired: this.restartRequired,
     };
   }

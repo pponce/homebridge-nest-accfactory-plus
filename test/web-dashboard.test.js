@@ -244,7 +244,7 @@ test('legacy object device overrides retain unedited settings and rules remain d
   };
   const saved = await store.save({ revision: initial.revision, config: { rules: { temperature: [draft] } } });
   assert.equal(saved.restartRequired, false);
-  assert.equal(saved.executionEnabled, false);
+  assert.equal(saved.executionEnabled, true);
   const next = await store.save({
     revision: saved.revision,
     config: { devices: [{ serialNumber: 'thermo', ecoSwitch: true, fanDuration: '1h' }] },
@@ -254,7 +254,8 @@ test('legacy object device overrides retain unedited settings and rules remain d
     { serialNumber: 'THERMO', ecoSwitch: true, fanDuration: '1h', future: { keep: true } },
     { serialNumber: 'SECOND', hidden: 'retained' },
   ]);
-  await assert.rejects(store.save({ revision: next.revision, config: { rules: { temperature: [{ ...draft, enabled: true }] } } }));
+  const enabled = await store.save({ revision: next.revision, config: { rules: { temperature: [{ ...draft, enabled: true }] } } });
+  assert.equal(enabled.config.rules.temperature[0].enabled, true);
   assert.throws(() =>
     validateRuleDrafts({
       occupancy: [{ id: 'a', kind: 'presence', name: 'Home', sourceIds: [], enabled: false }],
@@ -648,6 +649,14 @@ test('proxy trust comes from the loopback peer and public Host and Origin, never
 
 test('HTTPS reverse proxy carries secure sessions, actions, configuration and logout to a certificate-free HTTP backend', async (t) => {
   const state = await fixture(t);
+  const ruleActions = [];
+  state.dashboard.automation = { tick: async () => {}, control: async (payload) => {
+    if (payload.action === 'invalid') {
+      throw new Error('Invalid rule action');
+    }
+    ruleActions.push(payload);
+    return { available: true, rules: [{ id: payload.id, paused: payload.action === 'pause' }] };
+  } };
   const warnings = [];
   const server = new WebDashboard({
     ...state,
@@ -737,6 +746,16 @@ test('HTTPS reverse proxy carries secure sessions, actions, configuration and lo
   assert.match(login.headers['set-cookie'][0], /HttpOnly; Secure; SameSite=Strict/);
   assert.ok(login.headers['set-cookie'][0].startsWith(SESSION_COOKIE + '='));
   const headers = { cookie: login.headers['set-cookie'][0].split(';')[0], 'x-csrf-token': login.data.csrfToken };
+  assert.equal((await request('/api/rules/command', { method: 'POST', headers: { cookie: headers.cookie },
+    body: { id: 'rooms', action: 'resume' } })).status, 403);
+  assert.equal((await request('/api/rules/command', { method: 'POST', headers, origin: 'https://evil.example',
+    body: { id: 'rooms', action: 'resume' } })).status, 403);
+  assert.equal(ruleActions.length, 0);
+  assert.equal((await request('/api/rules/command', { method: 'POST', headers,
+    body: { id: 'rooms', action: 'pause' } })).data.rules[0].paused, true);
+  assert.deepEqual(ruleActions, [{ id: 'rooms', action: 'pause' }]);
+  assert.equal((await request('/api/rules/command', { method: 'POST', headers,
+    body: { id: 'rooms', action: 'invalid' } })).status, 400);
   assert.equal((await request('/api/session', { headers })).data.authenticated, true);
   assert.equal((await request('/api/status', { headers })).status, 200);
   assert.equal(
@@ -773,4 +792,6 @@ test('HTTPS reverse proxy carries secure sessions, actions, configuration and lo
   assert.match(logout.headers['set-cookie'][0], /Secure; SameSite=Strict; Max-Age=0/);
   assert.equal((await request('/api/session', { headers })).data.authenticated, false);
   assert.equal((await request('/api/status', { headers })).status, 401);
+  assert.equal((await request('/api/rules/command', { method: 'POST', headers,
+    body: { id: 'rooms', action: 'resume' } })).status, 401);
 });

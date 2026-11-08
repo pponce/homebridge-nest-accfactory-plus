@@ -457,7 +457,23 @@ export class WebDashboard {
         return;
       }
       if (request.method === 'PUT' && route === '/api/config') {
-        this.send(response, 200, { ...(await this.config.save(await this.body(request))), web: this.status() });
+        const saved = await this.config.save(await this.body(request));
+        await this.dashboard.automation?.tick();
+        this.send(response, 200, { ...saved, web: this.status() });
+        return;
+      }
+      if (request.method === 'POST' && route === '/api/rules/command') {
+        if (!this.dashboard.automation) {
+          throw new DashboardConfigError('Restart the Nest bridge to start climate automation.', 503);
+        }
+        try {
+          this.send(response, 200, await this.dashboard.automation.control(await this.body(request)));
+        } catch (error) {
+          if (error instanceof DashboardConfigError) {
+            throw error;
+          }
+          throw new DashboardConfigError('The rule action could not be applied. Select an enabled rule and refresh.');
+        }
         return;
       }
       if (request.method === 'POST' && route === '/api/command') {

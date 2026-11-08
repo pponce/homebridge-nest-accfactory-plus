@@ -36,8 +36,8 @@ function setup() {
     'raw',
     'crypto',
     'DATA_SOURCE',
-    'return new class { #connections = new Map([["A",connection]]); #rawData = raw;' +
-      'run(values) { return this.#set("A","T",values); }' +
+    'return new class { #connections = new Map([["A",connection]]); #rawData = raw; climateWrites = new Map();' +
+      'run(values, origin) { return this.#set("A","T",values, origin); }' +
       source.slice(begin, end) +
       '};',
   )(connection, raw, crypto, DATA_SOURCE);
@@ -162,3 +162,4 @@ test('preset switch awaits command, resets after acceptance, and propagates erro
   await assert.rejects(service.onSet(true), /failed/);
   await assert.rejects(f.device.runFanPreset(999));
 });
+

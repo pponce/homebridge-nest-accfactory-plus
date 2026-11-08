@@ -1,0 +1,123 @@
+name: Climate execution validation
+on:
+  push:
+    branches: [feature/climate-execution]
+permissions:
+  contents: read
+concurrency:
+  group: climate-execution-validation
+  cancel-in-progress: true
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      revision: ${{ steps.revision.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+          ref: feature/climate-execution
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply project formatting to execution-engine changes
+        run: |
+          files=(src/climate-automation.js src/climate-presence.js src/climate-dashboard.js src/system.js src/web-dashboard-config.js src/web-dashboard.js test/climate-automation.test.js test/climate-presence.test.js test/climate-controls.test.js test/climate-sources.test.js test/web-dashboard.test.js)
+          npx prettier --write "${files[@]}"
+          npx eslint --fix "${files[@]}"
+          if ! git diff --quiet -- "${files[@]}"; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -- "${files[@]}"
+            git commit -m 'Format climate execution modules'
+            git push origin HEAD:feature/climate-execution
+          fi
+      - id: revision
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  test:
+    needs: format
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - node: 22
+            homebridge: 1.11.4
+          - node: 22
+            homebridge: 2.4.0
+          - node: 24
+            homebridge: 1.11.4
+          - node: 24
+            homebridge: 2.4.0
+          - node: 26
+            homebridge: 2.4.0
+          - node: 24
+            homebridge: 2.5.0
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+          ref: ${{ needs.format.outputs.revision }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false homebridge@${{ matrix.homebridge }}
+      - name: Run project checks
+        id: validation
+        continue-on-error: true
+        run: node maintenance/checks/run-migration-check.mjs check
+      - name: "${{ steps.validation.outputs.detail }}"
+        if: always() && steps.validation.outcome != 'skipped'
+        run: test '${{ steps.validation.outcome }}' = 'success'
+      - name: Verify migration through Homebridge cache restoration
+        id: migration
+        continue-on-error: true
+        run: node maintenance/checks/run-migration-check.mjs
+      - name: "${{ steps.migration.outputs.detail }}"
+        if: always() && steps.migration.outcome != 'skipped'
+        run: test '${{ steps.migration.outcome }}' = 'success'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-node-${{ matrix.node }}-homebridge-${{ matrix.homebridge }}
+          path: coverage/summary.json
+
+
+  dashboard-browser:
+    needs: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.format.outputs.revision }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Prepare dashboard browser checks
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/climate-browser" playwright
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/climate-browser/node_modules/playwright" >> "$GITHUB_ENV"
+          echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          echo "REVIEW_OUTPUT_DIR=$RUNNER_TEMP/climate-dashboard-review" >> "$GITHUB_ENV"
+      - name: Test embedded and standalone dashboards
+        id: browser
+        continue-on-error: true
+        run: node maintenance/checks/run-dashboard-browser.mjs
+      - name: "${{ steps.browser.outputs.detail }}"
+        if: always() && steps.browser.outcome != 'skipped'
+        run: test '${{ steps.browser.outcome }}' = 'success'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dashboard-browser-review
+          path: ${{ runner.temp }}/climate-dashboard-review

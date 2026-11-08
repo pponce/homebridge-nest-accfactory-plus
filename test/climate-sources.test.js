@@ -25,11 +25,23 @@ async function fixture(t) {
   client.destroy = () => {};
   let failed = false;
   let faulty = false;
+  let fanValue = 1;
+  let putStatus = 204;
+  let writeFailure = false;
   const requests = [];
   const access = new ClimateAccess(config, {
     clientFactory: () => client,
     request: async (url, options) => {
       requests.push({ url, options });
+      if (options.method === 'PUT') {
+        if (writeFailure) {
+          throw new Error('Write timed out after delivery');
+        }
+        fanValue = JSON.parse(options.body).characteristics[0].value;
+        return { status: putStatus, ok: putStatus < 300, json: async () => ({
+          characteristics: [{ aid: 2, iid: 21, status: putStatus === 207 ? 0 : -70402 }],
+        }) };
+      }
       if (failed) {
         return { status: 470, ok: false };
       }
@@ -74,7 +86,7 @@ async function fixture(t) {
           characteristics: [
             { aid: 2, iid: 11, value: 68 },
             { aid: 2, iid: 12, value: faulty ? 1 : 0 },
-            { aid: 2, iid: 21, value: 1 },
+            { aid: 2, iid: 21, value: fanValue },
             { aid: 2, iid: 31, value: false },
             { aid: 2, iid: 41, value: 1 },
           ],
@@ -90,6 +102,9 @@ async function fixture(t) {
     access,
     client,
     requests,
+    fanValue: (value) => { fanValue = value; },
+    putStatus: (value) => { putStatus = value; },
+    failWrite: () => { writeFailure = true; },
     fail: () => {
       failed = true;
     },
@@ -118,6 +133,34 @@ test('discovery reads temperature-only services and fans, normalizes units and r
   assert.equal(f.requests[0].options.headers.Authorization, '111-22-333');
   assert.ok(!JSON.stringify(data).includes('111-22-333'));
   assert.ok(!JSON.stringify(data).includes('127.0.0.1'));
+});
+
+test('fan commands resolve a configured writable service, verify state and handle HAP write responses', async (t) => {
+  const f = await fixture(t);
+  const id = 'hap:' + bridge + '/2/20';
+  await f.access.setFan(id, false, true);
+  const request = f.requests.find((entry) => entry.options.method === 'PUT');
+  assert.equal(request.options.headers.Authorization, '111-22-333');
+  assert.equal(request.options.headers['Content-Type'], 'application/hap+json');
+  assert.deepEqual(JSON.parse(request.options.body), { characteristics: [{ aid: 2, iid: 21, value: 0 }] });
+  f.putStatus(207);
+  await f.access.setFan(id, true, false);
+  await assert.rejects(f.access.setFan(id, false, false), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(f.access.setFan('hap:' + bridge + '/2/10', false, true), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(f.access.setFan('http://elsewhere', false, true), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(f.access.setFan(id, 1, true), /Invalid/);
+  const before = f.requests.filter((entry) => entry.options.method === 'PUT').length;
+  f.failWrite();
+  await assert.rejects(f.access.setFan(id, false, true), /timed out/);
+  assert.equal(f.requests.filter((entry) => entry.options.method === 'PUT').length, before + 1, 'An uncertain write is never retried');
+});
+
+test('fan command denial is visible and a closed adapter never writes', async (t) => {
+  const f = await fixture(t);
+  f.putStatus(470);
+  await assert.rejects(f.access.setFan('hap:' + bridge + '/2/20', false, true), /not confirmed/);
+  f.access.close();
+  await assert.rejects(f.access.setFan('hap:' + bridge + '/2/20', false, true), /Invalid/);
 });
 
 test('real discovery adapter only browses configured identities and reads them through GET, including alternate addresses', async (t) => {
