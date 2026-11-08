@@ -190,4 +190,3 @@ for (let [reason, options] of [
     assert.equal(flow.requests.length, 0);
   });
 }
-

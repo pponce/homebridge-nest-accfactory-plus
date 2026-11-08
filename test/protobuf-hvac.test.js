@@ -253,4 +253,3 @@ for (let association of [null, {}, { deviceId: { resourceId: '' } }, { deviceId:
     assert.deepEqual(tempsensor(undefined, raw, { options: {} }), {});
   });
 }
-
