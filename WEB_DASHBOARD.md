@@ -4,6 +4,23 @@ The optional standalone dashboard gives Nest Climate Cntrl its own web address u
 
 The dashboard is under beta testing. Automatic room-temperature control, room-fan actions, and combined occupancy rules are not enabled by saving a draft.
 
+Start with [web access](#enable-web-access), then try a [temperature group](#temperature-group-example), [room-fan rule](#room-fan-example), or [Home/Away rule](#homeaway-example). For a proxy deployment, see [HTTPS through a reverse proxy](#https-through-a-reverse-proxy).
+
+## Admin interface at a glance
+
+The standalone dashboard provides a visual interface for daily use and supported configuration:
+
+| Area | What to use it for |
+| --- | --- |
+| **Overview** | Check temperatures, targets, heating/cooling activity and account connectivity. Use supported native Nest controls and inspect schedules and observed runtime. |
+| **Sensors & fans** | Discover configured Homebridge main and child bridges. Search and filter temperature, motion, occupancy and fan sources; inspect their readings and availability. |
+| **Climate rules** | Build named temperature groups, Home/Away rules and room-fan rules with source pickers and current-signal previews. All rules remain inactive drafts. |
+| **Settings** | Change the dashboard name and supported accessory options. Save changes with account credentials and bridge identity preserved; the dashboard identifies options requiring a restart. |
+
+Use **Homebridge → Plugins → Nest Climate Cntrl → Settings** for Google/Nest account setup and web login, certificate and network settings. Its **Room sensors & fans** section also offers a read-only temperature preview. Named rule drafts are managed in the standalone dashboard's **Climate rules** area.
+
+Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
+
 ## Enable web access
 
 1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Web dashboard**. The Nest bridge must be running.
@@ -20,6 +37,69 @@ The web server is off by default. Under **Network and connection settings → Co
 | HTTPS through reverse proxy | Your public HTTPS origin, such as `https://climate.example.com` | Nginx or another proxy on the same machine | HTTP at `127.0.0.1:9444` only |
 
 Save and restart the Nest child bridge after changing network settings. All three modes require the separate web login. The web port is configurable from 1024–65535.
+
+## Try your first rules
+
+You can test **discovery, current readings, condition previews, and saving/reopening drafts**. Automatic thermostat adjustments, room-fan switching and combined Home/Away execution are not available in this version. There is no activation switch for these drafts, and a restart does not activate them.
+
+### Find your sources
+
+1. Sign in to the standalone dashboard and open **Sensors & fans**.
+2. Select **Discover sources**. Associated Nest devices appear as the Nest account connects; discovery adds compatible services from configured Homebridge main and child bridges.
+3. Check **Bridge connections & source availability** if a source is missing. Homebridge accessory control (`-I`) must be enabled on the source bridge, and that bridge must be reachable with its configured credentials.
+4. Search for the rooms you want to include. The **Temperature**, **Presence** and **Fans** filters help you inspect each type.
+
+Third-party devices must expose a compatible temperature, motion, occupancy or fan service through Homebridge. Devices available only in Apple Home are not discoverable here. A fan needs a writable standard on/off control to be eligible for the rule preview; a generic switch is not automatically treated as a fan.
+
+Discovery records when a value was read, which may differ from when the sensor measured it. Refresh discovery when external readings become stale. A missing or stale selected source requires attention; it is not silently dropped from a group or treated as evidence that nobody is home.
+
+### Temperature group example
+
+**Goal:** plan a comfortable downstairs area using more than one room's temperature.
+
+1. Open **Climate rules → Temperature**. Select **Create temperature group**, or the **+** button if a draft already exists.
+2. Name it **Downstairs comfort** and select the Nest thermostat serving those rooms.
+3. Enter **21** in **Desired room temperature (°C)**. Rule temperature inputs use Celsius; 21 °C is 69.8 °F.
+4. Choose **Equal average of selected sensors** under **Combine readings**.
+5. Select two or more temperature inputs. You can use associated Nest sensors, other Homebridge temperature sensors, or a mix. For example, a Nest living-room sensor at **20 °C** and a Homebridge dining-room sensor at **22 °C** give a group average of **21 °C**. Choose **One selected sensor** and select exactly one input if only one room should be considered.
+6. Inspect **Current signals · preview only**, then select **Save changes**. Reload the page and confirm that the group name, selected sensors and desired temperature were saved.
+
+The desired temperature is a draft goal; saving it does **not** set the thermostat target or activate a controller. A group describes the rooms to consider together and does not create an independent physical HVAC zone. Third-party sensors remain Homebridge sources; they are not paired to the thermostat as native Nest sensors.
+
+The temperature average can be shown even when the illustrative control estimate is paused. That estimate currently requires a connected thermostat in **Heat** mode, with **Eco off** and its built-in sensor confirmed as the active temperature source. It is an estimate only, not a validated control algorithm. You do not need to change a working thermostat configuration just to save the group and inspect its average.
+
+For live native sensor selection, use the thermostat's **Temperature controlled by** control on **Overview**, where supported. This chooses a single associated Nest sensor; it does not activate the multi-sensor draft.
+
+### Room-fan example
+
+**Goal:** plan when a Homebridge-exposed ceiling or room fan would run as a room warms up.
+
+1. Discover the fan under **Sensors & fans**. Confirm that it is available and exposes standard on/off control.
+2. Open **Climate rules → Room fans** and select **Create fan rule** or **+**.
+3. Name it **Living room cooling** and select the ceiling or room fan under **Choose your room fans**.
+4. Choose **Temperature above threshold** for **Run condition**. Enter **24** for **Above temperature (°C)** and **1** for **Turn-off gap (°C)**.
+5. Select the temperature sensors for that room. Multiple selected readings are averaged. To consider the same rooms as your temperature group, select the same sources here; the fan draft has its own source selection.
+6. Inspect the preview. An average of **25 °C** meets the **above 24 °C** condition; **23 °C** does not. To test both results without changing the room, temporarily place the threshold below and then above the displayed average. No fan command is sent. Restore your intended threshold and select **Save changes**.
+
+The turn-off gap expresses the intended separation between starting and stopping a fan to avoid rapid switching. It is saved but not simulated by the current snapshot preview. Fan speed and direction are not configured by this rule editor.
+
+For a different use case, choose **Thermostat is heating** or **Thermostat is cooling**, then select the thermostat. The preview checks its reported activity, such as whether a circulation fan's run condition would be met during heating. These rules also remain inactive.
+
+**Nest HVAC fan timers are a separate live feature.** Where the thermostat supports a blower, its controls on **Overview** can run that blower immediately for a chosen duration. They do not operate the third-party room fans selected in these drafts.
+
+### Home/Away example
+
+**Goal:** consider activity from several parts of the home when planning a presence rule.
+
+1. Open **Climate rules → Home & away** and select **Create presence rule** or **+**.
+2. Name it **Home presence**. Select the available **Nest Home/Away** input, a hallway **motion** sensor and an office **occupancy** sensor. Nest Home/Away appears when the plugin has its state; other sensors must be exposed through Homebridge.
+3. Set **Consider home when** to **Any selected source is positive**. For example, office occupancy can satisfy the preview's Home condition even when hallway motion is clear. **All selected sources are positive** requires every selected input to be positive at the same time.
+4. Enter **10** for **Motion hold (minutes)** and **20** for **Delay before Away (minutes)** to record your intended timing.
+5. Inspect the current positive-source count and Home condition, then select **Save changes**. To check another snapshot, trigger a selected motion sensor and refresh **Discover sources**.
+
+The preview evaluates current readings only. It does not keep motion positive for the saved hold or wait out the Away delay. Unavailable readings cannot establish an Away condition.
+
+This draft does not change Google's Home/Away state, activate Eco, or expose a new combined HomeKit occupancy accessory. Native Nest Home/Away remains separate. The combined rule is preparation for future automation.
 
 ## HTTP mode
 
@@ -87,15 +167,7 @@ If the proxy returns **502**, confirm that the Nest bridge has restarted, the ba
 
 For direct HTTPS without supplying certificates, the plugin generates a local self-signed certificate using OpenSSL. Browsers need to trust it before signing in. A proxy can also forward to the direct HTTPS listener with a trusted backend certificate and preserved public Host; select direct HTTPS for that arrangement.
 
-## What you can do
-
-| Area | Available controls |
-| --- | --- |
-| Overview | Current temperatures and targets, heating/cooling state, account connectivity, and observed runtime |
-| Thermostat controls | Supported Eco changes, native Nest temperature-source selection, and HVAC fan timers |
-| Sources | Readings and availability for associated Nest sensors and discoverable Homebridge temperature, motion, occupancy, and fan services |
-| Rules | Save draft temperature groups, occupancy rules, and room-fan rules for review |
-| Settings | Change supported climate presentation and accessory options while preserving stored account credentials and bridge identity |
+## Live actions and observations
 
 Live thermostat action buttons send a command immediately. A successful request means the API accepted the command; the displayed state changes after the thermostat reports it.
 

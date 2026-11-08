@@ -2,7 +2,9 @@
 
 # Nest Climate Cntrl
 
-Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a climate dashboard inside Homebridge and an optional standalone web interface.
+Bring Nest thermostats, room temperatures and climate controls into Apple Home, with a visual admin interface in Homebridge and an optional dashboard for your computer or phone.
+
+See how different rooms feel, use supported Nest controls, and prepare temperature groups, Homebridge room-fan rules and Home/Away rules from multiple sensors.
 
 **Public beta:** this version is still being tested on real equipment. Install the `beta` release and report issues with your thermostat model and Homebridge version.
 
@@ -10,18 +12,61 @@ Nest thermostat, room-sensor and Heat Link controls for Apple Home, with a clima
 
 ## What's included
 
-- **Climate dashboard:** thermostat temperature, target, heating/cooling state, connection status and diagnostics.
-- **Web dashboard:** optional direct HTTP, direct HTTPS, or HTTPS through a local reverse proxy from a computer or phone, separate sign-in, saved settings, sensor discovery and draft rule editors. See [web dashboard setup](WEB_DASHBOARD.md).
+| Feature | What you can do in this beta |
+| --- | --- |
+| **Visual setup and admin dashboard** | Configure accounts and accessories in Homebridge. Open a separate web dashboard with sign-in, thermostat status, sensor search, settings and guided rule editors. |
+| **Temperature groups with Nest and other sensors** | Select one sensor or average multiple readings from associated Nest sensors, other Homebridge temperature sensors, or both. Save a desired room temperature and preview the group; automatic thermostat adjustments are **not yet available**. |
+| **Homebridge ceiling and room fans** | Discover fans and draft temperature-based or heating/cooling-based rules. Preview whether a run condition is met; automatic room-fan commands are **not yet available**. |
+| **Home/Away from multiple signals** | Combine available Nest Home/Away, motion and occupancy inputs in a saved rule draft. Preview “any” or “all” logic; combined Home/Away automation is **not yet available**. |
+| **Live Nest controls** | Use supported Eco controls, select a native Nest temperature source, and run the thermostat's HVAC blower with timed actions. |
+| **Schedules and runtime** | Inspect reported weekly setpoints, the next planned change and observed heating/cooling totals with a weekly chart. |
+
+**Rule drafts are inactive.** You can test discovery, readings and condition previews now. Saving or restarting does not enable automatic temperature, room-fan or combined Home/Away actions. See the [first-rule walkthroughs](WEB_DASHBOARD.md#try-your-first-rules).
+
+### Temperature groups: choose the rooms that matter
+
+A temperature group represents the rooms whose readings you want to consider together. For example, give a group the name **Downstairs comfort**, choose the Nest thermostat serving that area, and enter a desired temperature of **21 °C**.
+
+| Example | Sources to select | Group reading |
+| --- | --- | --- |
+| Nest sensors only | Living-room Nest sensor at 20 °C and dining-room Nest sensor at 22 °C | Equal average: 21 °C |
+| Other Homebridge sensors only | Office sensor at 19 °C and study sensor at 21 °C | Equal average: 20 °C |
+| Nest and other sensors together | Living-room Nest sensor at 20 °C and a Homebridge-exposed desk sensor at 22 °C | Equal average: 21 °C |
+
+Choose **One selected sensor** to focus on a single room, or **Equal average of selected sensors** for a group. The readings and desired temperature are available as a preview and saved draft. Having Nest maintain that group temperature automatically is planned; the draft does not change the thermostat's setpoint.
+
+A group does not create a separate physical heating/cooling zone or turn third-party sensors into native Nest sensors. For a live native Nest option, use **Temperature controlled by** to select one associated Nest Temperature Sensor where supported. [Create your first temperature group](WEB_DASHBOARD.md#temperature-group-example).
+
+### Room fans: plan comfort around temperature or HVAC activity
+
+For a ceiling fan exposed by another Homebridge plugin, draft a rule to run when the selected rooms average above **24 °C**, with a **1 °C turn-off gap** intended to prevent repeated on/off changes near the threshold. Alternatively, select **Thermostat is heating** or **Thermostat is cooling** as the run condition.
+
+The dashboard discovers compatible fans and previews the current condition. Fan switching and the turn-off behavior are not executed by drafts. These room fans are separate from the **Nest HVAC blower**, whose supported timer controls work now. [Create a room-fan draft](WEB_DASHBOARD.md#room-fan-example).
+
+### Home/Away: bring several presence signals together
+
+Draft a **Home presence** rule using Nest Home/Away, a hallway motion sensor and an office occupancy sensor. Choose **Any selected source is positive** so the preview reports a Home condition when any one of those signals is positive, or choose **All selected sources are positive** for a stricter condition.
+
+Motion holds and an Away delay can be saved in the draft, for example **10 minutes** and **20 minutes**. The current preview checks the latest readings; it does not run those timers, change Eco or Google's Home/Away state, or create a combined HomeKit occupancy accessory. Existing native Nest Home/Away support remains available. [Explore a presence draft](WEB_DASHBOARD.md#homeaway-example).
+
+### Admin interface and visual configuration
+
+Use **Homebridge → Plugins → Nest Climate Cntrl → Settings** for account setup, per-device options, room-sensor previews and web access. The optional standalone dashboard has four areas:
+
+- **Overview:** thermostat cards, supported live controls, schedules and runtime.
+- **Sensors & fans:** searchable temperature, motion, occupancy and fan sources, with bridge availability.
+- **Climate rules:** guided editors for temperature groups, Home/Away and room-fan drafts, with current-signal previews.
+- **Settings:** dashboard and supported accessory options, saved with a clear indication when a bridge restart is needed.
+
+The layout adapts to desktop and phone screens. Web access has its own sign-in and supports direct HTTP, direct HTTPS with certificates in the plugin, or HTTPS through a local reverse proxy such as Nginx. [Set up the web dashboard](WEB_DASHBOARD.md).
+
+### More Nest options
+
 - **Legacy Google authentication:** keeps support for compatible existing refresh tokens. If you already have a working legacy token, you can continue using it; this plugin cannot issue a new one.
 - **Eco switches:** optional Apple Home switches to enter and leave Eco mode.
-- **Native room sensors:** readings from associated Nest Temperature Sensors and a **Temperature controlled by** selector.
 - **HVAC fan timers:** configurable default duration and optional 15-, 30- and 60-minute action switches. These operate the blower connected to Nest.
-- **Schedules and runtime:** reported weekly setpoints, the next planned change and observed daily heating/cooling totals with a weekly chart.
-- **Room-sensor preview:** select Nest and other Homebridge temperature sensors together and preview their average. Discover room fans and motion/occupancy sensors on accessible main and child bridges.
 
 Eco and fan-preset switches are off by default. Separate humidity sensors and Eve history are also configurable.
-
-**The mixed-sensor preview is read-only.** It does not automatically adjust heating or run room fans. Automatic room-fan coordination, software temperature compensation and combined Home/Away rules are planned.
 
 ## Supported devices
 
@@ -29,7 +74,7 @@ Nest thermostats, associated Nest Temperature Sensors and Nest Heat Links suppor
 
 This edition focuses on climate: **camera, doorbell, floodlight-camera, Nest × Yale lock and weather support have been removed.**
 
-Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). If you want to install this plugin to use it's added capabilities, Nest Accfactory can run alongside this plugin with separate device ownership; see [coexistence guidance](MIGRATION.md#running-alongside-upstream).
+Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). Nest Accfactory can run alongside this plugin with separate device ownership; see [coexistence guidance](MIGRATION.md#running-alongside-upstream).
 
 ## Get started
 
