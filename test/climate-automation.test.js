@@ -1623,3 +1623,17 @@ test('changed native modes during downtime remain a reason to pause', async (t) 
   assert.equal(f.commands.length, count);
   await restarted.stop();
 });
+
+test('restart status names only the feedback still missing', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  await f.engine.persist();
+  f.dashboard.devices.get('T').data.eco_mode = undefined;
+  const restarted = await restartFixture(f);
+  assert.equal(restarted.snapshot().rules[0].reason, 'Waiting for Nest to report whether Eco is off.');
+  assert.equal(restarted.snapshot().rules[0].paused, false);
+  f.dashboard.update('T', 'Thermostat', { eco_mode: false }, 'A');
+  await restarted.tick();
+  assert.equal(restarted.snapshot().rules[0].temperatureControl, 'active');
+  await restarted.stop();
+});

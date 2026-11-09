@@ -19,7 +19,7 @@ test('an explicit built-in sensor can guide heating when only the paired-sensor 
     assert.equal(state.builtInConfirmed, true);
     assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: state }), true);
     assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: 'other', native_sensor_control: state }), false);
-    assert.equal(nativeSensorAllowsHeating({ native_sensor_control: state }), false);
+    assert.equal(nativeSensorAllowsHeating({ native_sensor_control: state }), true);
     assert.equal(state.supported, false, 'heating feedback must not authorize native sensor setup');
     assert.equal(state.control, null);
     assert.equal(state.holdSignature, null);
@@ -213,4 +213,15 @@ test('reported backplate remains usable for heating with both optional metadata 
   assert.equal(state.supported, false);
   assert.equal(state.control, null);
   assert.throws(() => sensorControlUpdate(settings, { action: 'hold', expected: state.signature }));
+});
+
+test('validated built-in feedback works without a duplicate legacy marker but rejects conflicts and unknowns', () => {
+  const native = sensorControlState({ activeRcsSelection: { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' } });
+  assert.equal(nativeSensorAllowsHeating({ native_sensor_control: native }), true);
+  for (const legacy of [null, 'remote-sensor', false, 0]) {
+    assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: legacy, native_sensor_control: native }), false);
+  }
+  assert.equal(nativeSensorAllowsHeating({}), false);
+  assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '' }), true);
+  assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: sensorControlState({}) }), false);
 });

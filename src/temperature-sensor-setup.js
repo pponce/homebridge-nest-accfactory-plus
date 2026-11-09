@@ -6,11 +6,14 @@ const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(valu
 const signature = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
 
 export function nativeSensorAllowsHeating(data) {
-  return (
-    data?.active_rcs_sensor === '' &&
-    (!data.native_sensor_control?.reported || data.native_sensor_control.source === 'thermostat' ||
-      data.native_sensor_control.builtInConfirmed === true)
-  );
+  const native = data?.native_sensor_control;
+  const legacy = data?.active_rcs_sensor;
+  if (native?.reported === true) {
+    // Validated native feedback is sufficient; a contradictory legacy selection is not.
+    return (native.source === 'thermostat' || native.builtInConfirmed === true) &&
+      (legacy === undefined || legacy === '');
+  }
+  return legacy === '';
 }
 
 export class TemperatureSensorSetup {
