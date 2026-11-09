@@ -29,6 +29,7 @@ let rejectNext = false;
 const requests = [];
 const errors = [];
 let diagnosticStates;
+let controllerRules;
 let failStatus = false;
 const requestMethods = [];
 const descriptions = {
@@ -43,7 +44,7 @@ const setup = () => ({ mixed: true, phase, reason: descriptions[phase],
   canRestore: phase === 'held', confirmation: 'confirmed-native-' + phase,
   thermostatId: 'T', thermostatName: 'Downstairs Nest' });
 const automation = () => ({ available: true, pendingRestorations: 0,
-  rules: config.rules.temperature.map((entry) => ({ ...entry, phase: entry.enabled ? 'waiting' : 'disabled',
+  rules: controllerRules || config.rules.temperature.map((entry) => ({ ...entry, phase: entry.enabled ? 'waiting' : 'disabled',
     paused: true, reason: entry.enabled ? 'Waiting for sensor setup.' : 'Rule is disabled.', sensorSetup: setup() })),
   sensorSetups: owned ? [{ id: 'mixed', name: rule.name, ...setup() }] : [] });
 const status = () => {
@@ -172,14 +173,12 @@ try {
     { ...settings, rcsControlMode: 'RCS_CONTROL_MODE_UNSPECIFIED', activeRcsSelection: remote }];
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await refreshDashboard();
-  const downstairs = page.getByRole('combobox', { name: 'Temperature controlled by for Downstairs Nest', exact: true });
-  const upstairs = page.getByRole('combobox', { name: 'Temperature controlled by for Upstairs Nest', exact: true });
-  assert.equal(await downstairs.locator('option:checked').textContent(), 'Thermostat sensor');
-  assert.equal(await upstairs.locator('option:checked').textContent(), 'Bedroom sensor');
-  assert.equal(await downstairs.isDisabled(), true);
-  assert.equal(await upstairs.isDisabled(), true);
-  assert.match(await page.locator('#thermostats').innerText(), /has not reported its sensor scheduling mode/);
-  assert.match(await page.locator('#thermostats').innerText(), /scheduling mode that automatic setup does not recognize/);
+  const downstairs = page.getByLabel('Temperature controlled by for Downstairs Nest', { exact: true });
+  const upstairs = page.getByLabel('Temperature controlled by for Upstairs Nest', { exact: true });
+  assert.equal(await downstairs.locator('.controller-name').textContent(), 'Thermostat sensor');
+  assert.equal(await upstairs.locator('.controller-name').textContent(), 'Bedroom sensor');
+  assert.equal(await page.locator('.temperature-controller select, .temperature-controller button').count(), 0);
+  assert.doesNotMatch(await page.locator('#thermostats').innerText(), /Automatic sensor setup unavailable/);
   await page.getByText('Diagnose Nest sensor selection', { exact: true }).click();
   const methodsBefore = requestMethods.length;
   const downloadPromise = page.waitForEvent('download');
@@ -195,18 +194,46 @@ try {
   assert.ok(requestMethods.slice(methodsBefore).every((method) => method === 'GET'), 'Diagnostic download must only read status');
   diagnosticStates = [{ ...settings, associatedRcsSensors: undefined }, { ...settings, activeRcsSelection: undefined }];
   await refreshDashboard();
-  assert.equal(await downstairs.locator('option:checked').textContent(), 'Thermostat sensor');
-  assert.equal(await upstairs.locator('option:checked').textContent(), 'Current sensor not reported');
+  assert.equal(await downstairs.locator('.controller-name').textContent(), 'Thermostat sensor');
+  assert.equal(await upstairs.locator('.controller-name').textContent(), 'Current sensor not reported');
   diagnosticStates = [settings, { ...settings, activeRcsSelection: remote, associatedRcsSensors: [] }];
   await refreshDashboard();
-  assert.equal(await downstairs.isDisabled(), false, 'Supported native selection remains usable');
-  assert.equal(await upstairs.isDisabled(), true, 'An unassociated selection never enables writes');
+  assert.equal(await downstairs.locator('.controller-name').textContent(), 'Thermostat sensor');
+  assert.equal(await upstairs.locator('.controller-name').textContent(), 'Bedroom sensor');
+  assert.equal(await page.locator('.temperature-controller select, .temperature-controller button').count(), 0);
   diagnosticStates = [{ ...settings, sensorSelection: {} }, { ...settings, multiSensorSettings: { multiSensorEnabled: true } }];
   await refreshDashboard();
-  assert.equal(await downstairs.locator('option:checked').textContent(), 'Current sensor not reported');
-  assert.equal(await upstairs.locator('option:checked').textContent(), 'Current sensor not reported');
+  assert.equal(await downstairs.locator('.controller-name').textContent(), 'Current sensor not reported');
+  assert.equal(await upstairs.locator('.controller-name').textContent(), 'Current sensor not reported');
   diagnosticStates = [{ ...settings, rcsControlMode: undefined }, { ...settings, activeRcsSelection: remote, rcsControlMode: undefined }];
   await refreshDashboard();
+  const controllerMethods = requestMethods.length;
+  const applied = { id: 'applied', name: 'Downstairs room average', kind: 'temperature', thermostatId: 'PRIVATE-THERMOSTAT-0',
+    enabled: true, temperatureControl: 'active', phase: 'active', reason: 'Heating follows the selected room temperatures.' };
+  controllerRules = [applied, { ...applied, id: 'disabled', name: 'Nighttime comfort', enabled: false },
+    { ...applied, id: 'upstairs-rule', name: 'Upstairs comfort', thermostatId: 'PRIVATE-THERMOSTAT-1', enabled: false },
+    { ...applied, id: 'fan-only', name: 'Room fan rule', kind: 'fan' }];
+  await refreshDashboard();
+  assert.equal(await downstairs.locator('.controller-name').textContent(), 'Climate rule · Downstairs room average');
+  assert.equal(await upstairs.locator('.controller-name').textContent(), 'Bedroom sensor');
+  await downstairs.focus(); await page.keyboard.press('Enter');
+  const details = page.locator('.temperature-controller').first();
+  assert.equal(await details.evaluate((node) => node.open), true);
+  assert.match(await details.innerText(), /Nighttime comfort/);
+  assert.doesNotMatch(await details.innerText(), /Upstairs comfort|Room fan rule|Dining room temperature/);
+  for (const [control, badge] of [['interval', 'Active · between updates'], ['updating', 'Confirming target'], ['restoring', 'Restoring Nest control']]) {
+    applied.temperatureControl = control; await refreshDashboard();
+    assert.equal(await downstairs.locator('.controller-name').textContent(), 'Climate rule · Downstairs room average');
+    assert.match(await downstairs.innerText(), new RegExp(badge.replace('·', '.')));
+    assert.equal(await details.evaluate((node) => node.open), true, 'Refreshing preserves expanded controller details');
+  }
+  for (const control of ['paused', 'waiting', 'disabled']) {
+    applied.temperatureControl = control; await refreshDashboard();
+    assert.equal(await downstairs.locator('.controller-name').textContent(), 'Thermostat sensor');
+  }
+  applied.temperatureControl = 'active'; await refreshDashboard();
+  await details.getByText('Nighttime comfort', { exact: true }).click();
+  assert.ok(requestMethods.slice(controllerMethods).every((method) => method === 'GET'), 'Reading controller details must never write settings');
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   const output = process.env.REVIEW_OUTPUT_DIR || path.join(root, 'maintenance/review/sensor-selection');
@@ -218,6 +245,7 @@ try {
   await page.getByRole('button', { name: 'Download sensor diagnostics', exact: true }).click();
   await page.getByText('Refresh the dashboard connection before downloading sensor diagnostics.', { exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Download sensor diagnostics', exact: true }).isDisabled(), true);
+  assert.equal(await downstairs.locator('.controller-name').textContent(), 'Control status unavailable');
   assert.deepEqual(errors, []);
   console.log('Sensor setup browser checks passed: consent, restoration, independent sensor display, specific reasons, read-only diagnostic export, privacy, disconnected states and mobile layout.');
 } finally {

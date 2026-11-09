@@ -525,3 +525,24 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
 .heating-evidence dd { margin: 0; font-weight: 600; }
 @media (max-width: 560px) { .heating-settings { padding: .8rem; } .heating-suggestion > .status-pill { display: table; margin: .5rem 0; } }
 
+.temperature-controller { border: 1px solid var(--line); border-radius: 12px; width: 100%; }
+.temperature-controller summary { display: flex; align-items: center; gap: 12px; padding: 14px; cursor: pointer; list-style: none; }
+.temperature-controller summary::-webkit-details-marker { display: none; }
+.controller-heading { display: grid; gap: 5px; flex: 1; min-width: 0; }
+.controller-name, .controller-list li > div { overflow-wrap: anywhere; }
+.temperature-controller summary > .status-pill { flex-shrink: 0; }
+.temperature-controller summary > span:last-child { display: flex; }
+.temperature-controller[open] summary > span:last-child { transform: rotate(180deg); }
+.controller-details { padding: 0 14px 14px; }
+.controller-details h4 { margin: 18px 0 8px; font-size: 0.85rem; }
+.controller-list { list-style: none; padding: 0; margin: 0; }
+.controller-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 10px 0; }
+.controller-list li > div { min-width: 0; }
+.controller-list small { display: block; margin-top: 5px; line-height: 1.5; }
+.controller-list .status-pill { flex-shrink: 0; }
+@media (max-width: 600px) {
+  .temperature-controller summary { flex-wrap: wrap; gap: 8px; }
+  .controller-heading { flex-basis: calc(100% - 32px); }
+  .temperature-controller summary > span:last-child { margin-left: auto; }
+  .controller-list li { flex-wrap: wrap; gap: 7px; }
+}

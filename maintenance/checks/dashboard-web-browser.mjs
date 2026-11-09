@@ -350,10 +350,10 @@ try {
   await Promise.all([page.waitForResponse((response) => response.url().endsWith('/api/command')), page.getByLabel('Turn Eco on for Living room').click()]);
   await page.waitForFunction(() => !document.querySelector('[aria-label="Turn Eco on for Living room"]').disabled);
   assert.deepEqual(commands[0], { serial: 'T1', action: 'eco', value: true });
-  await page.getByLabel('Temperature controlled by for Living room', { exact: true }).selectOption('sensor-bedroom');
-  await Promise.all([page.waitForResponse((response) => response.url().endsWith('/api/command')), page.getByLabel('Apply temperature source for Living room', { exact: true }).click()]);
-  await page.waitForFunction(() => !document.querySelector('[aria-label="Apply temperature source for Living room"]').disabled);
-  assert.deepEqual(commands[1], { serial: 'T1', action: 'sensor', value: 'sensor-bedroom' });
+  await page.getByLabel('Temperature controlled by for Living room', { exact: true }).click();
+  assert.match(await page.locator('.temperature-controller').first().innerText(), /Bedroom sensor/);
+  assert.equal(await page.locator('.temperature-controller select, .temperature-controller button').count(), 0);
+  assert.equal(commands.length, 1, 'Controller information must never send a sensor command');
   statusAvailable = false;
   await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
   await page.getByText('Fixture bridge unavailable.', { exact: true }).waitFor();

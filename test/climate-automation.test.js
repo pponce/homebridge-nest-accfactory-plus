@@ -182,13 +182,39 @@ test('mixed sensor heating writes a bounded target, waits for feedback and rate 
   const f = await fixture(t);
   assert.deepEqual(f.commands, [{ id: 'thermostat', target_temperature_low: 22.5 }]);
   assert.equal(f.rule('rooms').roomTemperature, 20);
+  assert.equal(f.rule('rooms').thermostatId, 'T');
+  assert.equal(f.rule('rooms').temperatureControl, 'updating');
   f.source('room').temperature = 24;
   await f.engine.tick();
   assert.equal(f.commands.length, 1);
+  assert.equal(f.rule('rooms').temperatureControl, 'interval');
   f.advance(5 * minute);
   await f.engine.tick();
   assert.equal(f.commands.at(-1).target_temperature_low, 21);
   assert.equal(f.rule('rooms').roomTemperature, 22);
+  assert.equal(f.rule('rooms').temperatureControl, 'updating');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'active');
+});
+
+test('temperature controller reporting does not mistake enabled, paused or unavailable rules for applied rules', async (t) => {
+  const f = await fixture(t, {});
+  f.dashboard.update('T', 'Thermostat', { hvac_mode: 'cool' }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'waiting');
+  assert.equal(f.commands.length, 0);
+  f.dashboard.update('T', 'Thermostat', { hvac_mode: 'heat', target_temperature_low: 22.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'active', 'An already-correct target needs no write to be managed');
+  assert.equal(f.commands.length, 0);
+  await f.engine.control({ id: 'rooms', action: 'pause' });
+  assert.equal(f.rule('rooms').temperatureControl, 'paused');
+  f.rules({ temperature: [{ ...temperatureRule, enabled: false }] });
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'disabled');
+  f.engine.error = 'Checks failed';
+  assert.equal(f.rule('rooms').temperatureControl, 'unavailable');
 });
 
 test('rounding stays on C/F grids inside offset and absolute limits', () => {
@@ -239,6 +265,7 @@ test('manual cloud target changes pause heating without restoring over the user'
   f.advance(6 * minute);
   await f.engine.tick();
   assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.rule('rooms').temperatureControl, 'paused');
   assert.equal(f.commands.length, 1);
   await f.engine.stop();
   assert.equal(f.commands.length, 1);
@@ -265,9 +292,11 @@ test('missing inputs restore only owned settings and cannot be silently dropped 
   f.source('room').available = false;
   await f.engine.tick();
   assert.equal(f.rule('rooms').phase, 'waiting');
+  assert.equal(f.rule('rooms').temperatureControl, 'restoring');
   assert.equal(f.commands.at(-1).target_temperature_low, 19);
   await f.engine.tick();
   assert.equal(f.commands.length, 2);
+  assert.equal(f.rule('rooms').temperatureControl, 'waiting');
   f.source('room').available = true;
   f.advance(5 * minute);
   await f.engine.tick();

@@ -93,9 +93,17 @@ Only one enabled group can control a thermostat. A group does not create an inde
 
 Change the **desired room temperature in Climate rules**. Apple Home continues to show Nest's physical target; changing it directly pauses the software group. Manual target/mode changes, Eco, a native sensor change, a lock or a Nest schedule boundary take priority. Select **Resume automatic control** when you want a new room-temperature hold.
 
+### See what controls each thermostat
+
+On **Overview → Your thermostats**, **Temperature controlled by** shows the current controller. Expand it to inspect the thermostat’s built-in sensor, associated official Nest room sensors and climate temperature rules assigned to that thermostat. This is read-only information; opening it or clicking a listed item does not change settings.
+
+When a temperature rule manages the heating target, its name appears with **Active**, **Active · between updates**, or **Confirming target** while Nest’s feedback is pending. **Restoring Nest control** means the rule is returning its previous heating target. Paused, disabled and waiting rules are listed with their status; simply enabling a rule does not identify it as the active controller. Rule status comes from the running engine, including when the settings editor contains unsaved changes.
+
+When Nest controls directly, the heading shows its selected built-in or official room sensor. A confirmed **Thermostat sensor** can be shown even when no external-sensor list is reported. **Current sensor not reported** means Nest has not provided a recognized selection. **Control status unavailable** means current control cannot be confirmed. Native sensor selection is managed in the Nest app; climate temperature rules are managed in **Climate rules**. To use other Homebridge temperature sensors, create a temperature rule and select them as inputs there.
+
 ### Assisted Nest sensor setup for mixed groups
 
-The **Overview → Your thermostats** cards show the selected temperature sensor whenever Nest reports a recognized selection. The selected sensor and automatic setup availability are separate: a known sensor can be displayed while missing or unsupported scheduling information prevents automatic setup. **Current sensor not reported** means there is no unambiguous selection to display. When sensor controls are unavailable, use the Nest app to change the native selection.
+Displaying a known native sensor is separate from automatic sensor setup: missing or unsupported sensor-control settings can prevent automatic setup even while the selected sensor is displayed.
 
 To investigate unavailable setup, open **Overview → Diagnose Nest sensor selection → Download sensor diagnostics**. The dashboard refreshes status and downloads one JSON report covering all thermostats. It includes thermostat names and models, connection and update status, selected sensor names, scheduling mode, and specific validation reasons such as missing scheduling mode, missing paired-sensor list, unknown selection, or an unsupported multi-sensor format. It excludes credentials, device IDs, signatures, temperatures and saved schedules. The download only reads status and does not change sensor selections, schedules or heating targets. Review the report before sharing it for support.
 
