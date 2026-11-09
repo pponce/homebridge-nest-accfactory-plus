@@ -43,6 +43,20 @@ test('unexpected request handler errors return a failure without rejecting into 
   assert.equal(f.dashboard.server.listening, true);
 });
 
+test('a failed handler closes a partially sent response without writing a second set of headers', async (t) => {
+  const f = await fixture(t);
+  const warnings = [];
+  f.dashboard.log = { warn: (message) => warnings.push(message) };
+  t.mock.method(f.dashboard, 'handle', async (request, response) => {
+    response.writeHead(200);
+    response.write('partial response');
+    throw new Error('SENSITIVE-FIXTURE');
+  });
+  await assert.rejects(fetch('http://127.0.0.1:' + f.dashboard.server.address().port + '/status').then((response) => response.text()));
+  assert.equal(warnings.length, 1);
+  assert.equal(f.dashboard.server.listening, true);
+});
+
 test('runtime prunes old days and periodic sampling persists observed time', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const f = await fixture(t);
