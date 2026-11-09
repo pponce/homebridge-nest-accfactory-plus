@@ -180,7 +180,7 @@ try {
   assert.equal(await page.getByLabel('Turn Eco on for Living room').isEnabled(), true);
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
   assert.equal(await page.getByLabel('Default HVAC fan duration').inputValue(), '1h');
-  assert.equal(await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).isChecked(), false);
+  assert.equal(await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().isChecked(), false);
   await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
   assert.equal(await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).isChecked(), false);
   const help = page.getByRole('button', { name: 'Help for Desired room temperature (°C)', exact: true });
@@ -220,7 +220,8 @@ try {
   assert.equal(await phone.locator('#save-bar').isVisible(), false, 'Touch help leaves the draft unchanged');
   await phone.close();
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
-  await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).check();
+  await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().check();
+  assert.equal(await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).nth(1).isChecked(), false, 'each thermostat keeps its own setting');
   await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
   await page.getByLabel('Rule name', { exact: true }).fill('Downstairs balance');
   await page.getByLabel('Desired room temperature (°C)', { exact: true }).fill('22');

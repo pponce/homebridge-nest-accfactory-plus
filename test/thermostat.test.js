@@ -250,7 +250,9 @@ test('HomeKit room target writes use the rule request and propagate failures wit
     target_temperature: 24, target_temperature_low: 24, hvac_mode: 'heat', eco_mode: false });
   device.hap = hap;
   device.thermostatService = service();
-  device.thermostatService.updateCharacteristic(hap.Characteristic.TargetHeatingCoolingState, hap.Characteristic.TargetHeatingCoolingState.HEAT);
+  device.thermostatService.updateCharacteristic(
+    hap.Characteristic.TargetHeatingCoolingState, hap.Characteristic.TargetHeatingCoolingState.HEAT,
+  );
   let room = { ruleId: 'rooms', temperature: 20, desiredTemperature: 21 };
   device.getClimateRoom = () => room;
   const requests = [];
@@ -262,11 +264,15 @@ test('HomeKit room target writes use the rule request and propagate failures wit
   assert.deepEqual(requests, [{ uuid: 'THERMO', climate_room_target: { ruleId: 'rooms', value: 22 } }]);
   assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.TargetTemperature).value, 22);
   assert.equal(device.deviceData.target_temperature_low, 24);
-  device.set = async () => { throw new Error('Rule became unavailable'); };
+  device.set = async () => {
+    throw new Error('Rule became unavailable');
+  };
   await assert.rejects(device.setTemperature(hap.Characteristic.TargetTemperature, 23), /unavailable/);
   assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.TargetTemperature).value, 22);
   room = null;
   device.set = async (request) => requests.push(request);
+  await assert.rejects(device.setTemperature(hap.Characteristic.TargetTemperature, 25), /control changed/);
+  assert.equal(requests.length, 1, 'a stale projected tile cannot send its desired target directly to Nest');
   await device.setTemperature(hap.Characteristic.TargetTemperature, 25);
   assert.deepEqual(requests.at(-1), { uuid: 'THERMO', target_temperature_low: 25 }, 'native mode retains existing routing');
 });

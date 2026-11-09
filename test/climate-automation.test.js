@@ -1482,7 +1482,9 @@ test('failed storage of a HomeKit desired target rejects the edit and pauses wit
   f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
   await f.engine.tick();
   const persist = f.engine.persist;
-  f.engine.persist = async () => { throw new Error('Fixture disk unavailable'); };
+  f.engine.persist = async () => {
+    throw new Error('Fixture disk unavailable');
+  };
   await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 }), /disk unavailable/);
   f.engine.persist = persist;
   assert.equal(f.rule('rooms').desiredTemperature, 21);

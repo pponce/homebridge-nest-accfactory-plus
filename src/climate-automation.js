@@ -21,7 +21,7 @@ const target = (device) => device?.data.target_temperature_low ?? device?.data.t
 const validTarget = (value) => Number.isFinite(value) && value >= 9 && value <= 32;
 const desiredTarget = (state) => state.roomTarget?.value ?? state.rule.desiredTemperature;
 const targetDelta = (before, after, scale) => scale === 'F' ?
-  (Math.round(after * 1.8 + 32) - Math.round(before * 1.8 + 32)) / 1.8 : after - before;
+    (Math.round(after * 1.8 + 32) - Math.round(before * 1.8 + 32)) / 1.8 : after - before;
 const shiftedTarget = (desired, delta) => Number(Math.max(9, Math.min(32, desired + delta)).toFixed(8));
 const flatten = (rules) => [...rules.temperature, ...rules.fans, ...rules.occupancy];
 
@@ -260,7 +260,7 @@ export class ClimateAutomation {
         savedDesiredTemperature: state.rule.desiredTemperature,
         targetSource: state.roomTarget?.source ?? 'rule',
         manualTargetBehavior: state.rule.kind === 'temperature' ? state.rule.manualTargetBehavior ?? 'follow' : undefined,
-        hasSchedule: state.scheduleKey != null,
+        hasSchedule: state.scheduleKey !== undefined && state.scheduleKey !== null,
         nestTarget: state.nestTarget,
         proposedTarget: state.proposedTarget,
         nextChangeAt: state.nextChangeAt,
@@ -529,7 +529,7 @@ export class ClimateAutomation {
         ...this.heatingResponse.snapshot(envelope.config.rules.temperature.map((rule) => {
           const state = this.states.get(rule.id);
           return state && state.rule.thermostatId === rule.thermostatId && state.rule.desiredTemperature === rule.desiredTemperature ?
-            { ...rule, desiredTemperature: desiredTarget(state) } : rule;
+              { ...rule, desiredTemperature: desiredTarget(state) } : rule;
         }), this.heatingDeviceOptions(envelope.config.devices)),
       };
     });
@@ -633,6 +633,7 @@ export class ClimateAutomation {
     const account = live.accounts.find((entry) => entry.id === device?.account);
     if (!device || !account?.authorised || !account.observing || device.needsUpdate || device.data.online !== true ||
         device.data.hvac_mode !== 'heat' || device.data.eco_mode !== false || device.data.temperature_lock === true ||
+        device.data.can_heat === false ||
         !nativeSensorAllowsHeating(device.data) || !this.sensorSetup.permits(state.rule)) {
       return null;
     }

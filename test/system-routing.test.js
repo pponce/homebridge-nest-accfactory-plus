@@ -59,7 +59,9 @@ test('failed native thermostat writes report rejection to manual target tracking
     manualThermostatResult: async (requests, accepted) => results.push({ requests, accepted }),
     stop: async () => {},
   };
-  flow.connection.grpcTransport.command = async () => { throw new Error('Fixture cloud unavailable'); };
+  flow.connection.grpcTransport.command = async () => {
+    throw new Error('Fixture cloud unavailable');
+  };
   await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', target_temperature_low: 21 }));
   assert.deepEqual(results, [{ requests: token, accepted: false }]);
 });
@@ -252,7 +254,9 @@ test('HomeKit room requests go only to automation and never leak into native com
   assert.equal(flow.commands.length, 0);
   await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 },
     target_temperature_low: 21 }));
-  flow.platform.automation.setHomeKitRoomTarget = async () => { throw new Error('Rule unavailable'); };
+  flow.platform.automation.setHomeKitRoomTarget = async () => {
+    throw new Error('Rule unavailable');
+  };
   await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 } }));
   delete flow.platform.automation.setHomeKitRoomTarget;
   await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 } }));

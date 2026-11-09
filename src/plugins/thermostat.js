@@ -429,6 +429,7 @@ export default class NestThermostat extends HomeKitDevice {
     );
 
     const room = this.climateRoomView(deviceData);
+    this.displayedRoomId = room?.ruleId;
     if (deviceData.current_temperature !== undefined || room) {
       this.thermostatService.updateCharacteristic(
         this.hap.Characteristic.CurrentTemperature, room?.temperature ?? deviceData.current_temperature,
@@ -1153,7 +1154,9 @@ export default class NestThermostat extends HomeKitDevice {
     if (!this.thermostatService || !this.hap) {
       return;
     }
-    const current = this.climateRoomView()?.temperature ?? this.deviceData.current_temperature;
+    const room = this.climateRoomView();
+    this.displayedRoomId = room?.ruleId;
+    const current = room?.temperature ?? this.deviceData.current_temperature;
     if (Number.isFinite(current)) {
       this.thermostatService.updateCharacteristic(this.hap.Characteristic.CurrentTemperature, current);
     }
@@ -1170,6 +1173,11 @@ export default class NestThermostat extends HomeKitDevice {
 
     let mode = this.thermostatService.getCharacteristic(this.hap.Characteristic.TargetHeatingCoolingState).value;
     const room = this.climateRoomView();
+    if (this.displayedRoomId && this.displayedRoomId !== room?.ruleId &&
+        characteristic.UUID === this.hap.Characteristic.TargetTemperature.UUID) {
+      this.updateClimateRoom();
+      throw new Error('Temperature control changed. Refresh the thermostat before changing its target.');
+    }
     if (room && mode === this.hap.Characteristic.TargetHeatingCoolingState.HEAT &&
         characteristic.UUID === this.hap.Characteristic.TargetTemperature.UUID) {
       try {
