@@ -26,7 +26,8 @@ try {
     'homebridge-ui/public/index.js',
     'homebridge-ui/public/host.css',
     'homebridge-ui/public/climate/app.js',
-    'homebridge-ui/public/climate/index.html',
+    'homebridge-ui/public/climate/markup.js',
+    'homebridge-ui/public/climate/styles.css',
     'homebridge-ui/public/climate/shared/climate-utils.js',
     'homebridge-ui/public/nest-climate-cntrl-icon-512.png',
     'homebridge-ui/public/web-dashboard-setup.js',
@@ -72,6 +73,9 @@ try {
   assert.equal(registered[1], 'NestClimateCntrl');
   assert.equal(typeof registered[2], 'function');
   const root = path.join(temporary, 'node_modules/homebridge-nest-climate-cntrl');
+  const { default: markup } = await import(pathToFileURL(path.join(root, 'homebridge-ui/public/climate/markup.js')).href);
+  assert.equal(markup, fs.readFileSync(path.join(root, 'homebridge-ui/dashboard/index.html'), 'utf8'));
+  assert.equal(fs.existsSync(path.join(root, 'homebridge-ui/public/climate/index.html')), false);
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json')));
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'config.schema.json')));
   assert.equal(pkg.name, registered[0]);

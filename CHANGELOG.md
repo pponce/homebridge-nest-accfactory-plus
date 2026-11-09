@@ -1,3 +1,13 @@
+## v0.5.2
+
+**Homebridge climate configuration interface.**
+
+- Load the shared climate interface using JavaScript assets supported by Homebridge Config UI X. Settings, climate rules and sensor discovery work within Homebridge without enabling standalone web access.
+- Keep connection setup accessible if climate interface assets cannot load, with guidance to reopen Settings or refresh Homebridge.
+- Validate the installed package's shared interface and exercise embedded settings with Homebridge's restriction on additional HTML documents.
+
+Saved accounts, climate rules, web access settings and accessory identities are preserved.
+
 ## v0.5.1
 
 **Configured startup and resilient climate services.**
