@@ -1,3 +1,20 @@
+## v0.5.0-beta.12
+
+**Independent fan triggers, shared-fan priorities, and in-page confirmations.**
+
+- Choose when a room fan should run: above a temperature threshold, while Nest is actively heating, or while Nest is actively cooling. For every trigger, choose **Use last setting**, **Fixed speed**, or **Temperature-based speed**. Temperature-based speed uses the selected room readings and comfort target; it does not change the thermostat target.
+- Assign multiple rules to the same fan with distinct priorities from 0–100. The highest-priority eligible rule controls each fan. Missing required readings in a higher-priority rule block lower-priority fallback until those readings recover.
+- Rule handoffs preserve the fan's original state and share its command cooldown. Fixed and temperature-based speeds respect the fan's supported steps and configured limits.
+- A manual power or speed change suspends automatic control of that fan across its rules until **Resume**. Other fans can continue under their applicable rules.
+- Confirm discard, delete, and unsaved sign-out inside the dashboard. **Keep editing** receives initial focus, Escape cancels, and a failed reload preserves pending edits.
+- Saved fan rules retain their existing trigger and speed behavior when loaded.
+
+After updating, refresh the dashboard and review and **Resume** enabled temperature/fan rules. For a shared fan, start with one heating or cooling rule and one temperature rule, assign distinct priorities, and confirm the fan's physical response.
+
+See the [room-fan setup guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.12/WEB_DASHBOARD.md#temperature-based-fan-speed).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.11
 
 **Temperature-based speed for Homebridge room fans.**
