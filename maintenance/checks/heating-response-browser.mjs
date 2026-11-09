@@ -51,6 +51,7 @@ try {
   await page.getByLabel('Heating type', { exact: true }).selectOption('radiantFloor');
   await page.getByRole('switch', { name: 'Observe heating response locally' }).check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.locator('#save-bar').waitFor({ state: 'hidden' });
   const starting = page.getByRole('region', { name: 'Starting recommendation' });
   const apply = starting.getByRole('button', { name: 'Apply to this rule' });
   await apply.waitFor();
@@ -93,12 +94,16 @@ try {
   assert.match(await page.locator('.heating-evidence').innerText(), /Response delay/);
   await page.getByLabel('Temperature units', { exact: true }).selectOption('F');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.locator('#save-bar').waitFor({ state: 'hidden' });
   await page.waitForFunction(() => document.querySelector('.heating-suggestion')?.textContent.includes('0.9°F'));
   assert.match(await learned.innerText(), /0.45°F/);
   const type = page.getByLabel('Heating type', { exact: true });
   await type.focus();
-  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-  await page.waitForTimeout(250);
+  await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === '/api/heating-response'),
+    page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))),
+  ]);
+  await page.waitForFunction(() => !document.getElementById('refresh-status').disabled);
   assert.equal(await type.evaluate((element) => element === document.activeElement), true);
   await page.waitForFunction(() => document.getElementById('toast').hidden);
   await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
