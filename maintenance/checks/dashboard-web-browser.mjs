@@ -408,6 +408,10 @@ try {
     }
     if (pageName === 'rules') {
       await page.getByLabel('Rule name', { exact: true }).fill('Cooler evenings upstairs');
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'Cooler evenings upstairs');
+      await page.setViewportSize({ width: 360, height: 800 });
+      assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'Cooler evenings upstairs');
       assert.equal(await page.getByRole('button', { name: 'Save changes', exact: true }).isVisible(), true);
     }
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, pageName + ' must fit at 360px');

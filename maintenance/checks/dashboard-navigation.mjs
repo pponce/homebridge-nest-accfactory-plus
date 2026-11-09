@@ -47,7 +47,7 @@ export async function checkCompactNavigation(page, output, label) {
   assert.equal(await panel.isVisible(), false);
   assert.equal(await toggle.evaluate((node) => node === document.activeElement), true);
   await toggle.click();
-  await page.locator('#page-title').click();
+  await page.locator('#connection-state').click();
   assert.equal(await panel.isVisible(), false, 'Outside click dismisses the menu');
   await toggle.focus();
   await page.keyboard.press('Enter');
