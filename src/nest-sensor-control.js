@@ -44,9 +44,10 @@ export function sensorControlState(settings) {
   const result = {
     reported: object(settings),
     supported: false,
+    builtInConfirmed: false,
     reason: null,
     mode: 'unknown', source: 'unknown', sensorId: null, signature: '', holdSignature: null, control: null,
-    // Display-only feedback must never authorize automatic setup or heating.
+    // Selection is display feedback; heating and sensor-setting writes have separate validation.
     selection: { source: 'unknown', sensorId: null },
     diagnostics: {
       settingsReported: object(settings), modeReported: settings?.rcsControlMode !== undefined,
@@ -101,6 +102,11 @@ export function sensorControlState(settings) {
   } else if (associationsValid && !validSelection(settings.activeRcsSelection, settings)) {
     issue('sensor_not_associated', 'The selected Nest sensor is not in the reported paired-sensor list.');
   }
+  // Protobuf can omit an empty repeated paired-sensor list. A positively reported
+  // backplate in a recognized mode can guide heating without authorizing sensor writes.
+  result.builtInConfirmed = result.selection.source === 'thermostat' && result.diagnostics.issues.every((entry) =>
+    entry.code === 'associations_unavailable' && settings.associatedRcsSensors === undefined,
+  );
   if (result.diagnostics.issues.length) {
     return result;
   }

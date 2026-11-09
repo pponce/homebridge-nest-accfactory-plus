@@ -11,6 +11,34 @@ const fixture = () => ({
   associatedRcsSensors: [{ deviceId: { resourceId: 'bedroom' }, vendorId: 1, productId: 2 }],
 });
 
+test('an explicit built-in sensor can guide heating when only the paired-sensor list is omitted', () => {
+  for (const mode of ['HOLD', 'SCHEDULE', 'SCHEDULE_OVERRIDE']) {
+    const settings = { rcsControlMode: 'RCS_CONTROL_MODE_' + mode,
+      activeRcsSelection: { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' } };
+    const state = sensorControlState(settings);
+    assert.equal(state.builtInConfirmed, true);
+    assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: state }), true);
+    assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: 'other', native_sensor_control: state }), false);
+    assert.equal(nativeSensorAllowsHeating({ native_sensor_control: state }), false);
+    assert.equal(state.supported, false, 'heating feedback must not authorize native sensor setup');
+    assert.equal(state.control, null);
+    assert.equal(state.holdSignature, null);
+    assert.throws(() => sensorControlUpdate(settings, { action: 'hold', expected: state.signature }));
+    for (const change of [
+      { associatedRcsSensors: null }, { associatedRcsSensors: {} }, { associatedRcsSensors: [null] },
+      { rcsControlMode: undefined }, { rcsControlMode: 'unknown' }, { activeRcsSelection: undefined },
+      { activeRcsSelection: sensor('bedroom') },
+      { activeRcsSelection: { ...settings.activeRcsSelection, activeRcsSensor: { resourceId: 'bedroom' } } },
+      { sensorSelection: { isThermostatSelected: true } },
+      { multiSensorSettings: { multiSensorEnabled: true } },
+    ]) {
+      const invalid = sensorControlState({ ...settings, ...change });
+      assert.equal(invalid.builtInConfirmed, false);
+      assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: invalid }), false);
+    }
+  }
+});
+
 test('sensor hold and restoration preserve the full native schedule and sensor associations', () => {
   const original = fixture();
   const before = structuredClone(original);

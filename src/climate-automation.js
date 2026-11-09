@@ -653,19 +653,36 @@ export class ClimateAutomation {
       }
       return;
     }
-    if (
-      device.data.hvac_mode !== 'heat' ||
-      device.data.eco_mode !== false ||
-      !nativeSensorAllowsHeating(device.data) ||
-      device.data.can_heat === false ||
-      device.data.temperature_lock === true
-    ) {
+    const requirements = [];
+    if (device.data.hvac_mode !== 'heat') {
+      requirements.push('Select Heat mode on Nest.');
+    }
+    if (device.data.eco_mode !== false) {
+      requirements.push(device.data.eco_mode === true ?
+        'Turn Eco off on Nest.' : 'Waiting for Nest to report whether Eco is off.');
+    }
+    if (!nativeSensorAllowsHeating(device.data)) {
+      let reason = 'Waiting for Nest to confirm its built-in temperature sensor.';
+      if (device.data.active_rcs_sensor) {
+        reason = 'Select the built-in Nest temperature sensor.';
+      } else if (device.data.native_sensor_control?.reason) {
+        reason = 'Nest sensor feedback: ' + device.data.native_sensor_control.reason;
+      }
+      requirements.push(reason);
+    }
+    if (device.data.can_heat === false) {
+      requirements.push('This thermostat does not report support for heating.');
+    }
+    if (device.data.temperature_lock === true) {
+      requirements.push('Turn off the Nest temperature lock.');
+    }
+    if (requirements.length) {
       if (lease) {
         this.leases.delete(key);
         this.pause(state, 'Nest mode, Eco, lock or active sensor changed. Native Nest control takes priority; Resume when ready.');
       } else {
         state.phase = 'waiting';
-        state.reason = 'Heating control requires Heat mode, Eco off, no temperature lock and the built-in Nest sensor.';
+        state.reason = requirements.join(' ');
       }
       return;
     }

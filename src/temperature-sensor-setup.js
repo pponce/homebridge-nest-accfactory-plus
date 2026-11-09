@@ -8,7 +8,8 @@ const signature = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(
 export function nativeSensorAllowsHeating(data) {
   return (
     data?.active_rcs_sensor === '' &&
-    (!data.native_sensor_control?.reported || data.native_sensor_control.source === 'thermostat')
+    (!data.native_sensor_control?.reported || data.native_sensor_control.source === 'thermostat' ||
+      data.native_sensor_control.builtInConfirmed === true)
   );
 }
 
