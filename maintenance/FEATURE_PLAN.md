@@ -217,9 +217,10 @@ Use deterministic control tests and a read-only preview before a hardware trial.
 
 ## Native-like temperature control — product goal
 
-The goal is to reproduce native Nest sensor behavior as closely as possible while allowing genuine Nest sensors and other Homebridge temperature sensors as group inputs. This is a discussion/design target, not functionality added in beta.17.
+The goal is to reproduce native Nest sensor behavior as closely as possible while allowing genuine Nest sensors and other Homebridge temperature sensors as group inputs. This remains a design target; beta.18 changes sensor eligibility and Eco feedback, not manual target behavior.
 
 - Keep the chosen temperature source/group active when the user changes the desired room temperature. Changing a target from 70 °F to 72 °F should normally make the same group aim for a 72 °F room temperature/average.
+- The requested default is to keep the selected group active after a manual target change. Offer an optional **Pause after a manual Nest target change** policy. Proposed semantics: an absolute manual Nest target becomes the effective desired room target; compensation may then move the target shown on the physical Nest. Explain that distinction before exposing the policy.
 - Separate the selected sensor/group from the desired temperature, schedule and temporary temperature override. A manual target change should not silently rewrite the saved weekly schedule or the group’s sensor membership.
 - Present the effective group temperature and desired room target consistently in the dashboard and, after capability/lifecycle design, through the appropriate HomeKit thermostat controls.
 - Distinguish the plugin’s own acknowledged compensation writes from user changes; never create a loop that reinterprets each compensation write as a new comfort target.
