@@ -36,6 +36,9 @@ test('combined presence has stable distinct identity and read-only, fault-aware 
   f.presence.update(rule, { home: true, fault: false });
   assert.equal(await occupancy.handleGetRequest(), 1);
   assert.equal(service.getCharacteristic(hap.Characteristic.StatusFault).value, 0);
+  f.presence.update(rule, { home: true, fault: true });
+  assert.equal(await occupancy.handleGetRequest(), 1, 'Home remains conservative when another input fails');
+  f.presence.update(rule, { home: true, fault: false });
   f.presence.sync([rule]);
   assert.equal(service.getCharacteristic(hap.Characteristic.StatusFault).value, 0, 'Polling must not create transient faults');
   f.presence.update(rule, { home: false, fault: false });

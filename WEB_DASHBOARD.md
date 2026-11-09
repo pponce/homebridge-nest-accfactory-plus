@@ -116,7 +116,7 @@ Unavailable inputs cannot establish Away. The last confirmed state is retained w
 - **Pause rule** immediately requests a stop to automatic control. Settings still owned by that rule return to their previous values when the equipment is reachable. A newer manual setting is preserved.
 - Turning off **Enable automatic execution** or deleting a rule takes effect after **Save changes**. Disabling a presence rule removes its combined occupancy accessory.
 - Temperature and room-fan rules require **Resume automatic control after a Nest bridge restart**. Review equipment state first. Presence rules reconcile saved holds/overrides with current readings automatically.
-- If the Homebridge host stops abruptly, or Nest/the source bridge cannot be reached, it is impossible to send a fallback command. **The thermostat or room fan may retain its last commanded state.** A graceful shutdown attempts to restore owned settings.
+- If the Homebridge host stops abruptly, or Nest/the source bridge cannot be reached, it is impossible to send a fallback command. **The thermostat or room fan may retain its last commanded state.** A graceful shutdown attempts to restore owned settings. Restoring an owned setting after pause or invalid inputs can happen immediately; the minimum interval still applies before the next normal adjustment.
 - Failed or unconfirmed commands pause the rule. Check the actual equipment and its connection before resuming. A successful API response is not proof that the equipment reached the requested state.
 
 ## HTTP mode

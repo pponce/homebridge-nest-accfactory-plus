@@ -60,6 +60,11 @@ function deviceRows(value) {
 function runtimeSignature(block) {
   const runtime = structuredClone(block);
   delete runtime.climateRuleDrafts;
+  for (const device of Array.isArray(runtime.devices) ? runtime.devices : Object.values(runtime.devices ?? {})) {
+    if (object(device)) {
+      delete device.scheduleTimeZone;
+    }
+  }
   runtime.name ??= 'Nest Climate Cntrl';
   runtime.options = { ...(object(runtime.options) ? runtime.options : {}), eveHistory: runtime.options?.eveHistory !== false };
   return JSON.stringify(runtime);

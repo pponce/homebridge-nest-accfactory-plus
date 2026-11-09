@@ -1,5 +1,8 @@
 # Feature guide and rule-readiness checkpoint
 
+> Current execution work: see [EXECUTION_ENGINE_HANDOFF.md](EXECUTION_ENGINE_HANDOFF.md). This file records the earlier beta.5 checkpoint; draft-only statements below are historical.
+
+
 Updated: 2026-11-08
 
 ## Objective and source

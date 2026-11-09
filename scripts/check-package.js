@@ -33,6 +33,9 @@ try {
     'homebridge-ui/dashboard/favicon.png',
     'homebridge-ui/dashboard/icon-192.png',
     'homebridge-ui/dashboard/icon-512.png',
+    'dist/climate-automation.js',
+    'dist/climate-presence.js',
+    'homebridge-ui/climate-access.js',
     'dist/web-dashboard.js',
     'dist/web-dashboard-auth.js',
     'dist/web-dashboard-config.js',
@@ -68,6 +71,10 @@ try {
   const proxy = web.normalizeWebDashboard({ protocol: 'proxy', host: '::', publicOrigin: 'https://climate.example.com' });
   assert.equal(proxy.host, '127.0.0.1');
   assert.equal(proxy.publicOrigin, 'https://climate.example.com');
+  const engine = await import(pathToFileURL(path.join(root, 'dist/climate-automation.js')).href);
+  assert.equal(typeof engine.ClimateAutomation, 'function');
+  const presence = await import(pathToFileURL(path.join(root, 'dist/climate-presence.js')).href);
+  assert.equal(typeof presence.ClimatePresence, 'function');
   const preflight = await import(pathToFileURL(path.join(root, 'scripts/migration-preflight.mjs')).href);
   assert.equal(typeof preflight.inspectInstallation, 'function');
   console.log('Production tarball installs and registers successfully:', packed.filename);

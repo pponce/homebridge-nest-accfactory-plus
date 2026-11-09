@@ -60,7 +60,7 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
         throw new Error('cloud unavailable');
       }
       if (acknowledge) {
-        dashboard.update('T', 'Thermostat', { target_temperature_low: values.target_temperature_low }, 'A');
+        dashboard.update('T', 'Thermostat', { target_temperature_low: Math.round(values.target_temperature_low * 2) / 2 }, 'A');
       }
     },
   });
@@ -166,6 +166,38 @@ test('rounding stays on C/F grids inside offset and absolute limits', () => {
   assert.equal(Math.round(value * 1.8 + 32), value * 1.8 + 32);
 });
 
+test('whole-Fahrenheit commands accept half-Celsius feedback without masking a subsequent manual step', async (t) => {
+  const f = await fixture(t, {});
+  f.dashboard.update('T', 'Thermostat', { temperature_scale: 'F' }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  assert.ok(Math.abs(f.commands[0].target_temperature_low - 22.2222222222) < 0.0001);
+  assert.equal(f.dashboard.devices.get('T').data.target_temperature_low, 22);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.commands.length, 1);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.commands.length, 1);
+});
+
+test('sensor recovery cannot bypass the heating update interval after restoring a fallback target', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  f.source('room').available = false;
+  await f.engine.tick();
+  assert.equal(f.commands.length, 2);
+  f.source('room').available = true;
+  await f.engine.tick();
+  assert.equal(f.commands.length, 2);
+  assert.match(f.rule('rooms').reason, /minimum heating-target/);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  assert.equal(f.commands.length, 3);
+});
+
 test('manual cloud target changes pause heating without restoring over the user', async (t) => {
   const f = await fixture(t);
   await f.engine.tick();
@@ -187,6 +219,9 @@ test('direct manual commands pause before feedback and resume explicitly starts 
   assert.equal(f.commands.length, 1);
   await f.engine.control({ id: 'rooms', action: 'resume' });
   assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.commands.length, 1);
+  f.advance(5 * minute);
+  await f.engine.tick();
   assert.equal(f.commands.length, 2);
 });
 

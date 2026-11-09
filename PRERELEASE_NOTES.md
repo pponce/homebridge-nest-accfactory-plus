@@ -1,3 +1,19 @@
+## v0.5.0-beta.6
+
+**Opt-in climate automation for live equipment trials:**
+
+- **Temperature groups:** use one sensor or an equal average of associated Nest and other Homebridge temperature sensors to guide Nest heating. Configure a desired room temperature, bounded target adjustment and minimum update interval. Heat mode, Eco off and the built-in Nest control sensor are required; cooling/range compensation is outside this pilot.
+- **Room fans:** control compatible Homebridge fans above a temperature threshold or during reported Nest heating/cooling activity. Hysteresis and a minimum command interval reduce repeated switching. Rules release only settings they still own and respect manual fan changes.
+- **Combined Home/Away:** expose a separate read-only Apple Home occupancy sensor using Nest status, motion and occupancy inputs, with any/all logic, motion holds, an Away delay and timed dashboard overrides. This does not change Google's whole-home mode or Eco settings.
+- **Execution controls:** enable individual rules, view live status and waiting/paused reasons, and use pause/resume controls. Saving applies enabled rules without restarting the bridge. Existing and newly created drafts remain disabled until explicitly enabled.
+- **Recovery and precedence:** direct manual thermostat changes and Nest schedule boundaries take priority. Missing inputs cannot establish Away. Temperature and fan rules require explicit Resume after a bridge restart. Commands are tracked before transmission, and uncertain writes are not retried automatically.
+
+Follow the [live-rule setup and testing guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.6/WEB_DASHBOARD.md#try-your-first-rules). The engine polls approximately every 15 seconds; brief motion pulses between polls may be missed. If the host or equipment connection fails, Nest or a room fan may retain its last commanded state. Review actual equipment behavior during initial trials.
+
+The direct HTTP, direct HTTPS and same-machine reverse-proxy connection modes remain supported. Existing Climate Cntrl installations can update without re-pairing their thermostats or changing web credentials. A combined occupancy accessory is added only when its presence rule is enabled.
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.5
 
 **Three web dashboard connection modes:**

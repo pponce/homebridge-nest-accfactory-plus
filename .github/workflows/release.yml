@@ -100,12 +100,15 @@ jobs:
           NODE
       - run: node scripts/check-package.js
       - name: Check the checkout and npm publication helper
-        run: python3 maintenance/checks/publish-beta-runner.py
+        run: |
+          python3 maintenance/checks/publish-beta-runner.py
+          python3 maintenance/checks/install-execution-runner.py
       - name: Prepare release helpers and checksums
         run: |
           cp scripts/migration-preflight.mjs nest-climate-migration-preflight.mjs
           cp maintenance/update-checkout-and-publish-beta.sh update-checkout-and-publish-beta.sh
-          sha256sum "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh > SHA256SUMS
+          cp maintenance/install-execution-beta.sh install-execution-beta.sh
+          sha256sum "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh install-execution-beta.sh > SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -116,7 +119,7 @@ jobs:
           else
             flags=()
             if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease --latest=false); fi
-            gh release create "v$VERSION" "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh SHA256SUMS \
+            gh release create "v$VERSION" "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh install-execution-beta.sh SHA256SUMS \
               --target "$GITHUB_SHA" --title "Nest Climate Cntrl v$VERSION" \
               --notes-file RELEASE_NOTES.md "${flags[@]}"
           fi

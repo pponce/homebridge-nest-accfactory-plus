@@ -477,6 +477,7 @@ function renderRuleRuntime(rule) {
   host.replaceChildren(el('h4', 'Execution status'));
   if (!state.live || !runtime?.available) { host.append(el('p', 'Execution status unavailable. Refresh after the Nest bridge starts.')); return; }
   if (runtime.error) host.append(el('p', runtime.error));
+  if (runtime.pendingRestorations) host.append(el('p', 'Some owned settings are waiting to be restored. Check equipment connectivity.'));
   host.append(el('strong', current?.phase || 'Not saved'), el('p', current?.reason || 'Save this rule to apply its settings.'));
   if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Nest target: ' + formatTemp(current.nestTarget) + ' · Room target: ' + formatTemp(current.desiredTemperature)));
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));

@@ -6,7 +6,9 @@ import { sensorSources } from '../homebridge-ui/public/sensor-preview.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
-const equal = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 0.15 : a === b);
+// Nest's mapped feedback is rounded to 0.5 °C, including whole-Fahrenheit targets.
+// A 0.26 °C tolerance accepts that rounding while detecting the next reported half-degree step.
+const equal = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 0.26 : a === b);
 const fresh = (source, now) =>
   source?.available === true && Number.isFinite(source.lastReadAt) && source.lastReadAt <= now + 1000 && now - source.lastReadAt <= 90000;
 const target = (device) => device?.data.target_temperature_low ?? device?.data.target_temperature;
@@ -516,14 +518,20 @@ export class ClimateAutomation {
     }
     state.phase = 'active';
     state.reason = 'Heating follows the selected room temperature within the configured adjustment limit.';
-    state.nextChangeAt = lease ? lease.sentAt + (rule.minimumIntervalMinutes ?? 5) * MINUTE : null;
-    if (equal(target(device), proposed) || (lease && this.now() < state.nextChangeAt)) {
+    state.nextChangeAt = Number.isFinite(state.lastWriteAt) ? state.lastWriteAt + (rule.minimumIntervalMinutes ?? 5) * MINUTE : null;
+    if (equal(target(device), proposed)) {
+      return;
+    }
+    if (state.nextChangeAt && this.now() < state.nextChangeAt) {
+      state.phase = 'waiting';
+      state.reason = 'Waiting for the minimum heating-target update interval.';
       return;
     }
     lease ??= { kind: 'temperature', targetId: rule.thermostatId, owner: rule.id, baseline: target(device) };
     lease.before = target(device);
     lease.expected = proposed;
     lease.sentAt = this.now();
+    state.lastWriteAt = lease.sentAt;
     lease.pending = true;
     this.leases.set(key, lease);
     await this.persist();
@@ -567,6 +575,7 @@ export class ClimateAutomation {
     }
     state.demand = demand;
     state.fanObserved ??= {};
+    state.fanWrites ??= {};
     state.phase = 'active';
     state.reason = demand ? 'Run condition is met.' : 'Run condition is clear.';
     for (const id of rule.targetIds) {
@@ -591,13 +600,20 @@ export class ClimateAutomation {
       state.fanObserved[id] = source.running;
       // Never switch off a fan that the rule did not turn on.
       const desired = demand ? true : lease?.baseline;
-      if (desired === undefined || source.running === desired || (lease && this.now() - lease.sentAt < MINUTE)) {
+      if (desired === undefined || source.running === desired) {
+        continue;
+      }
+      if (Number.isFinite(state.fanWrites[id]) && this.now() - state.fanWrites[id] < MINUTE) {
+        state.phase = 'waiting';
+        state.reason = 'Waiting for the minimum room-fan command interval.';
+        state.nextChangeAt = state.fanWrites[id] + MINUTE;
         continue;
       }
       lease ??= { kind: 'fan', targetId: id, owner: rule.id, baseline: source.running };
       lease.before = source.running;
       lease.expected = desired;
       lease.sentAt = this.now();
+      state.fanWrites[id] = lease.sentAt;
       lease.pending = true;
       this.leases.set(key, lease);
       await this.persist();
@@ -722,6 +738,12 @@ export class ClimateAutomation {
     lease.pending = true;
     lease.restoring = true;
     lease.sentAt = this.now();
+    const owner = this.states.get(lease.owner);
+    if (owner && lease.kind === 'temperature') {
+      owner.lastWriteAt = lease.sentAt;
+    } else if (owner) {
+      (owner.fanWrites ??= {})[lease.targetId] = lease.sentAt;
+    }
     await this.persist();
     if (lease.kind === 'temperature') {
       await this.dashboard.setAutomationTarget(lease.targetId, lease.baseline, current);

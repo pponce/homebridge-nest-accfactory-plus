@@ -1,6 +1,6 @@
 # Climate execution engine checkpoint
 
-Updated: 2026-11-08. Work in progress; do not treat this checkpoint as a release sign-off.
+Updated: 2026-11-09. Beta.6 release preparation; final release validation pending.
 
 ## Objective and repository
 
@@ -18,20 +18,24 @@ Repository: `pponce/homebridge-nest-climate-cntrl`. Implementation branch: `feat
 - Rule validation, schema, authenticated/CSRF-protected command endpoint, enable toggles, runtime status, pause/resume and one-hour presence overrides. Existing drafts remain disabled.
 - README and WEB_DASHBOARD.md have live-rule explanations and supervised trial instructions in the working tree.
 
-## Verification so far
+## Verification
 
-- 68 focused local engine, source, native-control, dashboard and web API tests passed before the latest small fixture updates. Engine coverage at that point: 91.30% lines, 88.20% branches, 90.14% functions. New module coverage floors were added without reducing existing floors.
-- CI run `42537098781`: formatting and all browser suites passed, including embedded setup, standalone desktop/mobile execution controls and HTTPS reverse proxy sessions.
-- Compatibility matrix failed on older extracted-method fixtures lacking `climateWrites`. Local fixes for `test/protobuf-hvac.test.js` and `test/system-set.test.js` are prepared; they need the next CI run.
-- Local npm dependency download is blocked (registry 403), and Chromium cannot open its required socket. Full runtime, HAP, coverage/build and browser checks run in GitHub CI.
+- CI run `42537635516` passed on formatted commit `d38270098652bb23ddcb53ed764a84d0770f17f8`: all six supported Node 22/24/26 and Homebridge 1.11.4/2.4.0/2.5.0 combinations, including lint, coverage, build, real HAP lifecycle and cache restoration.
+- Embedded setup, standalone desktop/mobile and HTTPS-to-HTTP reverse-proxy browser suites passed, including enable/save/pause/resume and existing authentication/CSRF checks.
+- Final review added regressions for Fahrenheit target feedback rounding, minimum-interval preservation after a sensor outage and timezone changes without a bridge restart. All 71 focused engine, source, native-control, dashboard and API tests pass locally. These final changes need the final CI run.
+- Engine coverage before these additions: 91.30% lines, 88.20% branches, 90.14% functions. New module coverage floors were added without reducing existing floors.
+- Local dependency downloads and Chromium are unavailable in this environment. Complete runtime/browser/package checks run in GitHub CI.
 - No real thermostat/fan installation was modified. No npm publication is authorized or performed.
 
-## Next steps
+## Release and first hardware trial
 
-1. Commit the fixture corrections and pending docs to the implementation branch, preserving remote history and expected-head checks. The branch-specific validation workflow formats touched modules and then tests that formatted commit across all supported Node/Homebridge combinations.
-2. Inspect all CI failures, finish meaningful tests and any fixes, and verify the final exact source revision. Add a real platform startup/lifecycle test if coverage requires it; do not lower existing coverage floors.
-3. Review remaining execution edge cases, especially command races, cleanup/recovery and rule changes. Check documentation links and ensure embedded setup text directs users to live rules accurately.
-4. Prepare the next beta version, release notes and a complete install script with START/END markers, no `exit` or `set -e`, and stop → hb-service add → start. Keep generated reports/downloads under the existing project folder. Do not create backups without permission.
-5. Fast-forward main only after checks pass, create the tested GitHub prerelease package, and provide exact first temperature-group/fan setup steps. Ask before npm publication.
+Version files, beta.6 notes, installed-package checks and a checksum-verifying installer are prepared. The installer is `maintenance/install-execution-beta.sh`; it downloads the GitHub release package into the existing project folder and runs stop → hb-service add → start. It attempts to start Homebridge even when package installation fails. It does not publish to npm or change Nginx/DNS.
+
+1. Commit final corrections and release preparation to `feature/climate-execution`; validate the exact formatted head in the branch workflow.
+2. Fast-forward main only after all checks pass, then wait for the GitHub prerelease workflow and verify the beta.6 package/checksums. Record the source and validation run here.
+3. Install the GitHub beta on a test installation. Open Climate rules, select a Heat/Eco-off thermostat using its built-in sensor, choose valid group sources and a modest adjustment limit, then explicitly enable/save. If Nest has a weekly schedule, set the thermostat's IANA timezone first.
+4. Observe actual Nest target/room readings, manual-change pause and Pause restoration. For a room fan, begin with it off and test threshold start, hysteresis stop and manual override. Temperature/fan rules require Resume after a bridge restart.
+5. Enable one combined presence rule and verify Apple Home occupancy, fault behavior, holds, Away delay and timed overrides. Polling may miss motion pulses shorter than 15 seconds.
+6. Record hardware results before expanding scope. Ask before npm publication.
 
 The local checkout is a synthetic snapshot with pre-existing changes. Do not push its Git history. Use GitHub tree/commit/ref tools against the inspected remote base and preserve submodule entries. Private deployment details and credentials do not belong in public documentation.

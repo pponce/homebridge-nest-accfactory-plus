@@ -273,6 +273,16 @@ test('legacy object device overrides retain unedited settings and rules remain d
   assert.throws(() => validateRuleDrafts({ temperature: [{ ...draft, unsupported: true }] }));
 });
 
+test('schedule time zone changes apply to the rule engine without requiring a bridge restart', async (t) => {
+  const state = await fixture(t);
+  const store = new WebDashboardConfig(state.configPath, state.block);
+  const initial = await store.snapshot();
+  const saved = await store.save({ revision: initial.revision,
+    config: { devices: [{ serialNumber: 'THERMO', scheduleTimeZone: 'America/Los_Angeles' }] } });
+  assert.equal(saved.restartRequired, false);
+  assert.equal(saved.config.devices[0].scheduleTimeZone, 'America/Los_Angeles');
+});
+
 test('HTTPS API requires allowed hosts, a local session, matching origin and CSRF for changes', async (t) => {
   const state = await fixture(t);
   const server = new WebDashboard({ ...state, platformConfig: state.block, discoveryDelay: 0 });

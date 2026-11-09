@@ -1,6 +1,8 @@
 # Nest Climate Cntrl — feature plan
 
-Updated: 2026-11-06
+Updated: 2026-11-09
+
+Execution status: beta.6 implements opt-in bounded heating groups, Homebridge room-fan execution and combined occupancy accessories. See [EXECUTION_ENGINE_HANDOFF.md](EXECUTION_ENGINE_HANDOFF.md) for validation and remaining hardware trials. The design below includes future scope; weighting, scheduled groups, cooling/range compensation and derived-presence climate actions are not implemented.
 
 This file tracks maintainer planning for the thermostat and heating direction of `pponce/homebridge-nest-climate-cntrl`. It is not a list of released features. The selected product name is **Nest Climate Cntrl**; repository rename is complete; the first climate beta uses the new package name.
 
@@ -10,10 +12,10 @@ This file tracks maintainer planning for the thermostat and heating direction of
 | --- | --- |
 | Thermostat dashboard | Status, schedules, runtime and diagnostics inside the plugin's Homebridge settings. Verify completion against the active implementation branch. |
 | Native thermostat controls | Eco controls, a “Temperature controlled by” selector for native sources, and optional HVAC fan-timer controls disabled by default. Verify completion against the active implementation branch. |
-| Room and ceiling fans | Select accessible Homebridge fans and coordinate them with heating/cooling. Keep room fans distinct from the thermostat's HVAC blower. Detailed behavior remains to be designed. |
+| Room and ceiling fans | Select accessible Homebridge fans and coordinate them with heating/cooling. Keep room fans distinct from the thermostat's HVAC blower. Temperature hysteresis and reported HVAC activity rules are implemented for beta.6. |
 | Coexistence and migration | Alias `NestClimateCntrl`; no weather; fresh child-bridge cutover from Accfactory/Plus, new pairing and rebuilt Apple Home assignments. Existing Climate installations update normally. |
-| Combined Climate Home/Away sensor | **Approved for the feature plan; implementation pending.** Optional occupancy sensor combines Google home status with a searchable Homebridge sensor picker and configurable presence rules. |
-| Mixed room-sensor control | **Read-only discovery and single/equal-average preview implemented.** Software heating control, weighting and schedules remain pending. Combine genuine Nest sensors and other accessible Homebridge temperature sensors in one group. |
+| Combined Climate Home/Away sensor | **Implemented for beta.6; physical hardware trials pending.** Optional occupancy sensor combines Google home status with a searchable Homebridge sensor picker and configurable presence rules. |
+| Mixed room-sensor control | **Single/equal-average heating control implemented for beta.6.** Weighting and scheduled groups remain pending. Combine genuine Nest sensors and other accessible Homebridge temperature sensors in one group. |
 
 ## Coexistence, identity and migration
 
@@ -51,7 +53,7 @@ Use a new Climate child bridge for the cutover. Keep the existing compatibility 
 
 ## Combined Climate Home/Away sensor — approved feature scope
 
-**Approved for the feature plan; implementation pending.** Expose an optional plugin-owned **Climate Home/Away** occupancy sensor that combines Google's reported home status with configurable logic using user-selected Homebridge sensors. It is disabled by default and has its own stable identity per configured Google home.
+**Implemented for beta.6; physical hardware trials pending.** Expose an optional plugin-owned **Climate Home/Away** occupancy sensor that combines Google's reported home status with configurable logic using user-selected Homebridge sensors. It is disabled by default and has its own stable identity per child bridge and rule.
 
 ### Output and Google input
 

@@ -6,7 +6,7 @@
   umask 077
   nest_publish_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.5'
+    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.6'
     local release_url="https://github.com/pponce/$package/releases/download/v$version"
     local release_dir="$project/maintenance/releases/v$version"
     local asset origin branch worktree_status ignored tool attempt tag_value

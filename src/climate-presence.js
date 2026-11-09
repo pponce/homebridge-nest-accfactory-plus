@@ -42,7 +42,7 @@ export class ClimatePresence {
       service.setCharacteristic(Characteristic.Name, rule.name);
       service.getCharacteristic(Characteristic.OccupancyDetected).onGet(() => {
         const state = this.readings.get(rule.id);
-        if (typeof state?.home !== 'boolean' || state.fault) {
+        if (typeof state?.home !== 'boolean' || (state.fault && state.home !== true)) {
           throw new this.api.hap.HapStatusError(this.api.hap.HAPStatus.SERVICE_COMMUNICATION_FAILURE);
         }
         return Number(state.home);
