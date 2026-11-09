@@ -4,7 +4,9 @@ import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-pre
 import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed } from '/shared/fan-speed.js';
 
 const $ = (id) => document.getElementById(id);
-for (const id of ['http-login-warning', 'http-session-warning']) $(id).hidden = window.location.protocol !== 'http:';
+const host = window.climateHost;
+if (host) { $('sign-out').hidden = true; document.body.classList.add('homebridge-host'); }
+for (const id of ['http-login-warning', 'http-session-warning']) $(id).hidden = Boolean(host) || window.location.protocol !== 'http:';
 const iconPaths = {
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
   sensors: '<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4m8.4-8.4a6 6 0 0 1 0 8.4M4.6 4.6a10.5 10.5 0 0 0 0 14.8m14.8-14.8a10.5 10.5 0 0 1 0 14.8"/>',
@@ -215,6 +217,7 @@ function markDirty() {
   document.querySelectorAll('.sensor-setup button').forEach((control) => { control.disabled = true; });
 }
 async function api(route, { method = 'GET', body, anonymous = false, timeout = 20000 } = {}) {
+  if (host) return host.request(route, { method, body, timeout });
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (!['GET', 'HEAD'].includes(method) && state.session?.csrfToken) headers['X-CSRF-Token'] = state.session.csrfToken;
@@ -234,7 +237,7 @@ function showLogin(message = '', setup = false) {
   $('login-error').textContent = message; $('login-error').hidden = !message;
   $('login-form').hidden = setup; $('setup-retry').hidden = !setup;
   $('login-title').textContent = setup ? 'A little setup first.' : 'Welcome home.';
-  $('login-help').textContent = setup ? 'Create your web account in Homebridge → Nest Climate Cntrl → Web dashboard, then return here.' : 'Sign in with your Climate Cntrl web account.';
+  $('login-help').textContent = setup ? 'Create your web account in Homebridge → Nest Climate Cntrl → Connection & advanced setup, then return here.' : 'Sign in with your Climate Cntrl web account.';
 }
 async function checkSession() {
   try {
@@ -704,6 +707,7 @@ async function applyHeatingRecommendation(entry, stage) {
 function renderSettings() {
   if (!state.config) return;
   $('temperature-unit').value = temperatureUnit();
+  $('pause-on-restart').checked = state.config.options?.pauseOnRestart === true;
   $('dashboard-name').value = state.config.name || 'Nest Climate Cntrl'; $('eve-history').checked = state.config.options?.eveHistory !== false;
   $('dashboard-url').textContent = state.envelope.web?.url || location.origin;
   $('device-settings').replaceChildren();
@@ -730,6 +734,7 @@ function renderSettings() {
 }
 $('temperature-unit').addEventListener('change', () => { if (state.config) { state.config.temperatureUnit = $('temperature-unit').value; markDirty(); renderAll(); } });
 $('dashboard-name').addEventListener('input', () => { if (state.config) { state.config.name = $('dashboard-name').value; markDirty(); } });
+$('pause-on-restart').addEventListener('change', () => { if (state.config) { (state.config.options ??= {}).pauseOnRestart = $('pause-on-restart').checked; markDirty(); } });
 $('eve-history').addEventListener('change', () => { if (state.config) { (state.config.options ??= {}).eveHistory = $('eve-history').checked; markDirty(); } });
 function renderAccounts() {
   $('account-list').replaceChildren();
@@ -855,6 +860,14 @@ document.querySelectorAll('[data-kind]').forEach((tab) => {
   tab.addEventListener('click', () => { state.ruleKind = tab.dataset.kind; state.ruleId = null; renderRules(); });
   tab.addEventListener('keydown', (event) => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const tabs = [...document.querySelectorAll('[data-kind]')]; const index = tabs.indexOf(tab); const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length; tabs[next].click(); tabs[next].focus(); });
 });
+function renderRuleStatuses() {
+  for (const node of document.querySelectorAll('[data-rule-status]')) {
+    const runtime = state.status?.automation?.rules?.find((entry) => entry.id === node.dataset.ruleStatus);
+    node.textContent = !state.live ? 'Status unavailable' : runtime ?
+      runtime.paused ? 'Paused' : runtime.phase?.replace(/^./, (letter) => letter.toUpperCase()) || 'Waiting' : 'Not running';
+    node.title = runtime?.reason || 'Save changes to apply this rule.';
+  }
+}
 function renderRules() {
   cancelFanDrag();
   if (!state.config) { empty($('rule-editor'), 'Configuration unavailable.', 'Refresh after the plugin has started.', 'rules'); return; }
@@ -870,6 +883,7 @@ function renderRules() {
   for (const [index, rule] of items.entries()) {
     const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item');
     item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · ' + (rule.enabled ? 'Enabled' : 'Disabled')));
+    const runtime = el('small'); runtime.dataset.ruleStatus = rule.id; item.append(runtime);
     item.setAttribute('aria-pressed', String(rule.id === state.ruleId));
     $('rule-list').append(isFan ? fanRuleRow(rule, index, items.length, item) : item);
   }
@@ -879,6 +893,7 @@ function renderRules() {
     empty($('rule-editor'), ...details, button('Create ' + (state.ruleKind === 'temperature' ? 'temperature group' : state.ruleKind === 'presence' ? 'presence rule' : 'fan rule'), newRule, 'button primary')); return;
   }
   renderRuleEditor();
+  renderRuleStatuses();
 }
 function editorSection(host, number, title, description) {
   const section = el('section', undefined, 'editor-section'); const heading = el('h4'); heading.append(el('span', number, 'step-number'), document.createTextNode(title)); section.append(heading, el('p', description)); host.append(section); return section;
@@ -888,7 +903,7 @@ function ruleFieldHelp(title, rule) {
     case 'Rule name': return 'Choose a name that identifies this rule in the list and its execution status. For a Home/Away rule, this also names its combined occupancy sensor.';
     case 'Enable automatic execution': return rule.kind === 'presence'
       ? 'After saving, publish the combined Home/Away result as an Apple Home occupancy sensor. This does not change Google Home/Away or Nest Eco settings.'
-      : 'After saving, allow this rule to control its selected equipment when its conditions are met. Temperature and fan rules require Resume after a bridge restart. Review execution status for any setup or pause.';
+      : 'After saving, allow this rule to control its selected equipment when its conditions are met. Previously active rules continue after restart checks unless Pause after bridge restart is enabled. Rules you pause stay paused. Review execution status for any setup or pause.';
     case 'Thermostat': return rule.kind === 'fan'
       ? 'Watch this thermostat for active heating or cooling. Selecting Heat or Cool mode alone does not start the fans; the equipment must actually be running. This rule does not switch the HVAC system on.'
       : 'Choose the Nest thermostat whose heating target this group adjusts. Its own temperature counts toward the group only if you also select it under Temperature sources.';
@@ -987,7 +1002,7 @@ function renderRuleEditor() {
       for (const [direction, label] of [['up', 'Move up'], ['down', 'Move down']]) row.querySelector('[data-reorder="' + direction + '"]').setAttribute('aria-label', label + ': ' + value);
     }
   });
-  toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Temperature and fan rules require Resume after a bridge restart.', rule.enabled, (value) => { rule.enabled = value; renderRules(); }, () => ruleFieldHelp('Enable automatic execution', rule));
+  toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Previously active rules continue after restart checks unless Pause after bridge restart is enabled. Rules you pause stay paused.', rule.enabled, (value) => { rule.enabled = value; renderRules(); }, () => ruleFieldHelp('Enable automatic execution', rule));
   if (rule.kind === 'temperature') {
     const target = editorSection(host, '01', 'Choose the room target', 'Choose the thermostat this rule will control and the temperature you want the selected rooms to reach.');
     const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); temperatureField(fields, 'Desired room temperature', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { min: rule.enabled ? 9 : 5, max: rule.enabled ? 32 : 35 }); target.append(fields);
@@ -1256,14 +1271,15 @@ $('discard').addEventListener('click', async () => {
   catch (error) { notice(error.message, 'danger'); }
   finally { $('discard').disabled = false; $('save').disabled = !state.dirty; }
 });
-function renderLive() { renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePickers(); renderRulePreview(); for (const device of thermostats()) timeZonePickers.get(device.serial)?.update(device.data); }
+function renderLive() {
+  renderRuleStatuses(); renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePickers(); renderRulePreview(); for (const device of thermostats()) timeZonePickers.get(device.serial)?.update(device.data); }
 function renderRestart() {
   const restart = state.envelope?.restart;
   $('restart-notice').hidden = !state.envelope?.restartRequired && !state.restarting && !state.restartMessage;
   $('restart-title').textContent = state.restarting ? 'Restarting child bridge…' : 'Restart required';
   $('restart-detail').textContent = state.restartMessage || (state.dirty ? 'Save or discard your edits before restarting.' :
-    restart?.available ? 'Restart this Nest child bridge to apply saved settings. The dashboard will briefly disconnect. Sign in again afterward, then Resume temperature and fan rules.' :
-      restart?.message || 'Restart this child bridge from Homebridge to apply saved settings, then Resume temperature and fan rules.');
+    restart?.available ? 'Restart this Nest child bridge to apply saved settings. The dashboard will briefly disconnect. Sign in again afterward and check rule status. Previously active rules continue after restart checks unless restart pausing is enabled.' :
+      restart?.message || 'Restart this child bridge from Homebridge to apply saved settings, then check rule status.');
   $('restart-child').hidden = !restart?.available;
   $('restart-child').disabled = state.restarting || state.dirty || state.saving || ['prepared', 'requested'].includes(restart?.phase);
   for (const section of document.querySelectorAll('[data-section]')) section.inert = state.restarting;
@@ -1287,8 +1303,8 @@ async function restartChildBridge() {
       if (session.instanceId && session.instanceId !== before) {
         state.restarting = false; state.restartMessage = ''; state.envelope = null; state.config = null; state.live = false; state.heating = null;
         state.session = session; renderRestart();
-        if (session.authenticated) { await enterDashboard(); notice('Child bridge restarted. Review your equipment, then Resume temperature and fan rules.'); }
-        else showLogin('Child bridge restarted. Sign in again, then Resume your temperature and fan rules.', session.setupRequired);
+        if (session.authenticated) { await enterDashboard(); notice('Child bridge restarted. Review your equipment, then check rule status.'); }
+        else showLogin('Child bridge restarted. Sign in again to check rule status.', session.setupRequired);
         return;
       }
       if (session.authenticated) {
@@ -1305,4 +1321,9 @@ async function restartChildBridge() {
 }
 $('restart-child').addEventListener('click', restartChildBridge);
 function renderAll() { renderLive(); renderSettings(); renderRules(); renderRestart(); }
+if (host) host.connect({
+  hasEdits: () => state.dirty || state.saving,
+  confirm: confirmAction,
+  reload: () => enterDashboard(),
+});
 checkSession();

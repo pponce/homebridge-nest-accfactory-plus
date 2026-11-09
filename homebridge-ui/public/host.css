@@ -1,0 +1,20 @@
+.homebridge-tools { padding: 12px 20px; background: var(--panel, #fff); color: var(--text, #2d2834); border-bottom: 1px solid #ddd6e4; }
+.homebridge-tools p { margin: 6px 0; font-size: 14px; }
+.homebridge-tools button, #connection-panel button { min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid #b9adca; cursor: pointer; }
+#connection-panel { margin: 20px; padding: 20px; }
+#web-account-setup { margin-top: 24px; }
+#web-account-setup label { display: block; margin-top: 12px; }
+#web-account-setup input { display: block; width: min(100%, 420px); padding: 10px; }
+#web-account-save { margin-top: 14px; }
+.homebridge-host .app-shell { min-height: 75vh; }
+.homebridge-host #http-login-warning, .homebridge-host #http-session-warning { display: none; }
+
+@media (min-width: 761px) {
+  .homebridge-host .app-shell { display: flex; align-items: flex-start; }
+  .homebridge-host .sidebar { position: sticky; top: 0; flex: 0 0 234px; min-height: 75vh; }
+  .homebridge-host .workspace { margin-left: 0; min-width: 0; flex: 1; }
+}
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .homebridge-host .sidebar { flex-basis: 208px; }
+}

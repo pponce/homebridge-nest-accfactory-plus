@@ -148,15 +148,22 @@ export class ClimateAutomation {
           if (state.roomTarget && (!validTarget(state.roomTarget.value) || !['manual', 'schedule'].includes(state.roomTarget.source))) {
             throw new Error('Invalid saved room target');
           }
-          delete state.manualTarget;
-          delete state.scheduleTarget;
+          if (state.manualTarget && (!state.manualTarget.accepted || !validTarget(state.manualTarget.expected) ||
+              !validTarget(state.manualTarget.desired) || !Number.isFinite(state.manualTarget.at))) {
+            state.paused = true;
+            state.reason = 'A manual target was not confirmed before restart. Review Nest, then Resume.';
+            delete state.manualTarget;
+          }
         }
         if (state.rule.kind === 'fan') {
           state.rule = normalizeFanRule(state.rule);
         }
-        if (state.rule.kind !== 'presence' && state.rule.enabled) {
-          state.paused = true;
-          state.reason = 'Bridge restarted. Review the equipment, then Resume automatic control.';
+        if (state.rule.kind !== 'presence' && state.rule.enabled && !state.paused) {
+          state.restartPolicyPending = true;
+          state.recovering = true;
+          state.phase = 'waiting';
+          state.temperatureControl = 'waiting';
+          state.reason = 'Bridge restarted. Waiting for current readings and equipment checks.';
         }
         this.states.set(id, state);
       }
@@ -185,12 +192,22 @@ export class ClimateAutomation {
         }
         this.fanOverrides = new Map(data.fanOverrides);
       }
+      if (data.fanObservations !== undefined) {
+        if (!Array.isArray(data.fanObservations) || data.fanObservations.length > 256 || data.fanObservations.some((entry) =>
+          !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || entry[0].length > 256 ||
+          typeof entry[1]?.running !== 'boolean' ||
+          (entry[1].speed !== undefined && (!Number.isFinite(entry[1].speed) || entry[1].speed < 0 || entry[1].speed > 100)))) {
+          throw new Error('Invalid saved fan observations');
+        }
+        this.fanObservations = new Map(data.fanObservations);
+      }
       this.sensorSetup.load(data.sensorSetups);
     } catch (error) {
       if (error.code !== 'ENOENT') {
         this.states.clear();
         this.leases.clear();
         this.fanOverrides.clear();
+        this.fanObservations.clear();
         this.sensorSetup.leases.clear();
         this.recoveryRequired = true;
         this.error = 'Saved automation state could not be read. Review equipment and Resume each rule.';
@@ -215,7 +232,7 @@ export class ClimateAutomation {
 
   async persist() {
     const bytes = JSON.stringify({ version: 1, states: [...this.states], leases: [...this.leases],
-      fanOverrides: [...this.fanOverrides], sensorSetups: this.sensorSetup.entries() });
+      fanOverrides: [...this.fanOverrides], fanObservations: [...this.fanObservations], sensorSetups: this.sensorSetup.entries() });
     const operation = this.saving.then(async () => {
       const temporary = path.join(this.directory, 'automation-' + crypto.randomUUID() + '.tmp');
       let file;
@@ -369,6 +386,12 @@ export class ClimateAutomation {
         state.fanObserved = {};
         state.fanSpeedObserved = {};
         state.fanSpeeds = [];
+      }
+      if (state.restartPolicyPending) {
+        delete state.restartPolicyPending;
+        if (envelope.config.options?.pauseOnRestart === true) {
+          this.pause(state, 'Pause after bridge restart is enabled. Resume when ready for automatic control.');
+        }
       }
       state.rule = rule;
       this.states.set(rule.id, state);
@@ -895,6 +918,13 @@ export class ClimateAutomation {
       requirements.push('Turn off the Nest temperature lock.');
     }
     if (requirements.length) {
+      const unknown = device.data.hvac_mode === undefined || device.data.eco_mode === undefined ||
+        device.data.active_rcs_sensor === undefined;
+      if (state.recovering && unknown) {
+        state.phase = 'waiting';
+        state.reason = 'Waiting for Nest mode, Eco and active-sensor feedback after restart.';
+        return;
+      }
       if (lease || state.controlStarted) {
         this.leases.delete(key);
         delete state.manualTarget;
@@ -926,8 +956,9 @@ export class ClimateAutomation {
       target(device) > 32
     ) {
       state.phase = 'waiting';
-      state.reason = 'A selected temperature is unavailable. Returning an owned target to its previous setting when possible.';
-      if (lease) {
+      state.reason = state.recovering ? 'Waiting for all selected temperature readings after restart.' :
+        'A selected temperature is unavailable. Returning an owned target to its previous setting when possible.';
+      if (lease && !state.recovering) {
         await this.release(key, lease);
       }
       return;
@@ -935,6 +966,7 @@ export class ClimateAutomation {
     if (!this.temperatureFeedback(state, device, lease)) {
       return;
     }
+    delete state.recovering;
     lease = this.leases.get(key);
     const proposed = heatingTarget(
       desiredTarget(state),
@@ -1178,13 +1210,21 @@ export class ClimateAutomation {
         return;
       }
       this.leases.delete(key);
+      const state = this.states.get(lease.owner);
+      if (lease.kind === 'temperature' && state?.recovering && lease.restoring) {
+        this.pause(state, 'Nest did not confirm target restoration across restart. Review its target, then Resume.');
+      }
       return;
     }
     if (equal(current, lease.baseline)) {
       this.leases.delete(key);
       const state = this.states.get(lease.owner);
       if (state && lease.kind === 'temperature') {
-        state.controlStarted = false;
+        if (state.recovering) {
+          state.referenceTarget = current;
+        } else {
+          state.controlStarted = false;
+        }
       } else if (state?.fanObserved) {
         state.fanObserved[lease.targetId] = current;
       }

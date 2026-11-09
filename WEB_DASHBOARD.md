@@ -17,18 +17,18 @@ The standalone dashboard provides a visual interface for daily use and supported
 | **Climate rules** | Build named temperature groups, Home/Away rules and room-fan rules with source pickers and current-signal previews. Enable selected rules and inspect their live execution status, timers and pause/resume controls. |
 | **Settings** | Choose heating type, collect local response history, review per-rule recommendations, and change the dashboard name and supported accessory options. Save changes with account credentials and bridge identity preserved; the dashboard identifies options requiring a restart. |
 
-Use **Homebridge → Plugins → Nest Climate Cntrl → Settings** for Google/Nest account setup and web login, certificate and network settings. Its **Room sensors & fans** section also offers a read-only temperature preview. Named rules are managed in the standalone dashboard's **Climate rules** area.
+The same climate application is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings**. Open **Connection & advanced setup** there for Google/Nest credentials and web login, certificate and network settings. Named rules and live controls are available in both interfaces.
 
 Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
 
 ## Enable web access
 
-1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Web dashboard**. The Nest bridge must be running.
+1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup → Web dashboard**. The Nest bridge must be running.
 2. Create a **web username and password**. Use at least 8 characters for the password. This account is separate from your Google and Homebridge accounts.
 3. Select **Enable standalone dashboard**. Save with Homebridge's **Save** button and restart the Nest child bridge.
-4. Select **Refresh web access**, then **Open climate dashboard**. The default HTTPS port is **9444**.
+4. Reopen **Connection & advanced setup**, then select **Open climate dashboard**. The default HTTPS port is **9444**.
 
-The web server is off by default. Under **Network and connection settings → Connection mode**, choose how browsers reach it:
+The web server is off by default. Under **Connection & advanced setup → Web dashboard → Connection mode**, choose how browsers reach it:
 
 | Connection mode | Browser connection | Certificate owner | Backend |
 | --- | --- | --- | --- |
@@ -40,7 +40,7 @@ Save and restart the Nest child bridge after changing network settings. All thre
 
 ## Choose temperature units
 
-In the standalone dashboard, open **Settings → Your dashboard → Temperature units**, choose **Celsius (°C)** or **Fahrenheit (°F)**, then **Save changes**. The same preference is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings → Dashboard preferences → Temperature units**; use Homebridge’s Save button there. The standard configuration form includes **Dashboard temperature units** under **Web dashboard**.
+In the standalone dashboard, open **Settings → Your dashboard → Temperature units**, choose **Celsius (°C)** or **Fahrenheit (°F)**, then **Save changes**. The same **Settings → Temperature units** control and **Save changes** action are available inside Homebridge plugin Settings. The standard configuration form includes **Dashboard temperature units** under **Web dashboard**.
 
 Celsius is the default. The choice applies to readings, schedules, sensor previews, room targets, fan thresholds, adjustment limits, turn-off gaps and execution status. It is shared across browsers for this Climate platform. Refresh another open dashboard after saving. Changing only the units requires no bridge restart and preserves the temperatures in existing rules. Nest and Apple Home have separate display-unit settings.
 
@@ -193,7 +193,7 @@ Normal speed adjustments share a one-minute interval across rules. On a temperat
 
 When no rule calls for a fan, automation releases it: a fan started by automation turns off, and a previously running fan returns to its original speed within the final controlling cap. If no supported speed fits a reduced cap, an owned fan is stopped. A cap limits commands from the rule; it does not constrain manual controls or a fan's internal startup behavior. A disconnected Homebridge host cannot send a new speed or stop command.
 
-Review the table, enable the rule, and **Save changes**. **Execution status** reports the current and requested speed, cap and controlling rule for each fan. Fan rules require **Resume automatic control** after a bridge restart.
+Review the table, enable the rule, and **Save changes**. **Execution status** reports the current and requested speed, cap and controlling rule for each fan. Previously active fan rules continue after restart checks unless **Pause after bridge restart** is enabled.
 
 ### Multiple rules for one fan
 
@@ -233,13 +233,13 @@ Unavailable inputs cannot establish Away. The last confirmed state is retained w
 
 - **Pause rule** immediately requests a stop to automatic control. Settings still owned by that rule return to their previous values when the equipment is reachable. A newer manual setting is preserved.
 - Turning off **Enable automatic execution** or deleting a rule takes effect after **Save changes**. Disabling a presence rule removes its combined occupancy accessory.
-- Temperature and room-fan rules require **Resume automatic control after a Nest bridge restart**. Review equipment state first. Presence rules reconcile saved holds/overrides with current readings automatically.
+- Previously active temperature and room-fan rules continue after restart once current readings and equipment checks pass. Explicit pauses, manual fan overrides and uncertain commands remain paused. Enable **Pause after bridge restart** in Settings to require Resume after every restart. Presence rules reconcile saved holds/overrides with current readings automatically.
 - If the Homebridge host stops abruptly, or Nest/the source bridge cannot be reached, it is impossible to send a fallback command. **The thermostat or room fan may retain its last commanded state.** A graceful shutdown attempts to restore owned settings. Restoring an owned setting after pause or invalid inputs can happen immediately; the minimum interval still applies before the next normal adjustment.
 - Failed or unconfirmed commands pause the rule. Check the actual equipment and its connection before resuming. A successful API response is not proof that the equipment reached the requested state.
 
 ## HTTP mode
 
-HTTPS is the default. Under **Network and connection settings → Connection mode**, choose **HTTP · unencrypted**, save and restart the Nest bridge. The port remains configurable; the default is 9444. Open `http://<homebridge-host>:9444`.
+HTTPS is the default. Under **Connection & advanced setup → Web dashboard → Connection mode**, choose **HTTP · unencrypted**, save and restart the Nest bridge. The port remains configurable; the default is 9444. Open `http://<homebridge-host>:9444`.
 
 **HTTP sends passwords and dashboard data unencrypted. Use it only on a trusted local network.** This warning appears in setup, before sign-in, in the dashboard and in the startup log. HTTP still requires the web login and validates browser origins and changes. It does not generate or read TLS certificates. Certificate paths stay saved for switching back to HTTPS.
 
@@ -247,13 +247,13 @@ HTTPS is the default. Under **Network and connection settings → Connection mod
 
 1. Point your internal DNS hostname, such as `climate.example.com`, to the Homebridge host's LAN address.
 2. Keep **Connection mode** set to **HTTPS**. Keep **Listen address** at `0.0.0.0` or select the host's LAN IP. Keep **Web port** at `9444` unless that port is already in use.
-3. Set **Address shown in dashboard links** to the hostname only, without `https://`, a port or a path.
-4. Set **TLS certificate path** to the full-chain PEM file (server certificate followed by its intermediate certificates). Set **TLS private key path** to the matching PEM private-key file. The files must exist on the Homebridge host and be readable by its service user; keep the private key restricted.
+3. Set **Browser hostname or IP (optional)** to the hostname only, without `https://`, a port or a path.
+4. Set **TLS certificate file (optional)** to the full-chain PEM file (server certificate followed by its intermediate certificates). Set **TLS private key file (optional)** to the matching PEM private-key file. The files must exist on the Homebridge host and be readable by its service user; keep the private key restricted.
 5. Save, restart the Nest child bridge and open `https://climate.example.com:9444`. Use the hostname covered by the certificate, rather than its IP address. A trusted, valid certificate covering the hostname avoids the certificate warning.
 
 A wildcard certificate for `*.example.com` can cover `climate.example.com`. Restart the Nest child bridge after replacing or renewing certificate files; the listener reads them at startup.
 
-For an IPv6 connection to the dashboard, set **Listen address** to `::`, save and restart the Nest bridge. The default `0.0.0.0` listens on IPv4 only. On systems with dual-stack support, `::` accepts IPv4 as well. Keep the hostname under **Address shown in dashboard links**. IPv6 addresses in a proxy URL need brackets, for example `https://[::1]:9444` for a proxy running on the same host.
+For an IPv6 connection to the dashboard, set **Listen address** to `::`, save and restart the Nest bridge. The default `0.0.0.0` listens on IPv4 only. On systems with dual-stack support, `::` accepts IPv4 as well. Keep the hostname under **Browser hostname or IP (optional)**. IPv6 addresses in a proxy URL need brackets, for example `https://[::1]:9444` for a proxy running on the same host.
 
 ## HTTPS through a reverse proxy
 
@@ -262,7 +262,7 @@ Choose this mode when Nginx or another reverse proxy runs on the **same machine*
 1. Point the public DNS name to the proxy host's LAN IPv4 and/or IPv6 addresses. Do not point DNS to `127.0.0.1`.
 2. In Homebridge's web dashboard settings, choose **HTTPS through reverse proxy**.
 3. Set **Public HTTPS origin** to the browser address, such as `https://climate.example.com`. Do not add a path, query, credentials, or the internal backend port. Include a public port only if the proxy actually serves HTTPS on a nonstandard port.
-4. Keep **Web port** at `9444`, or choose another unused port. The plugin automatically binds to **`127.0.0.1`**, regardless of a saved direct-mode listen address. The setup UI displays this fixed address.
+4. Keep **Web port** at `9444`, or choose another unused port. The plugin automatically binds to **`127.0.0.1`**, regardless of a saved direct-mode listen address. The loopback binding applies in proxy mode even if another listen address is saved.
 5. No certificate or private-key paths are needed in the plugin. Any saved paths are ignored in this mode; no certificate is generated or read.
 6. Configure the proxy backend as **HTTP to `127.0.0.1:9444`** and preserve the browser's **Host** and **Origin** headers. Keep TLS certificates and the HTTP-to-HTTPS redirect at the proxy.
 7. Save, restart the Nest child bridge, apply the proxy configuration, and open the public HTTPS address. **Open climate dashboard** uses that address without the internal backend port.
@@ -313,7 +313,7 @@ Runtime totals reflect periods observed by the plugin. Gaps are unknown, and run
 
 ## Saving settings
 
-Review your changes and select **Save**. **Discard** opens an in-page confirmation: **Keep editing** or Escape preserves your draft; **Discard changes** loads the latest saved setup. Deleting a rule and signing out with unsaved edits also use in-page confirmations. Configuration changes are written to the existing Nest Climate Cntrl entry; account credentials, child-bridge identity, and unrelated plugin settings are retained. The dashboard identifies settings that need a child-bridge restart. Enabled rule changes apply without a restart. Disabled rules remain drafts. After a bridge restart, resume temperature and fan rules explicitly.
+Review your changes and select **Save**. **Discard** opens an in-page confirmation: **Keep editing** or Escape preserves your draft; **Discard changes** loads the latest saved setup. Deleting a rule and signing out with unsaved edits also use in-page confirmations. Configuration changes are written to the existing Nest Climate Cntrl entry; account credentials, child-bridge identity, and unrelated plugin settings are retained. The dashboard identifies settings that need a child-bridge restart. Enabled rule changes apply without a restart. Disabled rules remain drafts. After a bridge restart, previously active rules continue after checks unless **Pause after bridge restart** is enabled.
 
 If another settings page saves while you are editing, the dashboard asks you to reload instead of overwriting the newer configuration. Copy any unsaved choices you want to keep, reload, and apply them to the latest settings.
 
@@ -369,7 +369,7 @@ For background on radiant response and stored heat, see [Google's True Radiant e
 
 Changes to Apple Home accessories, such as Eco switches or a separate humidity sensor, require a child-bridge restart. After saving, the dashboard offers **Restart child bridge** when Homebridge UI can authenticate locally and identify this exact running Nest child bridge. Save or discard unsaved edits before restarting.
 
-The button restarts only the identified Nest child bridge. The dashboard briefly disconnects, checks for a new running instance, and asks you to sign in again. Review the equipment and **Resume** enabled temperature and fan rules afterward. Restart requests are not repeated automatically if their result cannot be confirmed.
+The button restarts only the identified Nest child bridge. The dashboard briefly disconnects, checks for a new running instance, and asks you to sign in again. Previously active rules continue after current readings and checks unless restart pausing is enabled; intentional pauses remain in effect. Restart requests are not repeated automatically if their result cannot be confirmed.
 
 If direct restart is unavailable, the notice explains that the child bridge must be restarted in Homebridge. A plugin running on the main bridge or sharing a child bridge with another configured plugin must be restarted there. Homebridge UI must be reachable locally and its service authentication must be available; HTTPS connections retain certificate verification.
 
@@ -379,3 +379,13 @@ The Nest occupancy input represents Nest's Home/Away decision. When the same acc
 
 Each enabled Home presence rule exposes one combined occupancy sensor, named after the rule. Its output is excluded from the input picker to prevent feedback. The combined sensor is separate from Nest's native Home/Away state and does not change Google's Home/Away or Eco settings.
 
+
+## Homebridge configuration interface
+
+Homebridge plugin Settings and the standalone dashboard use the same climate application: Overview, Sensors & fans, Climate rules, and Settings. Rule editors, field help, drag ordering, heating recommendations, manual-target policy, Apple Home room-temperature display, runtime status, and live controls are available in both. Standalone web access does not need to be enabled to use the Homebridge interface.
+
+Use **Save changes** for climate configuration. It checks the saved revision before writing; a change made elsewhere requires reloading. The outer Homebridge Save button is disabled while this application is open. **Enabled** describes the saved rule permission; **Active**, **Waiting**, and **Paused** describe its current execution.
+
+Open **Connection & advanced setup** to edit account credentials, web-server settings or advanced schema fields, including while the bridge is unavailable. This form uses Homebridge’s Save button. Save or discard climate edits before opening it. Returning to climate controls discards unsaved form edits and reloads saved configuration. If the saved configuration changes while the form is open, reopen setup before saving. Raw advanced rule temperatures use Celsius; the graphical editors use your chosen display unit.
+
+A reported built-in Nest sensor can guide a temperature rule even when Nest omits its room-sensor scheduling mode or empty paired-sensor list. These missing fields still prevent automatic changes to native sensor schedules. A rule combining official Nest room sensors with Homebridge sensors requires confirmed native sensor setup.

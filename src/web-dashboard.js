@@ -462,84 +462,7 @@ export class WebDashboard {
         this.send(response, 200, { authenticated: false });
         return;
       }
-      if (request.method === 'GET' && route === '/api/status') {
-        this.send(response, 200, this.dashboard.snapshot());
-        return;
-      }
-      if (request.method === 'GET' && route === '/api/bridge/restart') {
-        this.send(response, 200, { phase: this.childRestart.phase, message: this.childRestart.message });
-        return;
-      }
-      if (mutation && ['prepared', 'requested'].includes(this.childRestart.phase)) {
-        throw new DashboardConfigError('A child-bridge restart is pending. Wait for it to reconnect.', 409);
-      }
-      if (request.method === 'POST' && route === '/api/bridge/restart') {
-        const restart = await this.childRestart.prepare(await this.body(request));
-        response.once('finish', () => {
-          this.restartTimer = setTimeout(() => {
-            if (!this.stopping) {
-              void restart();
-            }
-          }, 200);
-          this.restartTimer.unref();
-        });
-        response.once('close', () => {
-          if (!response.writableFinished && this.childRestart.phase === 'prepared') {
-            this.childRestart.phase = 'failed';
-            this.childRestart.message = 'The connection closed before the restart could be requested.';
-          }
-        });
-        this.send(response, 202, { accepted: true, instanceId: this.instanceId });
-        return;
-      }
-      if (request.method === 'GET' && route === '/api/sources') {
-        this.send(response, 200, await this.sources());
-        return;
-      }
-      if (request.method === 'GET' && route === '/api/config') {
-        this.send(response, 200, await this.configuration());
-        return;
-      }
-      if (request.method === 'PUT' && route === '/api/config') {
-        const saved = await this.config.save(await this.body(request));
-        await this.dashboard.automation?.tick();
-        this.send(response, 200, await this.configuration(saved));
-        return;
-      }
-      if (
-        (request.method === 'GET' && route === '/api/heating-response') ||
-        (request.method === 'POST' && route === '/api/heating-response/apply')
-      ) {
-        const automation = this.dashboard.automation;
-        if (!automation || automation.stopping) {
-          throw new DashboardConfigError('Heating recommendations are unavailable. Check the Nest bridge.', 503);
-        }
-        const result =
-          request.method === 'GET'
-            ? await automation.heatingRecommendations()
-            : await this.configuration(await automation.applyHeatingRecommendation(await this.body(request)));
-        this.send(response, 200, result);
-        return;
-      }
-      if (request.method === 'POST' && route === '/api/rules/command') {
-        if (!this.dashboard.automation) {
-          throw new DashboardConfigError('Restart the Nest bridge to start climate automation.', 503);
-        }
-        try {
-          this.send(response, 200, await this.dashboard.automation.control(await this.body(request)));
-        } catch (error) {
-          if (error instanceof DashboardConfigError) {
-            throw error;
-          }
-          throw new DashboardConfigError('The rule action could not be applied. Select an enabled rule and refresh.');
-        }
-        return;
-      }
-      if (request.method === 'POST' && route === '/api/command') {
-        this.send(response, 200, await this.dashboard.control(await this.body(request)));
-        return;
-      }
-      this.send(response, 404, { error: 'Page not found.' });
+      await this.handleClimate(request, response, route);
     } catch (error) {
       if (error instanceof DashboardConfigError) {
         this.send(response, error.status, { error: error.message });
@@ -547,6 +470,89 @@ export class WebDashboard {
         this.send(response, 503, { error: 'The request could not be completed. Refresh and check the device or Homebridge connection.' });
       }
     }
+  }
+
+  // Shared climate routes: web sessions and authenticated Homebridge IPC use the same handlers.
+  async handleClimate(request, response, route) {
+    const mutation = !['GET', 'HEAD'].includes(request.method);
+    if (request.method === 'GET' && route === '/api/status') {
+      this.send(response, 200, this.dashboard.snapshot());
+      return;
+    }
+    if (request.method === 'GET' && route === '/api/bridge/restart') {
+      this.send(response, 200, { phase: this.childRestart.phase, message: this.childRestart.message });
+      return;
+    }
+    if (mutation && ['prepared', 'requested'].includes(this.childRestart.phase)) {
+      throw new DashboardConfigError('A child-bridge restart is pending. Wait for it to reconnect.', 409);
+    }
+    if (request.method === 'POST' && route === '/api/bridge/restart') {
+      const restart = await this.childRestart.prepare(await this.body(request));
+      response.once('finish', () => {
+        this.restartTimer = setTimeout(() => {
+          if (!this.stopping) {
+            void restart();
+          }
+        }, 200);
+        this.restartTimer.unref();
+      });
+      response.once('close', () => {
+        if (!response.writableFinished && this.childRestart.phase === 'prepared') {
+          this.childRestart.phase = 'failed';
+          this.childRestart.message = 'The connection closed before the restart could be requested.';
+        }
+      });
+      this.send(response, 202, { accepted: true, instanceId: this.instanceId });
+      return;
+    }
+    if (request.method === 'GET' && route === '/api/sources') {
+      this.send(response, 200, await this.sources());
+      return;
+    }
+    if (request.method === 'GET' && route === '/api/config') {
+      this.send(response, 200, await this.configuration());
+      return;
+    }
+    if (request.method === 'PUT' && route === '/api/config') {
+      const saved = await this.config.save(await this.body(request));
+      await this.dashboard.automation?.tick();
+      this.send(response, 200, await this.configuration(saved));
+      return;
+    }
+    if (
+      (request.method === 'GET' && route === '/api/heating-response') ||
+      (request.method === 'POST' && route === '/api/heating-response/apply')
+    ) {
+      const automation = this.dashboard.automation;
+      if (!automation || automation.stopping) {
+        throw new DashboardConfigError('Heating recommendations are unavailable. Check the Nest bridge.', 503);
+      }
+      const result =
+        request.method === 'GET'
+          ? await automation.heatingRecommendations()
+          : await this.configuration(await automation.applyHeatingRecommendation(await this.body(request)));
+      this.send(response, 200, result);
+      return;
+    }
+    if (request.method === 'POST' && route === '/api/rules/command') {
+      if (!this.dashboard.automation) {
+        throw new DashboardConfigError('Restart the Nest bridge to start climate automation.', 503);
+      }
+      try {
+        this.send(response, 200, await this.dashboard.automation.control(await this.body(request)));
+      } catch (error) {
+        if (error instanceof DashboardConfigError) {
+          throw error;
+        }
+        throw new DashboardConfigError('The rule action could not be applied. Select an enabled rule and refresh.');
+      }
+      return;
+    }
+    if (request.method === 'POST' && route === '/api/command') {
+      this.send(response, 200, await this.dashboard.control(await this.body(request)));
+      return;
+    }
+    this.send(response, 404, { error: 'Page not found.' });
   }
 
   async stop() {

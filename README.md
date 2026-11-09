@@ -22,7 +22,7 @@ Use temperatures from the rooms that matter, coordinate Homebridge room fans, an
 | **Live Nest controls** | Use supported Eco controls, select a native Nest temperature source, and run the thermostat's HVAC blower with timed actions. |
 | **Schedules and runtime** | Inspect reported weekly setpoints, the next planned change and observed heating/cooling totals with a weekly chart. |
 
-**Execution is opt-in for each rule.** Review the inputs, select **Enable automatic execution**, and **Save changes**. Disabled rules remain drafts. The dashboard shows execution status, reasons for waiting or pausing, and immediate pause/resume controls. Temperature and fan rules require explicit Resume after a bridge restart. See the [first-rule walkthroughs](WEB_DASHBOARD.md#try-your-first-rules).
+**Execution is opt-in for each rule.** Review the inputs, select **Enable automatic execution**, and **Save changes**. Disabled rules remain drafts. The dashboard shows execution status, reasons for waiting or pausing, and immediate pause/resume controls. Previously active temperature and fan rules continue after restart once current readings and equipment checks pass. Deliberately paused rules stay paused. Enable **Pause after bridge restart** in Settings to require Resume instead. See the [first-rule walkthroughs](WEB_DASHBOARD.md#try-your-first-rules).
 
 ### Temperature groups: choose the rooms that matter
 
@@ -95,12 +95,12 @@ Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0
 
 1. Use Homebridge **1.11.4+ or 2.4.0+** with Node **22 or 24**. Node **26** requires Homebridge **2.4.0+**.
 2. Install **`homebridge-nest-climate-cntrl@beta`** through Homebridge's plugin installer. A child bridge is recommended for a new installation.
-3. Open **Plugins → Nest Climate Cntrl → Settings**, add your account and save.
+3. Open **Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup**, add your account and save.
 4. Restart the plugin's bridge, then select the optional Apple Home features you want.
 
 Google issue-token/cookie credentials and compatible existing legacy refresh tokens are supported. Legacy Nest access tokens are available for supported accounts. **No SDM project is required.** See [account setup](AUTHENTICATION.md).
 
-Live action buttons send commands immediately. Configuration changes use Homebridge's **Save** button and may require a bridge restart.
+Live action buttons send commands immediately. Climate configuration uses **Save changes** in the shared interface. Accounts and network settings are under **Connection & advanced setup** and use Homebridge's **Save** button. Accessory and connection changes may require a bridge restart.
 
 External discovery requires readable Homebridge accessories and the bridge's accessory-control configuration. Sensors or fans visible only in Apple Home are not accessible. Bridge PINs stay on the server.
 
@@ -108,7 +108,7 @@ Schedule entries show planned changes, not guaranteed hold-expiry times. Runtime
 
 ## Web dashboard
 
-Open **Plugins → Nest Climate Cntrl → Settings → Web dashboard**, create a web username/password, then enable web access, save and restart the Nest child bridge. Select **Open climate dashboard** to visit its address, usually `https://<homebridge-host>:9444`.
+Open **Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup → Web dashboard**, create a web username/password, then enable web access, save and restart the Nest child bridge. Select **Open climate dashboard** to visit its address, usually `https://<homebridge-host>:9444`.
 
 The phone-friendly interface shows thermostat status, native controls, sensors, schedules and runtime. It also lets you save supported settings and enable temperature, occupancy and room-fan rules. The engine runs in the Nest bridge independently of an open browser.
 

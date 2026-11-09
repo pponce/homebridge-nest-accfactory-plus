@@ -161,7 +161,9 @@ export class ClimateDashboard {
     this.devices.set(serial, {
       ...previous,
       account: account ?? previous.account,
-      needsUpdate: previous.needsUpdate === true && data.hvac_state === undefined,
+      needsUpdate: previous.needsUpdate === true && data.hvac_state === undefined &&
+        !(type === 'TemperatureSensor' && Number.isFinite(data.current_temperature)) &&
+        !(type === 'HomeAway' && typeof data.occupancy === 'boolean'),
       id: data.nest_google_device_uuid ?? previous.id,
       lastUpdate: Date.now(),
       nativeSensorRevision: (previous.nativeSensorRevision ?? 0) + (Object.hasOwn(data, 'native_sensor_control') ? 1 : 0),
@@ -320,6 +322,10 @@ export class ClimateDashboard {
       return;
     }
     try {
+      if (request.url.startsWith('/ui/') && this.webDashboard) {
+        await this.webDashboard.handleClimate(request, response, '/api/' + request.url.slice(4));
+        return;
+      }
       if (request.method === 'GET' && request.url === '/status') {
         response.end(JSON.stringify(this.snapshot()));
         return;
@@ -351,7 +357,8 @@ export class ClimateDashboard {
       }
       response.end(JSON.stringify(await this.control(payload)));
     } catch (error) {
-      response.writeHead(400).end(JSON.stringify({ error: error instanceof SyntaxError ? 'Invalid request.' : error.message }));
+      response.writeHead(Number.isInteger(error.status) ? error.status : 400)
+        .end(JSON.stringify({ error: error instanceof SyntaxError ? 'Invalid request.' : error.message }));
     }
   }
 
