@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { checkSourceRefresh } from './dashboard-source-refresh.mjs';
 import { checkEcoFeedback } from './dashboard-eco-feedback.mjs';
 import { checkTemperatureEditor } from './dashboard-temperature-editor.mjs';
+import { navigate, checkCompactNavigation } from './dashboard-navigation.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -177,13 +178,15 @@ try {
   assert.equal(await securePage.locator('#http-login-warning').isVisible(), false);
   assert.equal(await securePage.locator('#http-session-warning').isVisible(), false);
   await securePage.close();
+  assert.equal(await page.locator('#climate-sidebar').isVisible(), true);
+  assert.equal(await page.locator('#climate-menu-toggle').isVisible(), false);
   await capture('overview-desktop.png');
   assert.equal(await page.locator('#password').inputValue(), '');
   assert.equal(await page.getByLabel('Turn Eco on for Living room').isEnabled(), true);
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await navigate(page, 'Settings', true);
   assert.equal(await page.getByLabel('Default HVAC fan duration').inputValue(), '1h');
   assert.equal(await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().isChecked(), false);
-  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  await navigate(page, 'Climate rules', false);
   assert.equal(await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).isChecked(), false);
   const help = page.getByRole('button', { name: 'Help for Desired room temperature (°C)', exact: true });
   const tooltip = page.getByRole('tooltip');
@@ -221,10 +224,10 @@ try {
   await phone.getByLabel('Rule name', { exact: true }).tap(); await phone.getByRole('tooltip').waitFor({ state: 'hidden' });
   assert.equal(await phone.locator('#save-bar').isVisible(), false, 'Touch help leaves the draft unchanged');
   await phone.close();
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await navigate(page, 'Settings', true);
   await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().check();
   assert.equal(await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).nth(1).isChecked(), false, 'each thermostat keeps its own setting');
-  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  await navigate(page, 'Climate rules', false);
   await page.getByLabel('Rule name', { exact: true }).fill('Downstairs balance');
   await page.getByLabel('Desired room temperature (°C)', { exact: true }).fill('22');
   await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).check();
@@ -314,7 +317,7 @@ try {
   assert.deepEqual(ruleActions.at(-1), { id: 'fan-1', action: 'resume' });
 
   const rulesBeforeUnits = structuredClone(config.rules);
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await navigate(page, 'Settings', true);
   await page.getByLabel('Temperature units', { exact: false }).selectOption('F');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
@@ -323,12 +326,12 @@ try {
   await page.reload();
   await page.getByText('Connected', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('Temperature units', { exact: false }).inputValue(), 'F');
-  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await navigate(page, 'Overview', true);
   await page.getByLabel('Current temperature 70.7°F', { exact: true }).waitFor();
   assert.match(await page.locator('#schedule-preview').innerText(), /69.8°F/);
-  await page.getByRole('link', { name: 'Sensors & fans', exact: true }).click();
+  await navigate(page, 'Sensors & fans', true);
   await page.locator('#source-list').getByText('68.2°F', { exact: true }).waitFor();
-  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  await navigate(page, 'Climate rules', false);
   await page.getByRole('tab', { name: 'Temperature', exact: false }).click();
   assert.equal(await page.getByLabel('Desired room temperature (°F)', { exact: true }).inputValue(), '71.6');
   assert.equal(await page.getByLabel('Maximum target adjustment (°F)', { exact: true }).inputValue(), '2.7');
@@ -354,7 +357,7 @@ try {
   assert.equal(config.rules.fans[0].threshold, 25);
   assert.equal(config.rules.fans[0].hysteresis, 2);
   const rulesAfterEditing = structuredClone(config.rules);
-  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await navigate(page, 'Settings', true);
   await page.getByLabel('Temperature units', { exact: false }).selectOption('C');
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
@@ -364,12 +367,12 @@ try {
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
   assert.deepEqual(config.rules, rulesAfterEditing, 'Unit round trips must not rewrite fractional Celsius values');
-  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  await navigate(page, 'Climate rules', false);
   await page.getByRole('tab', { name: 'Room fans', exact: false }).click();
   assert.equal(await page.getByLabel('Above temperature (°C)', { exact: true }).inputValue(), '25');
   assert.equal(await page.getByLabel('Turn-off gap (°C)', { exact: true }).inputValue(), '2');
   assert.equal(commands.length, 0, 'Dashboard unit preferences must never send Nest commands');
-  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await navigate(page, 'Overview', true);
   await Promise.all([page.waitForResponse((response) => response.url().endsWith('/api/command')), page.getByLabel('Turn Eco on for Living room').click()]);
   await page.getByLabel('Turn Eco off for Living room', { exact: true }).waitFor();
   assert.deepEqual(commands[0], { serial: 'T1', action: 'eco', value: true });
@@ -388,12 +391,20 @@ try {
   await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
   await page.getByText('Connected', { exact: true }).waitFor();
   await page.setViewportSize({ width: 360, height: 800 });
+  await checkCompactNavigation(page, output, 'mobile');
+  await page.locator('#climate-menu-toggle').click();
+  assert.equal(await page.locator('#sign-out').isVisible(), true, 'Mobile menu retains sign out');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  assert.equal(await page.locator('#climate-sidebar').isVisible(), true);
+  assert.equal(await page.locator('#climate-menu-toggle').isVisible(), false);
+  assert.equal(await page.locator('#navigation a').count(), 4);
+  await page.setViewportSize({ width: 360, height: 800 });
+  assert.equal(await page.locator('#climate-menu-panel').isVisible(), false);
   for (const [name, pageName] of [['Overview', 'overview'], ['Sensors & fans', 'sources'], ['Climate rules', 'rules'], ['Settings', 'settings']]) {
-    await page.getByRole('link', { name, exact: pageName !== 'rules' }).click();
+    await navigate(page, name, pageName !== 'rules');
     if (pageName === 'overview') {
       const firstControl = await page.getByLabel('Turn Eco on for Living room').boundingBox();
-      const navigation = await page.locator('.sidebar').boundingBox();
-      assert.ok(firstControl.y + firstControl.height <= navigation.y, 'First thermostat controls must be visible without scrolling on a phone');
+      assert.ok(firstControl.y + firstControl.height <= page.viewportSize().height, 'First thermostat controls must be visible without scrolling on a phone');
     }
     if (pageName === 'rules') {
       await page.getByLabel('Rule name', { exact: true }).fill('Cooler evenings upstairs');
@@ -405,9 +416,8 @@ try {
     const bottomContentVisible = await page.evaluate(() => {
       document.activeElement?.blur(); window.scrollTo(0, document.documentElement.scrollHeight);
       const bottom = document.querySelector('[data-section]:not([hidden])').getBoundingClientRect().bottom;
-      const navigationTop = document.querySelector('.sidebar').getBoundingClientRect().top;
       const saveBar = document.getElementById('save-bar');
-      const unobscuredBottom = saveBar.hidden ? navigationTop : Math.min(navigationTop, saveBar.getBoundingClientRect().top);
+      const unobscuredBottom = saveBar.hidden ? innerHeight : saveBar.getBoundingClientRect().top;
       return bottom <= unobscuredBottom;
     });
     assert.equal(bottomContentVisible, true, pageName + ' final content must clear navigation and the save bar');
@@ -419,16 +429,17 @@ try {
     }
   }
   await page.emulateMedia({ colorScheme: 'dark' });
-  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await navigate(page, 'Overview', true);
   await checkTextContrast();
   await capture('overview-mobile-dark.png');
+  await checkCompactNavigation(page, output, 'mobile-dark');
   const manifest = await (await page.request.get(base + '/manifest.webmanifest')).json();
   assert.equal(manifest.display, 'standalone');
   for (const asset of ['favicon.png', 'apple-touch-icon.png', 'icon-192.png', 'icon-512.png']) assert.equal((await page.request.get(base + '/' + asset)).status(), 200);
   const apple = await (await page.request.get(base + '/apple-touch-icon.png')).body();
   assert.equal(apple.readUInt32BE(16), 180);
   assert.equal(apple.readUInt32BE(20), 180);
-  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  await navigate(page, 'Climate rules', false);
   await page.locator('[data-kind="presence"]').click();
   const nestInput = page.locator('.pick-source').filter({ hasText: 'Nest Home/Away' });
   assert.equal(await nestInput.count(), 1);

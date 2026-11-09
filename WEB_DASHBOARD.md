@@ -23,6 +23,12 @@ The runtime starts only with a usable, non-excluded Nest or Google account. With
 
 Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
 
+## Navigate on phones and in Homebridge
+
+Use **☰ Menu** to switch between **Overview**, **Sensors & fans**, **Climate rules** and **Settings**. In Homebridge Settings and on narrow web screens, navigation starts collapsed so the page can use the available width. The menu opens over the page and closes when you select a destination, click outside, press Escape or move keyboard focus out of it. The current page is highlighted. On the standalone mobile dashboard, the menu also includes **Sign out**.
+
+The standalone dashboard uses a persistent sidebar on wider desktop screens. Resizing the window switches between layouts without discarding unsaved changes.
+
 ## Enable web access
 
 1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup → Web dashboard**. The Nest bridge must be running.

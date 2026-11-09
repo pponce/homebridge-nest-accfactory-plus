@@ -1,3 +1,13 @@
+## v0.5.3
+
+**Compact navigation for Homebridge and mobile.**
+
+- Use a collapsed Menu button in Homebridge Settings and on narrow standalone web screens. Navigation opens over the page, highlights the current page and closes after selection, outside interaction or Escape.
+- Give climate settings and rule editors the full available width. Preserve the desktop dashboard sidebar and retain unsaved edits when switching between wide and narrow layouts.
+- Keep navigation colors readable with Homebridge themes and in light or dark mode, with keyboard navigation and touch-friendly controls. The standalone mobile menu includes Sign out.
+
+Saved accounts, climate rules, web access settings and accessory identities are preserved.
+
 ## v0.5.2
 
 **Homebridge climate configuration interface.**

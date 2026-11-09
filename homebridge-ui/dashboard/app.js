@@ -5,9 +5,10 @@ import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supported
 
 const $ = (id) => document.getElementById(id);
 const host = window.climateHost;
-if (host) { $('sign-out').hidden = true; document.body.classList.add('homebridge-host'); }
+if (host) { $('sign-out').hidden = true; $('climate-account').hidden = true; document.body.classList.add('homebridge-host'); }
 for (const id of ['http-login-warning', 'http-session-warning']) $(id).hidden = Boolean(host) || window.location.protocol !== 'http:';
 const iconPaths = {
+  menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/>',
   sensors: '<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4m8.4-8.4a6 6 0 0 1 0 8.4M4.6 4.6a10.5 10.5 0 0 0 0 14.8m14.8-14.8a10.5 10.5 0 0 1 0 14.8"/>',
   rules: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="6" cy="19" r="2"/><path d="M6 7v10m2-12h3a4 4 0 0 1 4 4v3h1m-1 0v3a4 4 0 0 1-4 4H8"/>',
@@ -48,6 +49,57 @@ const pageDetails = {
   overview: ['Your home at a glance', 'Climate overview'], sources: ['Connected rooms, clearer choices', 'Sensors & fans'],
   rules: ['Comfort, on your terms', 'Climate rules'], settings: ['The details that make it yours', 'Your setup'],
 };
+const compactViewport = window.matchMedia('(max-width: 760px)');
+let compactNavigation;
+function closeNavigation(restoreFocus = false) {
+  $('climate-menu-panel').hidden = true;
+  $('climate-menu-toggle').setAttribute('aria-expanded', 'false');
+  if (restoreFocus) $('climate-menu-toggle').focus({ preventScroll: true });
+}
+function setNavigationLayout() {
+  const compact = Boolean(host) || compactViewport.matches;
+  if (compact === compactNavigation) return;
+  const focused = document.activeElement;
+  const focusInNavigation = $('climate-menu').contains(focused) || $('climate-sidebar').contains(focused);
+  compactNavigation = compact;
+  closeNavigation();
+  document.body.classList.toggle('compact-navigation', compact);
+  $('climate-menu').hidden = !compact;
+  $('climate-sidebar').hidden = compact;
+  if (compact) $('climate-menu-panel').append($('navigation'), $('climate-account'));
+  else {
+    $('climate-sidebar').insertBefore($('navigation'), document.querySelector('.sidebar-note'));
+    $('climate-sidebar').append($('climate-account'));
+  }
+  if (focusInNavigation) (compact ? $('climate-menu-toggle') : $('navigation').querySelector('[aria-current="page"]') || $('navigation').querySelector('a')).focus({ preventScroll: true });
+}
+setNavigationLayout();
+compactViewport.addEventListener('change', setNavigationLayout);
+$('climate-menu-toggle').addEventListener('click', () => {
+  const open = $('climate-menu-panel').hidden;
+  $('climate-menu-panel').hidden = !open;
+  $('climate-menu-toggle').setAttribute('aria-expanded', String(open));
+});
+$('climate-menu-toggle').addEventListener('keydown', (event) => {
+  if (event.key !== 'ArrowDown') return;
+  event.preventDefault();
+  $('climate-menu-panel').hidden = false;
+  $('climate-menu-toggle').setAttribute('aria-expanded', 'true');
+  $('navigation').querySelector('a').focus();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || $('climate-menu-panel').hidden) return;
+  event.preventDefault(); closeNavigation(true);
+});
+for (const eventName of ['pointerdown', 'focusin']) document.addEventListener(eventName, (event) => {
+  if (!$('climate-menu').contains(event.target)) closeNavigation();
+});
+$('navigation').addEventListener('click', (event) => {
+  const link = event.target.closest('a[data-page]');
+  if (!link || !compactNavigation) return;
+  closeNavigation();
+  if (link.hash === location.hash) route();
+});
 let toastTimer;
 let refreshPromise;
 let statusPromise;
@@ -283,6 +335,7 @@ async function signOut() {
 }
 $('sign-out').addEventListener('click', signOut);
 function route(focus = true) {
+  closeNavigation();
   hideFieldHelp();
   cancelFanDrag();
   const page = location.hash.slice(1); state.page = pageDetails[page] ? page : 'overview';
