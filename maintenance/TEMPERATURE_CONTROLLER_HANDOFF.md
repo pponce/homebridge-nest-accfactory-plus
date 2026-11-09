@@ -15,14 +15,15 @@ Repository: `pponce/homebridge-nest-climate-cntrl`. Implementation branch: `feat
 
 ## Validation checkpoint
 
-128 focused tests passed locally (77 controller, automation and sensor tests; 51 dashboard, source and web-server tests). JavaScript syntax and whitespace checks passed. Local Chromium cannot launch because this execution environment disallows a required socket; browser verification uses the existing GitHub workflow. Physical thermostat behavior has not been tested.
+128 focused tests passed locally (77 controller, automation and sensor tests; 51 dashboard, source and web-server tests). JavaScript syntax and whitespace checks passed. Local Chromium cannot launch because this execution environment disallows a required socket. GitHub Test run [42650106631](https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42650106631) and dashboard run [42650106460](https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42650106460) passed on feature commit `07b904e71e6e4519f1cd54776f41e743cf5aa672`: all six Node/Homebridge combinations, lint, full tests, coverage floors, builds, migration checks, browser suites and production-package verification. Browser fixtures verify no writes from the display, distinct controller states, native-sensor diagnostics and mobile bounds. Physical thermostat behavior has not been tested.
+
+Review: [PR #14](https://github.com/pponce/homebridge-nest-climate-cntrl/pull/14). Main and published packages are unchanged. Direct publication to main was rejected by automatic approval review; explicit authorization is required before merging this implementation.
 
 ## Next steps
 
-1. Complete GitHub Test checks for the feature commit, including all Node/Homebridge combinations and browser suites.
-2. Inspect browser screenshots and resolve any layout or regression failures.
-3. Include the changes in the next requested release. No package version or release marker is changed by this feature.
-4. After installation, verify both thermostat cards, compare native sensor reporting with Nest, and check applied/paused temperature rules. No npm publication or live thermostat settings changes are part of this work.
+1. Review PR #14 and obtain approval to merge it into main.
+2. Include the changes in the next requested release. No package version or release marker is changed by this feature.
+3. After installation, verify both thermostat cards, compare native sensor reporting with Nest, and check applied/paused temperature rules. No npm publication or live thermostat settings changes are part of this work.
 
 ## Copyable handoff
 
@@ -32,6 +33,8 @@ Repository/branch: pponce/homebridge-nest-climate-cntrl, feature/temperature-con
 Completed: applied rule name, native sensor name, associated official sensors and assigned temperature rules; active/interval/pending/restoring/paused/disabled/waiting/unavailable states; no selector or Apply action.
 Decisions: non-native sensors require a climate temperature rule. Only confirmed native selections are displayed as selected. Display does not grant sensor-control or heating eligibility.
 Local validation: 128 focused tests passed; syntax/diff checks passed. Chromium is blocked locally by socket restrictions.
-Pending: GitHub validation and browser review, then a separately requested release and hardware verification.
-Next: inspect feature checks and fix any failures; do not publish npm or change live settings.
+GitHub validation: Test 42650106631 and dashboard 42650106460 passed for 07b904e71e6e4519f1cd54776f41e743cf5aa672, including all six runtime combinations and browser suites.
+Review: PR #14. Main and published packages are unchanged.
+Pending: approval to merge, a separately requested release and hardware verification.
+Next: obtain approval to merge PR #14; do not publish npm or change live settings.
 ```
