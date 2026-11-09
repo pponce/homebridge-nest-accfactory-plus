@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { checkSourceRefresh } from './dashboard-source-refresh.mjs';
 import { checkEcoFeedback } from './dashboard-eco-feedback.mjs';
+import { navigate, checkCompactNavigation } from './dashboard-navigation.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -108,7 +109,9 @@ const server = http.createServer(async (request, response) => {
     if (name !== 'index.html' && /\.(?:html?|xhtml)$/i.test(name)) { response.writeHead(404).end(); return; }
     try {
       response.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.png') ? 'image/png' : 'text/html');
-      response.end(await fs.readFile(path.join(publicRoot, name)));
+      const asset = await fs.readFile(path.join(publicRoot, name));
+      // Model the global theme rules included in Homebridge's custom-UI iframe.
+      response.end(name === 'host.css' ? asset.toString() + '\n.homebridge-host { color: #000 !important; background: #fff !important; } .homebridge-host .sidebar { background: #c2155d; color: #eee; } .homebridge-host a { color: #c2155d; } .homebridge-host a:hover { color: #c2155d !important; }' : asset);
     } catch { response.writeHead(404).end(); }
     return;
   }
@@ -159,17 +162,24 @@ try {
   await page.goto(embeddedUrl);
   await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor();
   assert.deepEqual(nestedHtmlRequests, []);
+  await checkCompactNavigation(page, output, 'embedded-desktop');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await checkCompactNavigation(page, output, 'embedded-dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await checkCompactNavigation(page, output, 'embedded-mobile');
+  await page.setViewportSize({ width: 1280, height: 1000 });
   assert.equal(await page.locator('#sign-out').isVisible(), false);
   assert.equal(await page.evaluate(() => window.outerSave), false);
   assert.equal(await page.locator('#connection-setup').isVisible(), true);
-  await page.locator('[data-page="settings"]').click();
+  await navigate(page, 'Settings');
   await page.locator('#pause-on-restart').check();
   await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#save-bar').hidden);
   assert.equal(config.options.pauseOnRestart, true);
   assert.equal(config.devices[0].homeKitRoomTemperature, true);
-  await page.locator('[data-page="rules"]').click();
+  await navigate(page, 'Climate rules');
   await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#save-bar').hidden);
@@ -189,7 +199,7 @@ try {
   await page.waitForFunction(() => !window.outerSave);
   await page.locator('#return-to-climate').click();
   assert.equal(await page.evaluate(() => window.schemaShown), false);
-  await page.locator('[data-page="settings"]').click();
+  await navigate(page, 'Settings');
   await page.locator('#dashboard-name').fill('A conflicting edit');
   conflict = true;
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();

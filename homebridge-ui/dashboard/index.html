@@ -41,7 +41,7 @@
     </div>
 
     <div id="app" class="app-shell" hidden>
-      <aside class="sidebar">
+      <aside id="climate-sidebar" class="climate-sidebar">
         <a class="brand" href="#overview" aria-label="Nest Climate Cntrl home"><img src="/icon-192.png" width="46" height="46" alt="" /><span>Nest Climate<br /><strong>Cntrl</strong></span></a>
         <span class="nav-caption">YOUR HOME</span>
         <nav id="navigation" class="navigation" aria-label="Main navigation">
@@ -51,12 +51,18 @@
           <a href="#settings" data-page="settings"><span data-icon="settings"></span><span>Settings</span></a>
         </nav>
         <div class="sidebar-note"><span data-icon="leaf"></span><p>Small adjustments.<br />A home that feels right.</p></div>
-        <div class="sidebar-footer"><span class="avatar" data-icon="user"></span><div><strong id="signed-in-name">Web account</strong><span>Local dashboard</span></div><button id="sign-out" class="icon-button" type="button" aria-label="Sign out" title="Sign out"><span data-icon="logout"></span></button></div>
+        <div id="climate-account" class="sidebar-footer"><span class="avatar" data-icon="user"></span><div><strong id="signed-in-name">Web account</strong><span>Local dashboard</span></div><button id="sign-out" class="icon-button" type="button" aria-label="Sign out" title="Sign out"><span data-icon="logout"></span></button></div>
       </aside>
 
       <main id="content" class="workspace">
         <header class="page-header">
-          <div><div class="eyebrow" id="page-eyebrow">Your home at a glance</div><h1 id="page-title" tabindex="-1">Climate overview</h1></div>
+          <div class="climate-page-heading">
+            <div id="climate-menu" class="climate-menu" hidden>
+              <button id="climate-menu-toggle" class="climate-menu-toggle" type="button" aria-expanded="false" aria-controls="climate-menu-panel"><span data-icon="menu"></span><span>Menu</span></button>
+              <div id="climate-menu-panel" class="climate-menu-panel" hidden></div>
+            </div>
+            <div class="climate-page-title"><div class="eyebrow" id="page-eyebrow">Your home at a glance</div><h1 id="page-title" tabindex="-1">Climate overview</h1></div>
+          </div>
           <div class="header-actions"><span id="connection-state" class="status-pill neutral" role="status">Connecting</span><button id="refresh-status" class="icon-button outlined" type="button" aria-label="Refresh status" title="Refresh status"><span data-icon="refresh"></span></button></div>
         </header>
         <div id="http-session-warning" class="callout warning" role="note" hidden>HTTP connection: passwords and dashboard data travel unencrypted. Use only on a trusted local network.</div>
