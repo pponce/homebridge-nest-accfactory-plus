@@ -2,7 +2,7 @@
 
 ## Objective and repository
 
-Add thermostat heating-type settings, bounded local response history and per-temperature-rule interval/adjustment recommendations, with explicit Apply. Repository: `pponce/homebridge-nest-climate-cntrl`. Target: `main`. Implementation/validation branch: `feature/heating-response`. Base: `ea2391f884bb53362afea2d19e15c077a00324a7` (v0.5.0-beta.8).
+Add thermostat heating-type settings, bounded local response history and per-temperature-rule interval/adjustment recommendations, with explicit Apply. Repository: `pponce/homebridge-nest-climate-cntrl`. Delivered on `main`. Implementation/validation branch: `feature/heating-response`. Base: `ea2391f884bb53362afea2d19e15c077a00324a7` (v0.5.0-beta.8).
 
 ## Implementation
 
@@ -18,14 +18,18 @@ Add thermostat heating-type settings, bounded local response history and per-tem
 ## Validation
 
 - 90 local tests pass across observation, rule execution, external sources, config and dashboard API suites. Checks cover multi-day qualification, sensor resets, interruptions, post-shutoff radiant response, persistence/retention/failures, disabled-rule collection, optimistic Apply conflicts and session/CSRF boundaries.
-- Chromium cannot start in this environment because its process-singleton socket is prohibited. The real-server browser fixture is included in the existing GitHub browser runner.
-- npm dependency downloads are blocked in this environment. The existing GitHub validation workflow runs formatting, the six Node/Homebridge combinations, package/coverage checks, migration and browser fixtures on the feature branch before promotion to main.
+- All four GitHub browser suites pass, including the real-server heating fixture: explicit Apply, no equipment commands, Celsius/Fahrenheit differences, pending-edit protection, completed-save synchronization, refresh focus and mobile layout. Desktop and 390px phone screenshots were visually reviewed. Local Chromium is prohibited by the environment, so browser validation ran in GitHub.
+- All six Node/Homebridge configurations pass project lint, tests, coverage, build and migration restoration. Final tested implementation: `b8c6f8d44c37f22621192434c4b6587f7213052a`; workflow run: https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42551239263.
+- Local build and production-package inclusion/import checks pass for the observer, execution engine and configuration modules. No package was uploaded.
+- Exact-revision fixture screenshots: https://github.com/pponce/homebridge-nest-climate-cntrl/tree/review/heating-response. They contain synthetic data only.
 
 ## Important decisions and pending work
 
 - Collecting observations never automatically applies guidance. Applying starting/learned recommendations is a separate, explicit per-rule action.
 - Confidence is observational, not statistical or proof of causality. Numeric presets and recommendation formulas are documented in `WEB_DASHBOARD.md`.
-- All six compatibility configurations and all four browser suites passed on implementation revision `978de3a919df3860cbe805a768b513969c1535e9`, in GitHub Actions run `42550745332`. This includes project lint, coverage, build and migration restoration.
-- Desktop and 390px mobile screenshots were inspected. A final UI-only adjustment places the live schedule-time-zone field in the heating section; browser captures reset scroll/focus and clear toasts for review. Final branch validation runs before main promotion.
-- Screenshot artifacts are stored on `review/heating-response`; the publication helper records the exact tested source revision.
-- No npm publication or new release is requested by this feature task. Installed-system observation still needs multiple days of real heating cycles after a future install.
+- The live schedule-time-zone field belongs in the heating section; accessory settings identify the restart requirement separately.
+- The main promotion adds only this completion note after the tested implementation. Documentation-only completion metadata does not repeat the already-passed code checks.
+- No npm publication or new release was requested or performed. Package/release markers remain v0.5.0-beta.8; this feature is unreleased source on main.
+- Next release task: select a new beta version, update versioned helpers/release marker and prerelease notes, then run the existing release workflow. Obtain publication authorization before uploading to npm.
+- After installation: select heating type and enable observation in Settings, save, and leave it running through at least six complete cycles across three days/48 hours. Check sensor/source availability, local history retention, evidence and recommendation confidence against actual room behavior. Apply to an individual rule only when its proposed limits are desired.
+- Physical heating behavior and multi-day real-home learning have not been verified by the synthetic tests.
