@@ -1,3 +1,19 @@
+## v0.5.0-beta.17
+
+**Read-only temperature controller information for every thermostat.**
+
+- **Temperature controlled by** identifies the climate temperature rule managing a thermostat’s heating target, or its reported built-in or official Nest room sensor when Nest controls directly.
+- Expand the summary to see associated official Nest sensors and climate temperature rules assigned to that thermostat. The display is informational; opening it or clicking a listed item does not select a sensor or activate a rule.
+- Rule status distinguishes active control, the interval between adjustments, pending target confirmation, restoration, paused or disabled rules, and rules waiting for usable inputs.
+- A confirmed built-in thermostat sensor is shown even when an external-sensor list is absent. Unknown selections and unavailable control status are labeled explicitly.
+- Other Homebridge temperature sensors are used as inputs to climate temperature rules. Runtime controller information is independent of unsaved settings drafts.
+
+After updating, refresh **Overview** and expand **Temperature controlled by** on each thermostat. Review enabled temperature and fan rules and **Resume** those you want to run after the bridge restart. Manage temperature rules in **Climate rules** and native sensor selection in the Nest app.
+
+See the [temperature controller guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.17/WEB_DASHBOARD.md#see-what-controls-each-thermostat).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.16
 
 **Field help for climate rules and SSH-friendly npm authorization.**
@@ -969,7 +985,3 @@ Due to the volume of changes in this release, versioning has been reverted to al
 
 - Main changes are around the video/audio pipelines in `webrtc.js` and `streamer.js` to improve stability and recovery from packet loss, especially for video streams
 - Added logging and cleanup around talkback stream handling
-
-
-
-

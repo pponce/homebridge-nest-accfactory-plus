@@ -32,7 +32,7 @@ NODE
   }
   climate_install_execution_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local version='0.5.0-beta.16'
+    local version='0.5.0-beta.17'
     local package='homebridge-nest-climate-cntrl'
     local directory="$project/maintenance/releases/v$version"
     local archive="$package-$version.tgz"
@@ -82,5 +82,3 @@ NODE
   unset -f climate_install_execution_beta climate_download_release_asset
   printf '%s\n' '=== Nest Climate execution beta update END ==='
 }
-
-
