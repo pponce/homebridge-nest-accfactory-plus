@@ -79,6 +79,12 @@ function confirmAction(title, detail, accept, cancel = 'Keep editing') {
     $('confirm-cancel').focus();
   });
 }
+$('confirm-dialog').addEventListener('keydown', (event) => {
+  if (event.key !== 'Tab') return;
+  const first = $('confirm-cancel'); const last = $('confirm-accept');
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+});
 function empty(host, title, description, symbol = 'sensors', action) {
   const content = el('div', undefined, 'empty-state');
   const mark = el('span', undefined, 'device-symbol'); mark.append(icon(symbol));
