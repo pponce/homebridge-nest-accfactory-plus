@@ -2,7 +2,7 @@
   printf '%s\n' '=== Nest Climate execution beta update START ==='
   climate_install_execution_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local version='0.5.0-beta.8'
+    local version='0.5.0-beta.9'
     local package='homebridge-nest-climate-cntrl'
     local release="https://github.com/pponce/$package/releases/download/v$version"
     local directory="$project/maintenance/releases/v$version"
@@ -45,8 +45,9 @@
       return 1
     fi
     printf '%s\n' 'Update complete. Open the climate dashboard and refresh the page.'
-    printf '%s\n' 'Existing drafts remain disabled. Enable and save only the rules you want to test.'
-    printf '%s\n' 'After subsequent bridge restarts, review and Resume temperature/fan rules explicitly.'
+    printf '%s\n' 'For heating guidance, open Settings -> your thermostat -> Heating response & tuning.'
+    printf '%s\n' 'Choose a heating type and enable local observation, then save. Apply recommendations per rule when ready.'
+    printf '%s\n' 'Review and Resume enabled temperature/fan rules after this bridge restart.'
   }
   if climate_install_execution_beta; then
     printf '%s\n' 'RESULT: SUCCESS'

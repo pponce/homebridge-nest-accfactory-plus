@@ -29,7 +29,7 @@ Add thermostat heating-type settings, bounded local response history and per-tem
 - Confidence is observational, not statistical or proof of causality. Numeric presets and recommendation formulas are documented in `WEB_DASHBOARD.md`.
 - The live schedule-time-zone field belongs in the heating section; accessory settings identify the restart requirement separately.
 - The main promotion adds only this completion note after the tested implementation. Documentation-only completion metadata does not repeat the already-passed code checks.
-- No npm publication or new release was requested or performed. Package/release markers remain v0.5.0-beta.8; this feature is unreleased source on main.
-- Next release task: select a new beta version, update versioned helpers/release marker and prerelease notes, then run the existing release workflow. Obtain publication authorization before uploading to npm.
+- Release target: `v0.5.0-beta.9`, requested after implementation. Versioned package metadata, npm beta publisher, installer and prerelease notes are prepared. The release-marker commit runs the existing GitHub release validation and asset publication workflow.
+- Verify the GitHub beta.9 release and assets, then use its maintainer-run npm publication helper. The user requested a publication script; npm has not been published from this environment. The separate installer uses the tested GitHub tarball and the stop/add/start Homebridge sequence.
 - After installation: select heating type and enable observation in Settings, save, and leave it running through at least six complete cycles across three days/48 hours. Check sensor/source availability, local history retention, evidence and recommendation confidence against actual room behavior. Apply to an individual rule only when its proposed limits are desired.
 - Physical heating behavior and multi-day real-home learning have not been verified by the synthetic tests.

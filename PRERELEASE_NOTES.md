@@ -1,3 +1,19 @@
+## v0.5.0-beta.9
+
+**Heating response & tuning for each thermostat.**
+
+- Choose **Forced air**, **Radiators** or **In-floor radiant** under **Settings → Thermostat settings → your thermostat → Heating response & tuning**. Each saved temperature rule has provisional starting guidance for its minimum update interval and maximum target adjustment.
+- Enable **Observe heating response locally** to collect room temperatures, Nest targets and heating-state history, including while the dashboard is closed or the rule is disabled. Collection is optional and never applies settings automatically.
+- Learned recommendations use complete heating cycles across multiple days, with evidence for response delay, warming rate, continued warming after shutoff, persistent Nest-to-room differences and room overshoot. Radiant response can begin after heating stops.
+- Each recommendation shows confidence and an explicit **Apply to this rule** button. Applying saves only the selected rule's update interval and maximum adjustment. Pending edits and changed configurations must be resolved before applying.
+- Changing the selected sensors, desired room temperature or heating type starts a new observation period. Local history is bounded, and temperature differences display in the selected Celsius/Fahrenheit units.
+
+Learned suggestions require at least **six usable cycles across three days**, spanning at least **48 hours**. Their confidence describes observational evidence; comfort and real equipment response should be assessed after applying a suggestion.
+
+Existing Climate installations update normally. Refresh the dashboard after installation, and review and **Resume** enabled temperature/fan rules after the bridge restart. See the [heating setup and tuning guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.9/WEB_DASHBOARD.md#heating-response--tuning).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.8
 
 **Live Homebridge sensor readings throughout the climate dashboard.**
