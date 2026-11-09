@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "1e05ff87b6706cbb10f88a6cc25fefd3ab5d8ffe",
+  "sourceCommit": "b8c6f8d44c37f22621192434c4b6587f7213052a",
   "sourceBranch": "feature/heating-response",
   "fixtureDataOnly": true,
   "checks": [
