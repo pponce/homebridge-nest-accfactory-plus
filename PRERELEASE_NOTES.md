@@ -1,3 +1,18 @@
+## v0.5.0-beta.15
+
+**Clear sensor selection and thermostat diagnostics.**
+
+- Thermostat cards display a recognized current sensor independently of automatic sensor setup availability. Unknown or ambiguous selections are explicitly labeled.
+- Automatic setup explains which native information is missing or unsupported, including sensor scheduling mode, paired-sensor list and active selection.
+- **Overview → Diagnose Nest sensor selection → Download sensor diagnostics** refreshes status and downloads one read-only JSON report for all thermostats. Reports include names, connection status and validation checks; credentials, device IDs, signatures, temperatures and schedules are excluded.
+- Mixed temperature groups require confirmed built-in sensor and hold feedback before controlling heating. Displaying a sensor does not enable unsupported setup or heating commands.
+
+After updating, refresh the dashboard. Review enabled rules and **Resume** those you want to run after the bridge restart. To investigate sensor setup, download the report and compare each thermostat's displayed selection with the Nest app.
+
+See the [sensor setup and diagnostics guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.15/WEB_DASHBOARD.md#assisted-nest-sensor-setup-for-mixed-groups).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.14
 
 **Drag fan rules into priority order.**

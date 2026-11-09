@@ -20,30 +20,50 @@ const canonical = (value) => {
 };
 const signature = (value) => crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 
-function validSelection(selection, settings) {
+function selectionSource(selection) {
   if (!object(selection) || Object.keys(selection).some((key) => !['rcsSourceType', 'activeRcsSensor'].includes(key))) {
-    return false;
+    return 'unknown';
   }
   if (selection.rcsSourceType === 'RCS_SOURCE_TYPE_BACKPLATE') {
-    return selection.activeRcsSensor === undefined;
+    return selection.activeRcsSensor === undefined ? 'thermostat' : 'unknown';
   }
   return (
     selection.rcsSourceType === 'RCS_SOURCE_TYPE_SINGLE_SENSOR' &&
     object(selection.activeRcsSensor) && Object.keys(selection.activeRcsSensor).length === 1 &&
-    typeof selection.activeRcsSensor.resourceId === 'string' && selection.activeRcsSensor.resourceId.length > 0 &&
-    settings.associatedRcsSensors.some((sensor) => sensor.deviceId.resourceId === selection.activeRcsSensor.resourceId)
-  );
+    typeof selection.activeRcsSensor.resourceId === 'string' && selection.activeRcsSensor.resourceId.length > 0
+  ) ? 'remote' : 'unknown';
+}
+
+function validSelection(selection, settings) {
+  const source = selectionSource(selection);
+  return source === 'thermostat' || (source === 'remote' &&
+    settings.associatedRcsSensors.some((sensor) => sensor.deviceId.resourceId === selection.activeRcsSensor.resourceId));
 }
 
 export function sensorControlState(settings) {
   const result = {
     reported: object(settings),
     supported: false,
-    reason: 'Nest sensor control is unavailable. ' +
-      'Mixed temperature groups cannot control heating until Nest reports a supported hold using its built-in sensor.',
+    reason: null,
     mode: 'unknown', source: 'unknown', sensorId: null, signature: '', holdSignature: null, control: null,
+    // Display-only feedback must never authorize automatic setup or heating.
+    selection: { source: 'unknown', sensorId: null },
+    diagnostics: {
+      settingsReported: object(settings), modeReported: settings?.rcsControlMode !== undefined,
+      selectionReported: settings?.activeRcsSelection !== undefined,
+      associationsReported: settings?.associatedRcsSensors !== undefined,
+      associatedSensorCount: Array.isArray(settings?.associatedRcsSensors) ? settings.associatedRcsSensors.length : null,
+      multiSensorSettingsReported: settings?.multiSensorSettings !== undefined,
+      sensorSelectionReported: settings?.sensorSelection !== undefined,
+      issues: [],
+    },
+  };
+  const issue = (code, message) => {
+    result.diagnostics.issues.push({ code, message });
+    result.reason = result.diagnostics.issues.map((entry) => entry.message).join(' ');
   };
   if (!object(settings)) {
+    issue('settings_missing', 'Nest has not reported usable sensor-control settings.');
     return result;
   }
   // Sign the entire reported trait so restoring control never overwrites a changed sensor schedule or association.
@@ -57,17 +77,31 @@ export function sensorControlState(settings) {
       (multi.multiSensorGroup !== undefined && (!Array.isArray(multi.multiSensorGroup) || multi.multiSensorGroup.length > 0))
     ))
   ) {
-    result.reason = 'Automatic setup is unavailable for this Nest multi-sensor format. ' +
-      'Mixed temperature groups cannot control heating until Nest reports a supported hold using its built-in sensor.';
+    issue('multi_sensor_format', 'Automatic setup is unavailable for this Nest multi-sensor format.');
     return result;
   }
-  if (
-    result.mode === 'unknown' || !Array.isArray(settings.associatedRcsSensors) ||
-    settings.associatedRcsSensors.some((sensor) =>
+  result.selection.source = selectionSource(settings.activeRcsSelection);
+  if (result.selection.source === 'remote') {
+    result.selection.sensorId = settings.activeRcsSelection.activeRcsSensor.resourceId;
+  }
+  if (result.mode === 'unknown') {
+    issue(settings.rcsControlMode === undefined ? 'mode_missing' : 'mode_unknown',
+      settings.rcsControlMode === undefined ? 'Nest has not reported its sensor scheduling mode.' :
+        'Nest reported a sensor scheduling mode that automatic setup does not recognize.');
+  }
+  const associationsValid = Array.isArray(settings.associatedRcsSensors) &&
+    !settings.associatedRcsSensors.some((sensor) =>
       !object(sensor?.deviceId) || typeof sensor.deviceId.resourceId !== 'string' || !sensor.deviceId.resourceId,
-    ) ||
-    !validSelection(settings.activeRcsSelection, settings)
-  ) {
+    );
+  if (!associationsValid) {
+    issue('associations_unavailable', 'Nest has not reported a usable paired-sensor list.');
+  }
+  if (result.selection.source === 'unknown') {
+    issue('selection_unknown', 'Nest has not reported a recognized active temperature sensor.');
+  } else if (associationsValid && !validSelection(settings.activeRcsSelection, settings)) {
+    issue('sensor_not_associated', 'The selected Nest sensor is not in the reported paired-sensor list.');
+  }
+  if (result.diagnostics.issues.length) {
     return result;
   }
   result.supported = true;

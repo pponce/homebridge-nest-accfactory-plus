@@ -93,6 +93,10 @@ Change the **desired room temperature in Climate rules**. Apple Home continues t
 
 ### Assisted Nest sensor setup for mixed groups
 
+The **Overview → Your thermostats** cards show the selected temperature sensor whenever Nest reports a recognized selection. The selected sensor and automatic setup availability are separate: a known sensor can be displayed while missing or unsupported scheduling information prevents automatic setup. **Current sensor not reported** means there is no unambiguous selection to display. When sensor controls are unavailable, use the Nest app to change the native selection.
+
+To investigate unavailable setup, open **Overview → Diagnose Nest sensor selection → Download sensor diagnostics**. The dashboard refreshes status and downloads one JSON report covering all thermostats. It includes thermostat names and models, connection and update status, selected sensor names, scheduling mode, and specific validation reasons such as missing scheduling mode, missing paired-sensor list, unknown selection, or an unsupported multi-sensor format. It excludes credentials, device IDs, signatures, temperatures and saved schedules. The download only reads status and does not change sensor selections, schedules or heating targets. Review the report before sharing it for support.
+
 A group that selects both a Nest room sensor and a temperature source from another Homebridge accessory can offer **Prepare Nest for group** in **Execution status**. The action is available only after the rule is saved and enabled, while the thermostat is connected and its native sensor controls are recognized.
 
 After you confirm, the plugin selects the built-in thermostat sensor and places native sensor selection on hold. The saved native sensor schedule and paired room sensors are preserved. Nest room sensors remain inputs to the group average. This action does not change the weekly temperature schedule, Heat/Cool mode or Eco. The heating rule waits for fresh Nest feedback confirming the requested sensor setup before adjusting the target.

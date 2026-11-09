@@ -265,8 +265,46 @@ function renderConnection() {
   $('connection-state').title = label;
   $('last-updated').textContent = state.live ? 'Updated ' + when(state.status.generatedAt) : 'Live updates unavailable';
 }
+function selectedNestSensor(data) {
+  const selection = data.native_sensor_control?.selection;
+  if (selection) return selection.source === 'thermostat' ? '' : selection.source === 'remote' ? selection.sensorId : null;
+  // Older status snapshots may provide a selection without automatic-setup metadata.
+  return typeof data.active_rcs_sensor === 'string' ? data.active_rcs_sensor : null;
+}
+function nestSensorName(id) {
+  if (id === null) return 'Current sensor not reported';
+  if (id === '') return 'Thermostat sensor';
+  return state.status.devices.find((entry) => entry.type === 'TemperatureSensor' && entry.id === id)?.data?.description || 'Nest room sensor (name unavailable)';
+}
+$('download-sensor-diagnostics').addEventListener('click', async () => {
+  const control = $('download-sensor-diagnostics'); control.disabled = true;
+  try {
+    await refreshStatus();
+    if (!state.live) throw new Error('Refresh the dashboard connection before downloading sensor diagnostics.');
+    const report = { schemaVersion: 1, generatedAt: new Date().toISOString(), statusGeneratedAt: state.status.generatedAt,
+      thermostats: thermostats().map((device) => {
+        const data = device.data || {}; const native = data.native_sensor_control; const checks = native?.diagnostics;
+        // Explicit fields only: never serialize the status, native control object, configuration or session.
+        return { name: data.description || 'Thermostat', model: data.model, connected: usable(device), lastUpdate: device.lastUpdate,
+          currentSensor: nestSensorName(selectedNestSensor(data)), selectionKnown: selectedNestSensor(data) !== null,
+          automaticSetupSupported: native?.supported === true, mode: native?.mode || 'unknown',
+          reason: native?.reason || null,
+          checks: checks ? { settingsReported: checks.settingsReported, modeReported: checks.modeReported,
+            selectionReported: checks.selectionReported, associationsReported: checks.associationsReported,
+            associatedSensorCount: checks.associatedSensorCount, multiSensorSettingsReported: checks.multiSensorSettingsReported,
+            sensorSelectionReported: checks.sensorSelectionReported,
+            issues: (checks.issues || []).map(({ code, message }) => ({ code, message })) } : null };
+      }) };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2) + '\n'], { type: 'application/json' }));
+    const link = el('a'); link.href = url; link.download = 'nest-sensor-diagnostics-' + Date.now() + '.json';
+    document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Sensor diagnostics downloaded. No thermostat settings were changed.');
+  } catch (error) { notice(error.message, 'warning'); }
+  finally { control.disabled = !state.live || !thermostats().length; }
+});
 function renderThermostats() {
   const devices = thermostats(); const host = $('thermostats'); host.replaceChildren();
+  $('download-sensor-diagnostics').disabled = !state.live || !devices.length;
   $('home-heading').textContent = state.config?.name || 'A clearer view of home.';
   const online = devices.filter(usable).length;
   $('overview-summary').textContent = devices.length ? online + ' of ' + devices.length + ' thermostats connected. A view of the rooms that matter.' : 'Your Nest thermostats appear here when the account connects.';
@@ -300,18 +338,25 @@ function renderThermostats() {
       timer.append(buttons); actions.append(timer);
     }
     controls.append(actions);
-    if (Array.isArray(data.linked_rcs_sensors)) {
+    if (Array.isArray(data.linked_rcs_sensors) || data.native_sensor_control) {
       const nativeControl = data.native_sensor_control;
-      const selectionAvailable = available && (!nativeControl || nativeControl.supported === true);
+      const currentSensor = selectedNestSensor(data);
+      const selectionAvailable = available && currentSensor !== null && (!nativeControl || nativeControl.supported === true);
       const selection = el('div', undefined, 'source-control'); const label = el('label', 'Temperature controlled by'); const select = el('select');
       select.setAttribute('aria-label', 'Temperature controlled by for ' + (data.description || 'thermostat'));
       const builtin = el('option', 'Thermostat sensor'); builtin.value = ''; select.append(builtin);
-      for (const id of data.linked_rcs_sensors) { const sensor = state.status.devices.find((entry) => entry.id === id); const option = el('option', sensor?.data?.description || 'Nest sensor'); option.value = id; select.append(option); }
-      if (nativeControl && !nativeControl.supported) { const unknown = el('option', 'Current selection unavailable'); unknown.value = 'unavailable'; select.append(unknown); }
-      select.value = nativeControl && !nativeControl.supported ? 'unavailable' : data.active_rcs_sensor || ''; select.disabled = !selectionAvailable; label.append(select);
+      const linked = data.linked_rcs_sensors || [];
+      for (const id of linked) { const option = el('option', nestSensorName(id)); option.value = id; select.append(option); }
+      if (currentSensor === null || (currentSensor !== '' && !linked.includes(currentSensor))) {
+        const current = el('option', nestSensorName(currentSensor)); current.value = currentSensor ?? 'unavailable'; current.disabled = true; select.append(current);
+      }
+      select.value = currentSensor ?? 'unavailable'; select.disabled = !selectionAvailable; label.append(select);
       const apply = button('Apply', () => sendCommand(device, 'sensor', select.value, apply), 'button secondary'); apply.disabled = !selectionAvailable;
       apply.setAttribute('aria-label', 'Apply temperature source for ' + (data.description || 'thermostat')); selection.append(label, apply); controls.append(selection);
-      controls.append(el('p', nativeControl && !nativeControl.supported ? nativeControl.reason || 'Review native sensor selection in the Nest app.' : 'Native Nest selection · its sensor schedule may replace this choice.', 'small-note'));
+      controls.append(el('p', nativeControl && !nativeControl.supported ?
+        'Automatic sensor setup unavailable. ' + (nativeControl.reason || 'Nest has not reported all required sensor settings.') +
+          ' Use the Nest app to change the selected sensor. Mixed temperature groups wait for confirmed built-in sensor and hold settings.' :
+        'Native Nest selection · its sensor schedule may replace this choice.', 'small-note'));
     }
     for (const setup of state.status.automation?.sensorSetups || []) {
       if (setup.thermostatId !== device.serial) continue;

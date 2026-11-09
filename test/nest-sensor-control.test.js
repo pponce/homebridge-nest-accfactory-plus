@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sensorControlState, sensorControlUpdate } from '../src/nest-sensor-control.js';
+import { nativeSensorAllowsHeating } from '../src/temperature-sensor-setup.js';
 
 const sensor = (id) => ({ rcsSourceType: 'RCS_SOURCE_TYPE_SINGLE_SENSOR', activeRcsSensor: { resourceId: id } });
 const fixture = () => ({
@@ -125,4 +126,52 @@ test('known native hold and schedule-override modes round trip without altering 
     const held = sensorControlUpdate(original, { action: 'hold', expected: state.signature });
     assert.deepEqual(sensorControlUpdate(held, { action: 'restore', expected: state.holdSignature, control: state.control }), original);
   }
+});
+
+test('known selected sensor stays readable without granting unsupported automatic control', () => {
+  for (const selection of [{ rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' }, sensor('bedroom')]) {
+    for (const mode of [undefined, 'RCS_CONTROL_MODE_UNSPECIFIED', 'private-unexpected-value']) {
+      const settings = { ...fixture(), rcsControlMode: mode, activeRcsSelection: selection };
+      const state = sensorControlState(settings);
+      const builtin = selection.rcsSourceType === 'RCS_SOURCE_TYPE_BACKPLATE';
+      assert.deepEqual(state.selection, { source: builtin ? 'thermostat' : 'remote', sensorId: builtin ? null : 'bedroom' });
+      assert.equal(state.supported, false);
+      assert.equal(state.source, 'unknown');
+      assert.equal(state.control, null);
+      assert.equal(state.holdSignature, null);
+      assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: state }), false);
+      assert.equal(state.diagnostics.issues[0].code, mode === undefined ? 'mode_missing' : 'mode_unknown');
+      assert.throws(() => sensorControlUpdate(settings, { action: 'hold', expected: state.signature }));
+      assert.doesNotMatch(JSON.stringify(state.diagnostics), /bedroom|private-unexpected-value|resourceId|rcsControlSchedule/);
+    }
+  }
+});
+
+test('diagnostics distinguish missing associations, unknown selection and a foreign selected sensor', () => {
+  const missing = sensorControlState(undefined);
+  assert.equal(missing.diagnostics.issues[0].code, 'settings_missing');
+  const noList = sensorControlState({ ...fixture(), associatedRcsSensors: undefined });
+  assert.equal(noList.selection.source, 'remote');
+  assert.equal(noList.diagnostics.associatedSensorCount, null);
+  assert.equal(noList.diagnostics.issues[0].code, 'associations_unavailable');
+  const unknown = sensorControlState({ ...fixture(), activeRcsSelection: undefined });
+  assert.deepEqual(unknown.selection, { source: 'unknown', sensorId: null });
+  assert.equal(unknown.diagnostics.issues[0].code, 'selection_unknown');
+  const foreign = sensorControlState({ ...fixture(), activeRcsSelection: sensor('other-sensor') });
+  assert.deepEqual(foreign.selection, { source: 'remote', sensorId: 'other-sensor' });
+  assert.equal(foreign.diagnostics.issues[0].code, 'sensor_not_associated');
+  assert.equal(foreign.supported, false);
+  assert.doesNotMatch(JSON.stringify(foreign.diagnostics), /other-sensor/);
+});
+
+test('ambiguous multi-sensor settings do not present the classic selection as authoritative', () => {
+  for (const extra of [{ sensorSelection: {} }, { multiSensorSettings: { multiSensorEnabled: true } }]) {
+    const state = sensorControlState({ ...fixture(), ...extra });
+    assert.deepEqual(state.selection, { source: 'unknown', sensorId: null });
+    assert.equal(state.diagnostics.issues[0].code, 'multi_sensor_format');
+  }
+  const supported = sensorControlState(fixture());
+  assert.equal(supported.diagnostics.associatedSensorCount, 1);
+  assert.deepEqual(supported.diagnostics.issues, []);
+  assert.equal(supported.reason, null);
 });

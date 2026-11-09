@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { sensorControlState } from '../../src/nest-sensor-control.js';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -27,6 +28,9 @@ let owned = false;
 let rejectNext = false;
 const requests = [];
 const errors = [];
+let diagnosticStates;
+let failStatus = false;
+const requestMethods = [];
 const descriptions = {
   required: 'Prepare Nest before this mixed temperature group can control heating.',
   preparing: 'Waiting for fresh Nest feedback to confirm the built-in sensor and sensor hold.',
@@ -42,14 +46,24 @@ const automation = () => ({ available: true, pendingRestorations: 0,
   rules: config.rules.temperature.map((entry) => ({ ...entry, phase: entry.enabled ? 'waiting' : 'disabled',
     paused: true, reason: entry.enabled ? 'Waiting for sensor setup.' : 'Rule is disabled.', sensorSetup: setup() })),
   sensorSetups: owned ? [{ id: 'mixed', name: rule.name, ...setup() }] : [] });
-const status = () => ({ generatedAt: Date.now(), accounts: [{ id: 'A', authorised: true, observing: true }],
+const status = () => {
+  const snapshot = { generatedAt: Date.now(), accounts: [{ id: 'A', authorised: true, observing: true }],
   devices: [{ id: 'T', serial: 'T', type: 'Thermostat', account: 'A', lastUpdate: Date.now(), data: {
     description: 'Downstairs Nest', model: 'Nest Learning Thermostat', online: true, hvac_mode: 'heat', hvac_state: 'off',
     eco_mode: false, current_temperature: 22, physical_temperature: 22, target_temperature: 21,
     active_rcs_sensor: phase === 'required' ? 'S' : '', linked_rcs_sensors: ['S'], schedules: {},
     native_sensor_control: { reported: true, supported: phase !== 'unsupported', source: phase === 'unsupported' ? 'unknown' : phase === 'required' ? 'remote' : 'thermostat' },
   } }, { id: 'S', serial: 'S', type: 'TemperatureSensor', account: 'A', lastUpdate: Date.now(),
-    data: { description: 'Nest living room', current_temperature: 20, online: true } }], automation: automation() });
+    data: { description: 'Nest living room', current_temperature: 20, online: true } }], automation: automation() };
+  if (diagnosticStates) {
+    const template = snapshot.devices[0];
+    snapshot.devices = diagnosticStates.map((settings, index) => ({ ...template, serial: 'PRIVATE-THERMOSTAT-' + index,
+      data: { ...template.data, description: index ? 'Upstairs Nest' : 'Downstairs Nest', linked_rcs_sensors: ['PRIVATE-SENSOR-ID'],
+        native_sensor_control: { ...sensorControlState(settings), privateExtra: 'PRIVATE-TOKEN', control: { secret: 'PRIVATE-CONTROL' } } } }));
+    snapshot.devices.push({ ...template, type: 'TemperatureSensor', id: 'PRIVATE-SENSOR-ID', data: { description: 'Bedroom sensor' } });
+  }
+  return snapshot;
+};
 const envelope = () => ({ revision: String(revision), config: structuredClone(config), accounts: [], restartRequired: false });
 const server = http.createServer(async (request, response) => {
   try {
@@ -66,12 +80,15 @@ try {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api/**', async (route) => {
     const request = route.request(); const pathname = new URL(request.url()).pathname;
+    requestMethods.push(request.method());
     let body = {}; let code = 200;
     if (pathname === '/api/session') body = { authenticated: true, username: 'fixture', csrfToken: 'fixture-csrf' };
     else if (pathname === '/api/config') {
       if (request.method() === 'PUT') { config = structuredClone(request.postDataJSON().config); revision++; }
       body = envelope();
-    } else if (pathname === '/api/status') body = status();
+    } else if (pathname === '/api/status') {
+      body = failStatus ? { error: 'Status unavailable' } : status(); code = failStatus ? 503 : 200;
+    }
     else if (pathname === '/api/sources') body = { bridges: [], sources: [{ id: 'room', name: 'Dining room temperature', kind: 'temperature', available: true, temperature: 22, lastReadAt: Date.now() }] };
     else if (pathname === '/api/heating-response') body = { revision: String(revision), rules: [], devices: [] };
     else if (pathname === '/api/rules/command') {
@@ -142,10 +159,63 @@ try {
   await dialog.getByRole('button', { name: 'Prepare thermostat', exact: true }).click();
   await page.locator('#notice').getByText('Nest sensor settings changed. Refresh and review the new setup.', { exact: true }).waitFor();
   assert.equal(requests.length, 3, 'A stale confirmation must not cause an automatic retry');
+
+  const builtin = { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' };
+  const remote = { rcsSourceType: 'RCS_SOURCE_TYPE_SINGLE_SENSOR', activeRcsSensor: { resourceId: 'PRIVATE-SENSOR-ID' } };
+  const settings = { rcsControlMode: 'RCS_CONTROL_MODE_HOLD', activeRcsSelection: builtin,
+    associatedRcsSensors: [{ deviceId: { resourceId: 'PRIVATE-SENSOR-ID' } }] };
+  diagnosticStates = [{ ...settings, rcsControlMode: undefined },
+    { ...settings, rcsControlMode: 'RCS_CONTROL_MODE_UNSPECIFIED', activeRcsSelection: remote }];
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  const downstairs = page.getByRole('combobox', { name: 'Temperature controlled by for Downstairs Nest', exact: true });
+  const upstairs = page.getByRole('combobox', { name: 'Temperature controlled by for Upstairs Nest', exact: true });
+  assert.equal(await downstairs.locator('option:checked').textContent(), 'Thermostat sensor');
+  assert.equal(await upstairs.locator('option:checked').textContent(), 'Bedroom sensor');
+  assert.equal(await downstairs.isDisabled(), true);
+  assert.equal(await upstairs.isDisabled(), true);
+  assert.match(await page.locator('#thermostats').innerText(), /has not reported its sensor scheduling mode/);
+  assert.match(await page.locator('#thermostats').innerText(), /scheduling mode that automatic setup does not recognize/);
+  await page.getByText('Diagnose Nest sensor selection', { exact: true }).click();
+  const methodsBefore = requestMethods.length;
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download sensor diagnostics', exact: true }).click();
+  const download = await downloadPromise;
+  const chunks = []; for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString(); const report = JSON.parse(text);
+  assert.match(download.suggestedFilename(), /^nest-sensor-diagnostics-\d+\.json$/);
+  assert.equal(report.thermostats.length, 2);
+  assert.deepEqual(report.thermostats.map((entry) => entry.currentSensor), ['Thermostat sensor', 'Bedroom sensor']);
+  assert.deepEqual(report.thermostats.map((entry) => entry.checks.issues[0].code), ['mode_missing', 'mode_unknown']);
+  assert.doesNotMatch(text, /PRIVATE-|fixture-csrf|resourceId|signature|rcsControlSchedule/);
+  assert.ok(requestMethods.slice(methodsBefore).every((method) => method === 'GET'), 'Diagnostic download must only read status');
+  diagnosticStates = [{ ...settings, associatedRcsSensors: undefined }, { ...settings, activeRcsSelection: undefined }];
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  assert.equal(await downstairs.locator('option:checked').textContent(), 'Thermostat sensor');
+  assert.equal(await upstairs.locator('option:checked').textContent(), 'Current sensor not reported');
+  diagnosticStates = [settings, { ...settings, activeRcsSelection: remote, associatedRcsSensors: [] }];
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  assert.equal(await downstairs.isDisabled(), false, 'Supported native selection remains usable');
+  assert.equal(await upstairs.isDisabled(), true, 'An unassociated selection never enables writes');
+  diagnosticStates = [{ ...settings, sensorSelection: {} }, { ...settings, multiSensorSettings: { multiSensorEnabled: true } }];
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  assert.equal(await downstairs.locator('option:checked').textContent(), 'Current sensor not reported');
+  assert.equal(await upstairs.locator('option:checked').textContent(), 'Current sensor not reported');
+  diagnosticStates = [{ ...settings, rcsControlMode: undefined }, { ...settings, activeRcsSelection: remote, rcsControlMode: undefined }];
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  const output = process.env.REVIEW_OUTPUT_DIR || path.join(root, 'maintenance/review/sensor-selection');
+  await fs.mkdir(output, { recursive: true });
+  await page.screenshot({ path: path.join(output, 'sensor-selection-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1100 });
+  await page.screenshot({ path: path.join(output, 'sensor-selection-desktop.png'), fullPage: true });
+  failStatus = true;
+  await page.getByRole('button', { name: 'Download sensor diagnostics', exact: true }).click();
+  await page.getByText('Refresh the dashboard connection before downloading sensor diagnostics.', { exact: true }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Download sensor diagnostics', exact: true }).isDisabled(), true);
   assert.deepEqual(errors, []);
-  console.log('Sensor setup browser checks passed: save/Resume consent, cancellation, exact tokens, pending feedback, unsupported states, restoration after deletion, dirty edits, stale confirmation and mobile layout.');
+  console.log('Sensor setup browser checks passed: consent, restoration, independent sensor display, specific reasons, read-only diagnostic export, privacy, disconnected states and mobile layout.');
 } finally {
   await browser?.close(); server.closeAllConnections(); await new Promise((resolve) => server.close(resolve));
 }
