@@ -6,6 +6,7 @@
 - Open help with a hover, keyboard focus or phone tap. Escape, an outside click or a second tap dismisses it. Help fits the viewport in light and dark themes.
 - Fan temperature examples use the current draft and selected units, including the turn-off temperature, the point where speed begins increasing and the temperature for maximum speed.
 - The npm publication helper prints login and authorization links for opening on your own computer. It waits for approval in the terminal and does not launch a browser from SSH.
+- With `--github-release`, the publication helper creates or reuses the tested GitHub release before publishing the verified package to npm with the `beta` tag.
 - The installer can retrieve release files through the GitHub asset API when the direct release download fails. Package checksums are verified before installation.
 
 After updating, refresh the dashboard. Hover over an information icon in **Climate rules** to inspect a setting. Review enabled temperature and fan rules and **Resume** those you want to run after the bridge restart.

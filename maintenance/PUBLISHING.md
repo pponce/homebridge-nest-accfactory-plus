@@ -16,6 +16,8 @@ The first publication requires the maintainer's authenticated npm account. Do no
 
 After explicit publication approval, run the current `maintenance/update-checkout-and-publish-beta.sh` from the existing project checkout. It fast-forwards a clean local `main`, updates submodules, downloads and verifies the tested GitHub tarball, and prints the npm login/authorization URL when needed. Open that URL in a browser on your own computer; the SSH terminal waits for approval without asking Enter to launch a browser. The helper uses npm’s per-command `--browser=false` option and does not change global npm settings. It does not stop Homebridge, install the plugin, alter accessory caches or create backups. A private publication-result report includes a command for copying it to a Mac. Registry propagation is retried; accepted uploads are not republished.
 
+Pass `--github-release` to handle both release steps. If the published GitHub beta and its package assets are ready, the helper reuses them. Otherwise it starts `release.yml` on `main` using an authenticated GitHub CLI and waits for the validated release before attempting npm publication. If GitHub CLI authentication is unavailable, it prints the workflow URL for starting the release manually. An unavailable or invalid GitHub release prevents npm publication. The version must already be prepared on `main`; the helper does not invent or bump a version.
+
 After the package exists, configure trusted publishing in npm's package settings:
 
 - Provider: GitHub Actions

@@ -105,7 +105,7 @@ jobs:
           fs.appendFileSync(process.env.GITHUB_ENV, 'VERSION=' + pkg.version + '\n');
           NODE
       - run: node scripts/check-package.js
-      - name: Check the checkout and npm publication helper
+      - name: Check the installer and GitHub-to-npm publication helper
         run: |
           python3 maintenance/checks/publish-beta-runner.py
           python3 maintenance/checks/install-execution-runner.py

@@ -54,11 +54,11 @@ try {
   await page.getByRole('button', { name: /Sign in/ }).click();
   await page.getByRole('tab', { name: /Room fans/ }).click();
   await page.locator('.pick-source').filter({ hasText: 'Living room fan' }).getByText('Speed control', { exact: false }).waitFor();
-  assert.equal(await page.getByLabel('Run condition').inputValue(), 'temperature');
+  assert.equal(await page.getByLabel('Run condition', { exact: true }).inputValue(), 'temperature');
   assert.equal(await page.getByLabel('Fan speed', { exact: true }).inputValue(), 'curve');
-  assert.equal(await page.getByLabel('Run condition').locator('option').count(), 3);
+  assert.equal(await page.getByLabel('Run condition', { exact: true }).locator('option').count(), 3);
   for (const action of ['heating', 'cooling', 'temperature']) {
-    await page.getByLabel('Run condition').selectOption(action);
+    await page.getByLabel('Run condition', { exact: true }).selectOption(action);
     assert.equal(await page.getByLabel('Fan speed', { exact: true }).locator('option').count(), 3);
     await page.getByLabel('Fan speed', { exact: true }).selectOption('fixed');
     assert.equal(Number(await page.getByLabel('Fixed fan speed (%)', { exact: true }).inputValue()), 50);
@@ -122,7 +122,7 @@ try {
   await page.getByRole('button', { name: 'Add rule', exact: true }).click();
   await page.getByLabel('Rule name', { exact: true }).fill('Cooling circulation');
   await page.locator('.pick-source').filter({ hasText: 'Living room fan' }).getByRole('checkbox').check();
-  await page.getByLabel('Run condition').selectOption('cooling');
+  await page.getByLabel('Run condition', { exact: true }).selectOption('cooling');
   await page.getByLabel('Fan speed', { exact: true }).selectOption('fixed');
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).check();
   assert.equal(await page.getByLabel('Priority (higher wins)', { exact: true }).count(), 0);

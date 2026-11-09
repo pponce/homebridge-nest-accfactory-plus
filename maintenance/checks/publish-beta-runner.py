@@ -33,6 +33,21 @@ if name == 'git':
 if name == 'curl':
     destination = pathlib.Path(args[args.index('-o') + 1])
     url = next(arg for arg in args if arg.startswith('https://'))
+    if '-w' in args:
+        assert scenario.startswith('github-') and '/releases/tags/' in url
+        version = os.environ['PUBLISH_VERSION']
+        if scenario == 'github-api-failure':
+            destination.write_text('{}'); print('403', end=''); sys.exit(0)
+        if scenario in ['github-create', 'github-auth-failure'] and not (root / 'release-requested').exists():
+            destination.write_text('{}'); print('404', end=''); sys.exit(0)
+        assets = [{'name': 'homebridge-nest-climate-cntrl-' + version + '.tgz', 'state': 'uploaded'},
+                  {'name': 'SHA256SUMS', 'state': 'uploaded'}]
+        if scenario == 'github-wait' and not (root / 'release-requested').exists():
+            (root / 'release-requested').write_text('uploading')
+            assets = []
+        destination.write_text(json.dumps({'tag_name': 'v' + version, 'draft': scenario == 'github-bad-release',
+                                          'prerelease': True, 'assets': assets}))
+        print('200', end=''); sys.exit(0)
     fallback = scenario in ['fallback-archive', 'fallback-checksum', 'download-failure', 'invalid-release', 'api-json']
     if url.startswith('https://github.com/') and fallback:
         if scenario != 'fallback-checksum' or url.endswith('/SHA256SUMS'):
@@ -55,6 +70,11 @@ if name == 'curl':
     shutil.copyfile(root / filename, destination)
     sys.exit(0)
 if name == 'sleep': sys.exit(0)
+if name == 'gh':
+    if args[:2] == ['auth', 'status']: sys.exit(1 if scenario == 'github-auth-failure' else 0)
+    assert args == ['workflow', 'run', 'release.yml', '--repo', 'pponce/homebridge-nest-climate-cntrl', '--ref', 'main']
+    (root / 'release-requested').write_text('requested')
+    sys.exit(0)
 if name == 'npm':
     args = args[2:]
     if args[0] == 'whoami': sys.exit(1 if scenario == 'web-login' else 0)
@@ -118,7 +138,7 @@ def run_case(scenario):
         (root / 'integrity').write_text('sha512-' + base64.b64encode(hashlib.sha512(archive.read_bytes()).digest()).decode())
         bin_dir = root / 'bin'
         bin_dir.mkdir()
-        for command in ['git', 'curl', 'npm', 'sleep']:
+        for command in ['git', 'curl', 'npm', 'sleep', 'gh']:
             script = bin_dir / command
             script.write_text(MOCK)
             script.chmod(0o755)
@@ -128,13 +148,22 @@ def run_case(scenario):
         if scenario == 'pending':
             release.mkdir(parents=True)
             (release / 'npm-upload-accepted').write_text('fixture accepted upload')
-        result = subprocess.run(['bash', str(PROJECT / 'maintenance/update-checkout-and-publish-beta.sh')],
+        result = subprocess.run(['bash', str(PROJECT / 'maintenance/update-checkout-and-publish-beta.sh'),
+                                 *(['--github-release'] if scenario.startswith('github-') else [])],
                                 env=env, text=True, capture_output=True, timeout=45)
         calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
         publishes = [call for call in calls if call[0] == 'npm' and call[3] == 'publish']
-        expected = 'SUCCESS' if scenario in ['success', 'web-login', 'existing', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 'PENDING' if scenario == 'pending' else 'FAILED'
+        expected = 'SUCCESS' if scenario in ['success', 'web-login', 'existing', 'artifacts', 'fallback-archive', 'fallback-checksum', 'github-existing', 'github-create', 'github-wait'] else 'PENDING' if scenario == 'pending' else 'FAILED'
         assert 'END: ' + expected in result.stdout, (scenario, result.stdout, result.stderr)
-        assert len(publishes) == (1 if scenario in ['success', 'web-login', 'publish-failure', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 0), (scenario, publishes)
+        assert len(publishes) == (1 if scenario in ['success', 'web-login', 'publish-failure', 'artifacts', 'fallback-archive', 'fallback-checksum', 'github-existing', 'github-create', 'github-wait'] else 0), (scenario, publishes)
+        if scenario.startswith('github-'):
+            starts = [call for call in calls if call[:3] == ['gh', 'workflow', 'run']]
+            assert len(starts) == (1 if scenario == 'github-create' else 0), (scenario, starts)
+            if expected == 'SUCCESS':
+                assert 'GitHub release and package assets are ready' in result.stdout
+                assert calls.index(publishes[0]) > max(index for index, call in enumerate(calls) if call[0] == 'curl' and '-w' in call)
+            else:
+                assert not any(call[0] == 'npm' for call in calls), 'Never reach npm before GitHub is ready'
         if scenario == 'web-login':
             assert len([call for call in calls if call[0] == 'npm' and call[3] == 'login']) == 1
             assert 'https://www.npmjs.com/login?' in result.stdout
@@ -161,7 +190,8 @@ def run_case(scenario):
 
 
 for case in ['success', 'web-login', 'existing', 'pending', 'dirty', 'diverged', 'checksum', 'mismatch', 'registry-failure', 'publish-failure', 'artifacts',
-             'fallback-archive', 'fallback-checksum', 'download-failure', 'invalid-release', 'api-json']:
+             'fallback-archive', 'fallback-checksum', 'download-failure', 'invalid-release', 'api-json',
+             'github-existing', 'github-create', 'github-wait', 'github-bad-release', 'github-api-failure', 'github-auth-failure']:
     run_case(case)
 
 # Real Git must reject an upstream file that would overwrite an ignored local artifact.

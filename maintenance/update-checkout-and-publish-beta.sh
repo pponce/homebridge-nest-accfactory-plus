@@ -34,7 +34,60 @@ NODE
       "$api/releases/assets/$asset_id" -o "$destination.download" || return 1
     mv "$destination.download" "$destination" || return 1
   }
+  nest_ensure_github_release() {
+    local package="$1" version="$2" release_dir="$3"
+    local api="https://api.github.com/repos/pponce/$package" status attempt validation requested=false
+    printf 'GitHub release: https://github.com/pponce/%s/releases/tag/v%s\n' "$package" "$version"
+    for attempt in {1..90}; do
+      status=$(curl -sSL --retry 2 --connect-timeout 15 --max-time 30 --proto '=https' --tlsv1.2 \
+        -H 'Accept: application/vnd.github+json' -w '%{http_code}' \
+        "$api/releases/tags/v$version" -o "$release_dir/github-release.json") || return 1
+      case "$status" in
+        200)
+          node - "$release_dir/github-release.json" "$package" "$version" <<'NODE'
+const fs = require('node:fs');
+const release = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const [name, version] = process.argv.slice(3);
+if (release.tag_name !== 'v' + version || release.draft !== false || release.prerelease !== true) {
+  console.error('GitHub did not report the expected published beta release.');
+  process.exitCode = 1;
+} else {
+  const ready = [name + '-' + version + '.tgz', 'SHA256SUMS'].every(name =>
+    release.assets?.filter(asset => asset.name === name && asset.state === 'uploaded').length === 1);
+  process.exitCode = ready ? 0 : 2;
+}
+NODE
+          validation=$?
+          if [ "$validation" -eq 0 ]; then
+            printf '%s\n' 'GitHub release and package assets are ready. Continuing to npm.'
+            return 0
+          fi
+          if [ "$validation" -ne 2 ]; then return 1; fi
+          ;;
+        404)
+          if [ "$requested" = false ]; then
+            if ! command -v gh >/dev/null || ! gh auth status --hostname github.com >/dev/null 2>&1; then
+              printf '%s\n' 'Starting a GitHub release requires an authenticated GitHub CLI on this host.' \
+                'You can also open this workflow link, choose Run workflow on main, then rerun this script:' \
+                "https://github.com/pponce/$package/actions/workflows/release.yml"
+              return 1
+            fi
+            printf '%s\n' 'Starting the GitHub release workflow. It validates the package before publishing.'
+            gh workflow run release.yml --repo "pponce/$package" --ref main || return 1
+            requested=true
+          fi
+          ;;
+        *) printf 'GitHub release lookup returned HTTP %s. npm publication was not attempted.\n' "$status"; return 1 ;;
+      esac
+      printf 'Waiting for the tested GitHub release and assets (%s/90)...\n' "$attempt"
+      if [ "$attempt" -lt 90 ]; then sleep 10; fi
+    done
+    printf '%s\n' 'GitHub release is not ready. npm publication was not attempted. Review the workflow and rerun after it succeeds:' \
+      "https://github.com/pponce/$package/actions/workflows/release.yml"
+    return 1
+  }
   nest_publish_beta() {
+    case "${1:-}" in ''|--github-release) ;; *) printf '%s\n' 'Supported option: --github-release'; return 1 ;; esac
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
     local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.16'
     local release_dir="$project/maintenance/releases/v$version"
@@ -91,6 +144,9 @@ NODE
     mkdir -p "$release_dir" || return 1
     chmod 700 "$release_dir" || return 1
     nest_publish_report="$release_dir/publish-result-$(date -u +%Y%m%dT%H%M%SZ).json"
+    if [ "${1:-}" = --github-release ]; then
+      nest_ensure_github_release "$package" "$version" "$release_dir" || return 1
+    fi
     for asset in "$package-$version.tgz" SHA256SUMS; do
       nest_download_release_asset "$package" "$version" "$asset" "$release_dir/$asset" || return 1
     done
@@ -159,7 +215,7 @@ NODE
     printf '%s\n' 'Registry or beta-tag verification is pending. Rerun this script later; it will not republish an accepted upload.'
     return 2
   }
-  if nest_publish_beta; then nest_publish_result=0; else nest_publish_result=$?; fi
+  if nest_publish_beta "$@"; then nest_publish_result=0; else nest_publish_result=$?; fi
   if [ -n "$nest_publish_report" ]; then
     node - "$nest_publish_report" "$nest_publish_result" "$nest_publish_head" <<'NODE'
 const fs = require('node:fs');
@@ -185,7 +241,7 @@ NODE
     *) printf '%s\n' '=== Nest Climate Cntrl checkout + beta publish END: FAILED — review the message above ===' ;;
   esac
   umask "$nest_publish_umask"
-  unset -f nest_publish_beta nest_download_release_asset
+  unset -f nest_publish_beta nest_download_release_asset nest_ensure_github_release
   unset nest_publish_report nest_publish_head nest_publish_result nest_publish_umask nest_publish_copy_host
 }
 
