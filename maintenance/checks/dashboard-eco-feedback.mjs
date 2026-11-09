@@ -11,6 +11,7 @@ export async function checkEcoFeedback(browser, base) {
   let networkFailure = false;
   let commandHold;
   let statusReads = 0;
+  let stage = 'initial request';
   page.on('pageerror', (error) => errors.push(error.message));
   await page.clock.install({ time: Date.now() });
   await page.route(base + '/api/**', async (route) => {
@@ -68,6 +69,7 @@ export async function checkEcoFeedback(browser, base) {
     assert.equal(writes.length, 1, 'polling and refresh never resend an Eco request');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'pending feedback fits a phone');
 
+    stage = 'separate thermostats';
     await send('Bedroom', false);
     reported.T1 = false;
     await page.clock.runFor(2100);
@@ -78,11 +80,13 @@ export async function checkEcoFeedback(browser, base) {
     await page.clock.runFor(2100);
     await toggle('Bedroom', true).waitFor();
 
+    stage = 'rejected request';
     reject = true;
     await send('Dining room', true);
     await dining.getByText(/Fixture command rejected/).waitFor();
     assert.equal(await toggle('Dining room', true).isEnabled(), true);
     assert.equal(await toggle('Dining room', true).getAttribute('aria-pressed'), 'false');
+    stage = 'timeout';
     reject = false;
     await send('Dining room', true);
     const sentBeforeTimeout = writes.length;
@@ -91,11 +95,13 @@ export async function checkEcoFeedback(browser, base) {
     assert.equal(await toggle('Dining room', true).getAttribute('aria-pressed'), 'false');
     assert.equal(writes.length, sentBeforeTimeout, 'timeout does not retry or undo a cloud command');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'timeout feedback fits a phone');
+    stage = 'late confirmation';
     reported.T1 = true;
     await refresh();
     assert.equal(await toggle('Dining room', false).isEnabled(), true, 'late feedback is still displayed');
     assert.equal(await dining.locator('.eco-feedback').count(), 0);
 
+    stage = 'disconnection';
     await send('Dining room', false);
     disconnected = true;
     await page.clock.runFor(2100);
@@ -109,6 +115,7 @@ export async function checkEcoFeedback(browser, base) {
     await page.getByRole('button', { name: 'Dismiss Eco update notice for Dining room' }).click();
     assert.equal(await dining.locator('.eco-feedback').count(), 0);
 
+    stage = 'lost HTTP response';
     networkFailure = true;
     await toggle('Dining room', false).click();
     await dining.getByText(/Connection interrupted/).waitFor();
@@ -118,6 +125,7 @@ export async function checkEcoFeedback(browser, base) {
     await toggle('Dining room', true).waitFor();
     assert.equal(await dining.locator('.eco-feedback').count(), 0, 'a lost HTTP response can still be confirmed by Nest state');
 
+    stage = 'logout';
     let release;
     commandHold = new Promise((resolve) => { release = resolve; });
     await toggle('Dining room', true).click();
@@ -133,5 +141,7 @@ export async function checkEcoFeedback(browser, base) {
     assert.equal(await page.locator('#app').isHidden(), true, 'late command acceptance cannot reopen the dashboard');
     assert.deepEqual(errors, []);
     console.log('PASS Eco feedback: optimistic display, stale reads, separate thermostats, delayed confirmation, rejection, timeout, late success, connection loss, mobile layout and logout');
+  } catch (error) {
+    throw new Error('Eco check ' + stage + ': ' + error.message.replace(/\s+/g, ' ').slice(0, 500), { cause: error });
   } finally { await page.close(); }
 }

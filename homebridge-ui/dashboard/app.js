@@ -348,7 +348,7 @@ setInterval(refreshPendingEco, 2000);
 async function sendEcoCommand(device, value) {
   if (!usable(device) || ecoCommands.get(device.serial)?.phase === 'pending') return;
   const requested = 'Eco ' + (value ? 'on' : 'off');
-  const command = { value, phase: 'pending', afterRead: null, deadline: Date.now() + ecoWaitMilliseconds,
+  const command = { value, phase: 'pending', afterRead: null,
     message: requested + ' requested. Waiting for Nest to confirm (up to 30 seconds).', timer: null };
   const current = () => ecoCommands.get(device.serial) === command;
   command.timer = setTimeout(() => {
