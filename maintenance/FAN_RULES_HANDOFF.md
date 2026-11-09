@@ -18,10 +18,27 @@ Separate fan run conditions from speed choices, support several prioritized rule
 
 ## Validation at checkpoint
 
-93 focused model, engine, HAP-source and configuration/web tests passed locally. Fan controller coverage: 97.73% lines, 98.05% branches, 100% functions; existing floors retained. Build passed. GitHub full compatibility and browser validation still pending at this checkpoint.
+93 focused model, engine, HAP-source and configuration/web tests passed locally. Fan controller coverage: 97.73% lines, 98.05% branches, 100% functions; existing floors retained. Build passed. All six Node/Homebridge compatibility configurations passed lint, full tests, coverage, build and migration checks on code commit 7618c40bf196f4c40a2f4ecf567f3a20877bfe7e in Test run 42564910059. Embedded, standalone, reverse-proxy, heating-response and fan-speed browser suites passed. Browser checks include modal focus trapping, Escape/cancel, failed-discard recovery, mobile layout, all trigger/speed choices, legacy rule normalization and overlapping-priority validation.
 
 ## Next steps
 
-Push only the intended source, test, dashboard and public-documentation files from this change. Run all six compatibility configurations and browser suites, fix failures, and record the verified commit/run here. Package version remains beta.11; no new GitHub or npm release requested for this change yet. Physical fan behavior and installed dashboard confirmation remain unverified. No live installation was changed and no npm publication was performed.
+Package version remains beta.11; no new GitHub or npm release requested for this change yet. Physical fan behavior and installed dashboard confirmation remain unverified. No live installation was changed and no npm publication was performed.
 
 Local checkout contains earlier synthetic-baseline changes; do not commit unrelated dirty or untracked files. Use the current GitHub main tree and an expected-head check when pushing.
+
+## Copyable handoff
+
+```text
+Objective: independent fan triggers/speed choices, prioritized shared fans, and in-page confirmations.
+Repository: pponce/homebridge-nest-climate-cntrl; branch main.
+Implementation commit: 7618c40bf196f4c40a2f4ecf567f3a20877bfe7e.
+Completed: last/fixed/curve speed for every trigger; per-fan priority and manual overrides; compatible legacy migration; styled discard/delete/sign-out confirmations.
+Decision: highest priority wins; missing higher-priority readings block fallback; fan handoffs preserve baseline and cooldown.
+Local validation: 93 focused tests, coverage floors and build passed.
+GitHub validation: all six compatibility configurations and all browser suites passed; Test run 42564910059.
+Pending: next GitHub beta release if requested, maintainer-run npm publication, installed fan/UI confirmation.
+No live installation or npm release was changed. Heating-control behavior was not changed.
+Next: prepare the next beta only on request, run the release checks, then provide a checksum-pinned npm publication block.
+```
+
+Production tarball content checks completed locally, but the local install check could not fetch npm dependencies (registry returned HTTP 403). A future release must run its production-package install check in GitHub before publication.
