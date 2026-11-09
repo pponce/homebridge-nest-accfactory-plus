@@ -17,6 +17,7 @@ Use temperatures from the rooms that matter, coordinate Homebridge room fans, an
 | **Visual setup and admin dashboard** | Configure accounts and accessories in Homebridge. Open a separate web dashboard with sign-in, thermostat status, sensor search, settings and guided rule editors. |
 | **Temperature groups with Nest and other sensors** | Use one sensor or average associated Nest sensors, other Homebridge temperature sensors, or both. Enable bounded Nest target adjustments to follow the group's desired temperature in **Heat mode**. |
 | **Homebridge ceiling and room fans** | Run compatible fans above a room-temperature threshold or during Nest heating/cooling activity. Use a turn-off gap to prevent chatter; manual fan changes pause the rule. |
+| **Heating response & tuning** | Choose the heating type, observe local heating cycles, and review evidence and confidence for each rule’s interval and adjustment recommendations. Apply each suggestion explicitly in Settings. |
 | **Home/Away from multiple signals** | Combine Nest Home/Away, motion and occupancy using any/all logic, motion holds and an Away delay. Publish a separate read-only Apple Home occupancy sensor, with timed dashboard overrides. |
 | **Live Nest controls** | Use supported Eco controls, select a native Nest temperature source, and run the thermostat's HVAC blower with timed actions. |
 | **Schedules and runtime** | Inspect reported weekly setpoints, the next planned change and observed heating/cooling totals with a weekly chart. |
@@ -36,6 +37,8 @@ A temperature group represents the rooms whose readings you want to consider tog
 Choose **One selected sensor** to focus on a single room, or **Equal average of selected sensors** for a group. An enabled group adjusts Nest's heating target using the difference between the built-in thermostat temperature and the group's reading. The default adjustment limit is **±1.5 °C** around the desired room target, with at least **5 minutes** between adjustments.
 
 Heating control requires **Heat mode**, **Eco off**, and the **built-in Nest sensor** as the actual control source. Native sensor selection, manual target/mode changes and Nest schedule boundaries take priority and pause an active hold. Change the desired room target in the dashboard; Apple Home continues to show and control Nest's physical target. Cooling/range compensation, weighted averages and scheduled groups are outside this heating pilot.
+
+For system-specific starting guidance and local observations, see [Heating response & tuning](WEB_DASHBOARD.md#heating-response--tuning). Collection leaves rule settings unchanged until you apply a recommendation.
 
 A group does not create a separate physical heating/cooling zone or turn third-party sensors into native Nest sensors. For a live native Nest option, use **Temperature controlled by** to select one associated Nest Temperature Sensor where supported. [Create your first temperature group](WEB_DASHBOARD.md#temperature-group-example).
 

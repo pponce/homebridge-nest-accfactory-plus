@@ -523,3 +523,30 @@ test('enabled-rule validation rejects conflicting owners and incomplete rules bu
   assert.throws(() => validateRuleDrafts({ temperature: [{ ...temperatureRule, desiredTemperature: 5 }] }), /9 and 32/);
   assert.throws(() => validateRuleDrafts({ fans: [{ ...fanRule, targetIds: [] }] }), /at least one/);
 });
+
+
+test('local observation reads disabled-rule sensors without commands and discards unavailable input', async (t) => {
+  const f = await fixture(t, { temperature: [{ ...temperatureRule, enabled: false }] });
+  f.devices.push({ serialNumber: 'T', heatingType: 'radiantFloor', heatingResponseEnabled: true });
+  await f.engine.tick();
+  let view = await f.engine.heatingRecommendations();
+  assert.equal(view.rules[0].collecting, true);
+  assert.equal(f.commands.length, 0);
+  assert.equal(f.engine.heatingResponse.records.get('rooms').samples.length, 1);
+  f.source('room').available = false;
+  f.advance(minute);
+  await f.engine.tick();
+  view = await f.engine.heatingRecommendations();
+  assert.match(view.rules[0].status, /fresh temperatures/);
+  assert.equal(f.commands.length, 0);
+  f.source('room').available = true;
+  f.advance(minute);
+  f.engine.heatingResponse.file = path.join(f.directory, 'missing', 'response.json');
+  await f.engine.tick();
+  await f.engine.heatingResponse.persist(true);
+  assert.match((await f.engine.heatingRecommendations()).error, /could not be saved/);
+  assert.equal(f.engine.snapshot().error, null);
+  f.devices[0].heatingResponseEnabled = false;
+  await f.engine.tick();
+  assert.equal(f.engine.heatingResponse.records.size, 0);
+});

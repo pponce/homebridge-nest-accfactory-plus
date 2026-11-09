@@ -35,6 +35,7 @@ try {
     'homebridge-ui/dashboard/icon-192.png',
     'homebridge-ui/dashboard/icon-512.png',
     'dist/climate-automation.js',
+    'dist/heating-response.js',
     'dist/climate-presence.js',
     'homebridge-ui/climate-access.js',
     'dist/web-dashboard.js',

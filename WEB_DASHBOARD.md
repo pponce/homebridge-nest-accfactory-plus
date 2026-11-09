@@ -15,7 +15,7 @@ The standalone dashboard provides a visual interface for daily use and supported
 | **Overview** | Check temperatures, targets, heating/cooling activity and account connectivity. Use supported native Nest controls and inspect schedules and observed runtime. |
 | **Sensors & fans** | Discover configured Homebridge main and child bridges. Search and filter temperature, motion, occupancy and fan sources; inspect their readings and availability. |
 | **Climate rules** | Build named temperature groups, Home/Away rules and room-fan rules with source pickers and current-signal previews. Enable selected rules and inspect their live execution status, timers and pause/resume controls. |
-| **Settings** | Change the dashboard name and supported accessory options. Save changes with account credentials and bridge identity preserved; the dashboard identifies options requiring a restart. |
+| **Settings** | Choose heating type, collect local response history, review per-rule recommendations, and change the dashboard name and supported accessory options. Save changes with account credentials and bridge identity preserved; the dashboard identifies options requiring a restart. |
 
 Use **Homebridge → Plugins → Nest Climate Cntrl → Settings** for Google/Nest account setup and web login, certificate and network settings. Its **Room sensors & fans** section also offers a read-only temperature preview. Named rules are managed in the standalone dashboard's **Climate rules** area.
 
@@ -219,3 +219,32 @@ On iPhone or iPad, open the dashboard in Safari, select **Share → Add to Home 
 
 Keep the Homebridge host reachable while using it. The dashboard does not cache account data or provide offline climate control.
 
+
+
+## Heating response & tuning
+
+Open **Settings → Thermostat settings → your thermostat → Heating response & tuning**. Choose the heating type and save. Each saved temperature rule for that thermostat has its own starting recommendation, current limits, evidence and **Apply to this rule** button.
+
+| Heating type | Starting minimum update interval | Starting maximum target adjustment |
+| --- | --- | --- |
+| Forced air | 10 minutes | ±1 °C / ±1.8 °F |
+| Radiators | 20 minutes | ±0.75 °C / ±1.35 °F |
+| In-floor radiant | 30 minutes | ±0.5 °C / ±0.9 °F |
+
+These are provisional plugin suggestions, not manufacturer specifications or measured characteristics of the home. Selecting a type does not apply them. The interval is the minimum time between changes to Nest's target, not an equipment cycling interval. The maximum adjustment bounds the Nest target above or below the rule's desired room temperature; it is not a per-command step size.
+
+Enable **Observe heating response locally** and save to collect readings in the background, even with the dashboard closed or the temperature rule disabled. Collection does not enable a rule, resume a paused rule, change Nest settings or change the rule's limits. A rule needs selected sensors, a desired temperature and a heating type before observation can begin. Sources must be available; Nest must be connected, in Heat mode with Eco off and its built-in control sensor selected.
+
+The observer keeps bounded local history of the selected-room average, built-in Nest temperature, Nest setpoint and reported heating state. It samples about once per minute and also captures heating-state/setpoint changes. Readings are retained for up to 48 hours (at most 2,880 per rule); up to 128 complete cycle summaries per rule are retained for 30 days. Data is stored in `nest-climate/web/<bridge-instance>/heating-response.json` under Homebridge's storage directory, with restricted file permissions. It is not uploaded by this feature. Writes occur at most every five minutes, except for observation resets and orderly shutdown. Turning observation off clears that thermostat's response history.
+
+A usable cycle includes an observed heating start, measurable room warming, readings near the desired room temperature, and a settled period after heating stops. Radiant warming can begin after shutoff. Missing or stale inputs, observation gaps longer than two minutes, restarts, significant setpoint changes and unreasonably long cycles exclude the affected partial cycle. Continuous heating, very short cycles, changing schedules or rooms that never approach the desired temperature may take longer to produce enough evidence.
+
+Learned suggestions require **at least six usable cycles across three days**, with **at least 48 hours between the first and last cycle**. The schedule time zone determines day boundaries; UTC is used if no zone is configured. Evidence shows median response delay, warming rate, continued warming after shutoff, Nest-minus-room difference and room overshoot. Reordering the same sensors preserves the observation period. Changing selected sensors, thermostat, aggregation, desired room temperature, heating type or schedule time zone starts a new period; returning to an earlier sensor selection does not recover its discarded history.
+
+The suggested interval combines response delay, estimated time to warm another 0.25 °C, and observed time to the post-heating peak. Learned intervals stay between half the starting interval and the supported 60-minute maximum. The adjustment suggestion starts with the magnitude of the persistent Nest-to-room difference plus a 0.25 °C margin, subtracts observed room overshoot, and is bounded from 0.5 °C to the smaller of 1.5 °C or the starting limit plus 0.5 °C. It is rounded to quarter-degree increments. The existing Nest target-grid rounding remains in effect.
+
+**Moderate confidence** means the minimum cycle/day requirements are met and room-to-Nest differences are sufficiently consistent. **Higher confidence** requires at least 12 cycles across five days, spanning at least 96 hours, with less variation in those differences. These labels describe the available observational evidence, not statistical certainty or guaranteed comfort. Weather, sunlight, occupancy, sensor placement and Nest's own control behavior can affect the results. Inconsistent differences withhold the learned suggestion. A response longer than the supported interval is called out explicitly.
+
+Save or discard any pending edits before applying a recommendation. **Apply to this rule** saves only that rule's minimum update interval and maximum adjustment. Its desired temperature, sensors, enabled/paused state and all other rules are preserved. An enabled rule uses the new limits on its next normal execution check. No bridge restart is required. Recommendations cannot be applied if their evidence or saved configuration has changed since they were displayed; refresh and review again.
+
+For background on radiant response and stored heat, see [Google's True Radiant explanation](https://support.google.com/googlehome/answer/9250165) and [Watts' radiant heating FAQ](https://www.watts.com/support/faq-radiant). The numeric suggestions above are this plugin's own heuristics.

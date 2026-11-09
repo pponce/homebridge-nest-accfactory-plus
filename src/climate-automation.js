@@ -2,6 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { ClimateAccess } from '../homebridge-ui/climate-access.js';
+import { HeatingResponse } from './heating-response.js';
+import { DashboardConfigError } from './web-dashboard-config.js';
 import { sensorSources } from '../homebridge-ui/public/sensor-preview.js';
 
 const MINUTE = 60000;
@@ -120,6 +122,7 @@ export class ClimateAutomation {
     this.external = { sources: [], bridges: [] };
     this.rules = [];
     this.stopping = false;
+    this.heatingResponse = new HeatingResponse({ directory, now });
   }
 
   async start({ schedule = true } = {}) {
@@ -173,6 +176,7 @@ export class ClimateAutomation {
         this.error = 'Saved automation state could not be read. Review equipment and Resume each rule.';
       }
     }
+    await this.heatingResponse.start();
     this.dashboard.automation = this;
     await this.tick();
     if (schedule && !this.stopping) {
@@ -304,7 +308,9 @@ export class ClimateAutomation {
       }
     }
     if (
-      this.rules.some((rule) => rule.enabled && [...rule.sourceIds, ...rule.targetIds].some((id) => !id.startsWith('nest:'))) ||
+      this.rules.some((rule) => (rule.enabled || (rule.kind === 'temperature' &&
+        this.deviceOptions.some((device) => device.serialNumber.toUpperCase() === rule.thermostatId?.toUpperCase() &&
+          device.heatingResponseEnabled))) && [...rule.sourceIds, ...rule.targetIds].some((id) => !id.startsWith('nest:'))) ||
       [...this.leases.values()].some((lease) => lease.kind === 'fan')
     ) {
       try {
@@ -314,6 +320,7 @@ export class ClimateAutomation {
       }
     }
     this.refreshSnapshot();
+    await this.observeHeating();
     this.presence?.sync(this.rules.filter((rule) => rule.kind === 'presence' && rule.enabled));
     // Persist configuration intent before permitting any side effects.
     await this.persist();
@@ -368,6 +375,61 @@ export class ClimateAutomation {
       }
     }
     await this.persist();
+  }
+
+  async observeHeating() {
+    const rules = this.rules.filter((rule) => rule.kind === 'temperature');
+    const readings = new Map(rules.map((rule) => {
+      const device = this.device(rule.thermostatId);
+      const data = device?.data ?? {};
+      const room = this.temperatureInputs(rule);
+      return [rule.id, {
+        valid: this.connected(device) && room !== null && data.hvac_mode === 'heat' && data.eco_mode === false &&
+          data.active_rcs_sensor === '' && ['heating', 'off'].includes(data.hvac_state) && data.can_heat !== false,
+        room, physical: data.physical_temperature, target: target(device), heating: data.hvac_state === 'heating',
+      }];
+    }));
+    try {
+      this.heatingResponse.observe(rules, this.deviceOptions, readings);
+      await this.heatingResponse.persist();
+    } catch {
+      this.heatingResponse.error = 'Heating observations are temporarily unavailable. Check the saved heating settings.';
+    }
+  }
+
+  heatingRecommendations() {
+    return this.serialize(async () => {
+      const envelope = await this.config.snapshot();
+      if (envelope.rulesError) {
+        throw new DashboardConfigError(envelope.rulesError);
+      }
+      return { revision: envelope.revision, ...this.heatingResponse.snapshot(envelope.config.rules.temperature, envelope.config.devices) };
+    });
+  }
+
+  applyHeatingRecommendation(payload) {
+    return this.serialize(async () => {
+      if (this.stopping || !payload || Object.keys(payload).some((key) => !['id', 'stage', 'recommendationId', 'revision'].includes(key)) ||
+        !['starting', 'learned'].includes(payload.stage)) {
+        throw new DashboardConfigError('Choose a current heating recommendation.');
+      }
+      const envelope = await this.config.snapshot();
+      if (envelope.rulesError || envelope.revision !== payload.revision) {
+        throw new DashboardConfigError('Settings changed. Reload the recommendations before applying.', 409);
+      }
+      const recommendation = this.heatingResponse.snapshot(envelope.config.rules.temperature, envelope.config.devices)
+        .rules.find((rule) => rule.id === payload.id)?.[payload.stage];
+      if (!recommendation || recommendation.id !== payload.recommendationId ||
+        (payload.stage === 'learned' && this.heatingResponse.error)) {
+        throw new DashboardConfigError('This recommendation is no longer available. Refresh and review the latest evidence.', 409);
+      }
+      const rules = structuredClone(envelope.config.rules);
+      const rule = rules.temperature.find((entry) => entry.id === payload.id);
+      rule.minimumIntervalMinutes = recommendation.minimumIntervalMinutes;
+      rule.maximumOffset = recommendation.maximumOffset;
+      // Saving only these two fields preserves rule enablement, sensors, target and all other rules.
+      return this.config.save({ revision: envelope.revision, config: { rules } });
+    });
   }
 
   refreshSnapshot() {
@@ -822,5 +884,6 @@ export class ClimateAutomation {
     }
     this.access?.close();
     await this.saving;
+    await this.heatingResponse.persist(true);
   }
 }

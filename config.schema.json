@@ -223,6 +223,19 @@
               "type": "boolean",
               "default": false
             },
+            "heatingType": {
+              "type": "string",
+              "title": "Heating type",
+              "enum": ["unknown", "forcedAir", "radiators", "radiantFloor"],
+              "default": "unknown",
+              "description": "For Heating response & tuning in the web dashboard. Selecting a type does not change rule settings."
+            },
+            "heatingResponseEnabled": {
+              "type": "boolean",
+              "title": "Observe heating response locally",
+              "default": false,
+              "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat’s response history."
+            },
             "scheduleTimeZone": {
               "type": "string"
             },

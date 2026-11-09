@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { HEATING_PROFILES } from './heating-response.js';
 import { parseDurationToSeconds } from './utils.js';
 
 const DEVICE_FIELDS = [
@@ -12,8 +13,10 @@ const DEVICE_FIELDS = [
   'fanDuration',
   'sensorPreview',
   'scheduleTimeZone',
+  'heatingType',
+  'heatingResponseEnabled',
 ];
-const bools = ['eveHistory', 'humiditySensor', 'ecoSwitch', 'fanPresetSwitches'];
+const bools = ['eveHistory', 'humiditySensor', 'ecoSwitch', 'fanPresetSwitches', 'heatingResponseEnabled'];
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const revision = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 export class DashboardConfigError extends Error {
@@ -64,6 +67,8 @@ function runtimeSignature(block) {
   for (const device of Array.isArray(runtime.devices) ? runtime.devices : Object.values(runtime.devices ?? {})) {
     if (object(device)) {
       delete device.scheduleTimeZone;
+      delete device.heatingType;
+      delete device.heatingResponseEnabled;
     }
   }
   runtime.name ??= 'Nest Climate Cntrl';
@@ -207,7 +212,7 @@ export class WebDashboardConfig {
     const block = state.block;
     const devices = deviceRows(block.devices).map((entry) => {
       const safe = { serialNumber: entry.serialNumber };
-      for (const key of ['name', 'fanDuration', 'scheduleTimeZone']) {
+      for (const key of ['name', 'fanDuration', 'scheduleTimeZone', 'heatingType']) {
         if (typeof entry[key] === 'string') {
           safe[key] = entry[key];
         }
@@ -340,6 +345,9 @@ export class WebDashboardConfig {
               text(value, 64) && Number.isFinite(seconds) && seconds >= 900 && seconds <= 604800,
               'Choose an HVAC fan duration from 15 minutes to 7 days.',
             );
+          }
+          if (key === 'heatingType') {
+            assert(value === 'unknown' || Object.hasOwn(HEATING_PROFILES, value), 'Choose a supported heating type.');
           }
           if (key === 'scheduleTimeZone') {
             assert(text(value, 100), 'Choose a valid IANA time zone.');

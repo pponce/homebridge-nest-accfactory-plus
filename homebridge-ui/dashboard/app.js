@@ -32,7 +32,7 @@ function icon(name) {
 }
 document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(icon(node.dataset.icon)));
 const state = {
-  session: null, envelope: null, config: null, dirty: false, saving: false, live: false,
+  session: null, envelope: null, config: null, dirty: false, saving: false, live: false, heating: null,
   status: { accounts: [], devices: [] }, external: { sources: [], bridges: [] },
   page: 'overview', sourceFilter: 'all', ruleKind: 'temperature', ruleId: null, discovering: false,
 };
@@ -121,6 +121,7 @@ function sources() {
 function markDirty() {
   state.dirty = true; $('save-bar').hidden = false; $('save-title').textContent = 'You have unsaved changes';
   $('save-detail').textContent = 'Saving applies enabled rules. Disabled rules remain drafts.'; $('save').disabled = state.saving;
+  renderHeatingRecommendations();
 }
 async function api(route, { method = 'GET', body, anonymous = false } = {}) {
   const headers = { Accept: 'application/json' };
@@ -175,6 +176,7 @@ async function signOut() {
   if (state.dirty && !window.confirm('Discard unsaved changes and sign out?')) return;
   try { await api('/logout', { method: 'POST', body: {} }); } catch (error) { if (error.status !== 401) { notice(error.message, 'danger'); return; } }
   state.session = null; state.config = null; state.envelope = null; state.dirty = false; state.live = false;
+  state.heating = null;
   state.status = { accounts: [], devices: [] }; state.external = { sources: [], bridges: [] };
   $('save-bar').hidden = true; showLogin(); $('username').focus();
 }
@@ -187,6 +189,7 @@ function route(focus = true) {
   });
   [$('page-eyebrow').textContent, $('page-title').textContent] = pageDetails[state.page];
   if (state.page === 'rules') renderRules();
+  if (state.page === 'settings' && state.config) refreshHeating();
   if (focus) { $('page-title').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'auto' }); }
 }
 window.addEventListener('hashchange', () => route());
@@ -204,6 +207,7 @@ async function refreshStatus() {
           catch (error) { if (state.session === session) { state.live = false; notice(error.message || 'Live status unavailable.', 'warning'); } }
         })(),
         discoverSources(false),
+        state.page === 'settings' ? refreshHeating() : Promise.resolve(),
       ]);
     }
     finally { $('refresh-status').disabled = false; refreshPromise = null; renderLive(); }
@@ -365,6 +369,88 @@ function toggle(host, title, description, value, change) {
   const input = el('input'); input.type = 'checkbox'; input.setAttribute('role', 'switch'); input.checked = value === true;
   input.addEventListener('change', () => { change(input.checked); markDirty(); renderRulePreview(); }); label.append(text, input); host.append(label);
 }
+let heatingRequest;
+async function refreshHeating() {
+  if (!state.session?.authenticated || !state.config) return;
+  if (heatingRequest) return heatingRequest;
+  const session = state.session;
+  heatingRequest = (async () => {
+    try { const data = await api('/heating-response'); if (state.session === session) state.heating = data; }
+    catch (error) { if (state.session === session) state.heating = { error: error.message, rules: [] }; }
+    finally { heatingRequest = null; if (state.session === session) renderHeatingRecommendations(); }
+  })();
+  return heatingRequest;
+}
+function formatDifference(value) {
+  return Number.isFinite(value) ? displayTemperature(value, temperatureUnit(), true).toFixed(2).replace(/0$/, '') + '°' + temperatureUnit() : '—';
+}
+function renderHeatingSettings(group, device, options) {
+  const section = el('section', undefined, 'heating-settings');
+  section.append(el('h4', 'Heating response & tuning'), el('p', 'Choose your heating system, then review guidance for each temperature rule. Suggestions only change a rule when you apply them.', 'small-note'));
+  inputField(section, 'Heating type', options.heatingType || 'unknown', (value) => { deviceOptions(device.serial, true).heatingType = value; },
+    { choices: [['unknown', 'Choose heating type'], ['forcedAir', 'Forced air'], ['radiators', 'Radiators'], ['radiantFloor', 'In-floor radiant']] });
+  toggle(section, 'Observe heating response locally', 'Collects while this dashboard is closed, including disabled rules. Keeps readings for up to 48 hours and cycle summaries for 30 days. Turning this off clears this thermostat’s response history.', options.heatingResponseEnabled,
+    (value) => { deviceOptions(device.serial, true).heatingResponseEnabled = value; });
+  section.append(el('p', 'Save these settings to start observation. Changing the selected sensors, desired room temperature or heating type starts a new observation period. Collection never changes rule settings.', 'small-note'));
+  const recommendations = el('div', undefined, 'heating-recommendations'); recommendations.dataset.thermostat = device.serial;
+  section.append(recommendations); group.append(section);
+}
+function renderHeatingRecommendations() {
+  for (const host of document.querySelectorAll('.heating-recommendations')) {
+    const entries = (state.heating?.rules || []).filter((rule) => rule.thermostatId === host.dataset.thermostat);
+    const signature = JSON.stringify([entries, state.heating?.error, state.dirty, state.saving, temperatureUnit(), state.heating?.revision === state.envelope?.revision]);
+    if (host.dataset.rendered === signature) continue;
+    host.dataset.rendered = signature; host.replaceChildren();
+    if (state.dirty) host.append(el('p', 'Save or discard your edits to review and apply recommendations for the saved setup.', 'callout'));
+    if (state.heating?.error) host.append(el('p', state.heating.error, 'callout warning'));
+    if (!entries.length) host.append(el('p', state.heating ? 'Create and save a temperature rule for this thermostat to see its recommendations.' : 'Loading heating guidance…', 'small-note'));
+    for (const entry of entries) {
+      const card = el('article', undefined, 'heating-rule'); card.setAttribute('aria-label', entry.name + ' heating recommendations');
+      card.append(el('h5', entry.name), el('p', 'Current rule: at least ' + entry.current.minimumIntervalMinutes + ' minutes between target changes · maximum adjustment ±' + formatDifference(entry.current.maximumOffset), 'small-note'));
+      card.append(el('p', entry.reason, 'small-note'));
+      const evidence = entry.evidence;
+      card.append(el('p', evidence.cycles + ' usable cycles across ' + evidence.days + ' days · ' + entry.status, 'small-note'));
+      if (evidence.cycles) {
+        const table = el('dl', undefined, 'heating-evidence');
+        for (const [label, value] of [
+          ['Response delay', Math.round(evidence.responseDelayMinutes) + ' min'],
+          ['Warming rate', formatDifference(evidence.warmingRateCPerHour) + '/hour'],
+          ['Warming after shutoff', formatDifference(evidence.coastRiseC) + ' over ' + Math.round(evidence.coastMinutes) + ' min'],
+          ['Nest minus room average', formatDifference(evidence.nestMinusRoomC)],
+          ['Room overshoot', formatDifference(evidence.overshootC)],
+        ]) { table.append(el('dt', label), el('dd', value)); }
+        card.append(table);
+      }
+      for (const [stage, title] of [['starting', 'Starting recommendation'], ['learned', 'Learned recommendation']]) {
+        const suggestion = entry[stage]; if (!suggestion) continue;
+        const block = el('section', undefined, 'heating-suggestion'); block.setAttribute('aria-label', title);
+        block.append(el('strong', title), pill(suggestion.confidence + ' confidence', stage === 'learned' ? 'good' : 'neutral'),
+          el('p', 'Update interval: ' + suggestion.minimumIntervalMinutes + ' min · maximum adjustment: ±' + formatDifference(suggestion.maximumOffset)),
+          el('p', suggestion.reason.replace('0.25°C', formatDifference(0.25)), 'small-note'));
+        if (suggestion.limitReached) block.append(el('p', 'Observed response exceeds the supported 60-minute interval. This suggestion is capped; review comfort before applying.', 'callout warning'));
+        const apply = button('Apply to this rule', () => applyHeatingRecommendation(entry, stage));
+        apply.disabled = state.dirty || state.saving || state.heating.revision !== state.envelope.revision || Boolean(stage === 'learned' && state.heating.error);
+        block.append(apply); card.append(block);
+      }
+      card.append(el('p', 'The interval limits changes to the Nest target, not how often the heating equipment cycles. Maximum adjustment bounds the target around this rule’s desired room temperature.', 'small-note'));
+      host.append(card);
+    }
+  }
+}
+async function applyHeatingRecommendation(entry, stage) {
+  if (state.dirty || state.saving) return;
+  state.saving = true; renderHeatingRecommendations();
+  try {
+    const envelope = await api('/heating-response/apply', { method: 'POST', body: {
+      id: entry.id, stage, recommendationId: entry[stage].id, revision: state.envelope.revision,
+    } });
+    state.envelope = envelope; state.config = structuredClone(envelope.config); renderAll();
+    notice('Applied to ' + entry.name + '. Only its update interval and maximum adjustment were saved. Enabled rules use these values on their next check.');
+    toast('Heating recommendation applied');
+  } catch (error) {
+    notice(error.status === 409 ? 'The saved setup or recommendation changed. Reload the dashboard and review it before applying.' : error.message, 'warning');
+  } finally { state.saving = false; await refreshHeating(); renderHeatingRecommendations(); }
+}
 function renderSettings() {
   if (!state.config) return;
   $('temperature-unit').value = temperatureUnit();
@@ -373,6 +459,8 @@ function renderSettings() {
   $('device-settings').replaceChildren();
   for (const device of thermostats()) {
     const options = deviceOptions(device.serial); const group = el('div', undefined, 'device-setting'); group.append(el('h3', device.data.description || 'Thermostat'));
+    renderHeatingSettings(group, device, options);
+    group.append(el('h4', 'Apple Home features · restart to apply'));
     toggle(group, 'Eco switch', 'A dedicated Eco control in Apple Home.', options.ecoSwitch ?? device.data.ecoSwitch, (value) => { deviceOptions(device.serial, true).ecoSwitch = value; });
     toggle(group, 'Separate humidity sensor', 'Show humidity as its own Apple Home sensor.', options.humiditySensor ?? device.data.humiditySensor, (value) => { deviceOptions(device.serial, true).humiditySensor = value; });
     inputField(group, 'Nest schedule time zone', options.scheduleTimeZone || '', (value) => { deviceOptions(device.serial, true).scheduleTimeZone = value || null; }, { description: 'Use the thermostat’s IANA time zone, for example America/Los_Angeles. Required for automatic heating when Nest reports a schedule.' });
@@ -386,6 +474,7 @@ function renderSettings() {
   }
   if (!thermostats().length) $('device-settings').append(el('p', 'Device options appear when your thermostats connect.', 'small-note'));
   renderAccounts();
+  refreshHeating();
 }
 $('temperature-unit').addEventListener('change', () => { if (state.config) { state.config.temperatureUnit = $('temperature-unit').value; markDirty(); renderAll(); } });
 $('dashboard-name').addEventListener('input', () => { if (state.config) { state.config.name = $('dashboard-name').value; markDirty(); } });
@@ -493,6 +582,7 @@ function renderRuleEditor() {
     const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Use the thermostat, native Nest sensors, other Homebridge sensors, or a mix. Automatic control supports Heat mode, Eco off and Nest’s built-in control sensor.');
     inputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
     const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from the target sent to Nest. Manual changes and Nest schedule boundaries pause the rule. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
+    const tuningLink = el('a', 'Review heating response & tuning in Settings', 'small-note'); tuningLink.href = '#settings'; limits.append(tuningLink);
     temperatureField(limits, 'Maximum target adjustment', rule.maximumOffset ?? 1.5, (value) => { rule.maximumOffset = value; }, { min: 0, max: 3, difference: true });
     inputField(limits, 'Minimum update interval (minutes)', rule.minimumIntervalMinutes ?? 5, (value) => { rule.minimumIntervalMinutes = value; }, { type: 'number', min: 1, max: 60, step: 1 });
   } else if (rule.kind === 'presence') {

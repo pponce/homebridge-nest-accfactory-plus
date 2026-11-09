@@ -914,3 +914,29 @@ test('HTTPS reverse proxy carries secure sessions, actions, configuration and lo
   assert.equal((await request('/api/status', { headers })).status, 401);
   assert.equal((await request('/api/rules/command', { method: 'POST', headers, body: { id: 'rooms', action: 'resume' } })).status, 401);
 });
+
+
+test('heating recommendations use authenticated reads and CSRF-protected explicit Apply', async (t) => {
+  const state = await fixture(t);
+  const server = new WebDashboard({ ...state, platformConfig: state.block });
+  t.after(() => server.stop());
+  await server.setupAccount({ username: 'admin', password: 'eight888' });
+  assert.equal((await call(server, '/api/heating-response')).status, 401);
+  const login = await call(server, '/api/login', { method: 'POST', body: { username: 'admin', password: 'eight888' } });
+  const cookie = login.headers['set-cookie'].split(';')[0];
+  const csrf = login.data.csrfToken;
+  assert.equal((await call(server, '/api/heating-response', { cookie })).status, 503);
+  let reads = 0;
+  let applies = 0;
+  state.dashboard.automation = {
+    heatingRecommendations: async () => { reads++; return { rules: [] }; },
+    applyHeatingRecommendation: async (payload) => { applies++; return { applied: payload.id }; },
+  };
+  assert.deepEqual((await call(server, '/api/heating-response', { cookie })).data.rules, []);
+  assert.equal(reads, 1);
+  assert.equal(applies, 0);
+  const mutation = { method: 'POST', cookie, body: { id: 'rooms' } };
+  assert.equal((await call(server, '/api/heating-response/apply', mutation)).status, 403);
+  assert.equal((await call(server, '/api/heating-response/apply', { ...mutation, csrf })).data.applied, 'rooms');
+  assert.equal(applies, 1);
+});

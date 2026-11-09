@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 
 let detail = 'Embedded, standalone and reverse-proxy browser checks passed';
-for (const file of ['maintenance/checks/dashboard-browser.mjs', 'maintenance/checks/dashboard-web-browser.mjs', 'maintenance/checks/dashboard-proxy-browser.mjs']) {
+for (const file of ['maintenance/checks/dashboard-browser.mjs', 'maintenance/checks/dashboard-web-browser.mjs', 'maintenance/checks/dashboard-proxy-browser.mjs', 'maintenance/checks/heating-response-browser.mjs']) {
   const result = spawnSync(process.execPath, [file], { encoding: 'utf8', env: process.env, maxBuffer: 20 * 1024 * 1024 });
   const output = (result.stdout || '') + (result.stderr || '');
   process.stdout.write(output);

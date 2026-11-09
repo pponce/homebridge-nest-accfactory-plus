@@ -473,3 +473,13 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .login-intro .brand, .login-copy h1 { color: #e3d4ed; }
   .login-copy p, .login-copy .eyebrow, .login-footer { color: #b5a0c5; }
 }
+
+.heating-settings { margin: 1.25rem 0 2rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 14px; }
+.heating-settings h4 { margin-top: 0; }
+.heating-rule { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+.heating-rule h5 { font-size: 1rem; margin: 0 0 .5rem; }
+.heating-suggestion { margin: 1rem 0; padding: 1rem; border: 1px solid var(--line); border-radius: 12px; }
+.heating-suggestion > .status-pill { margin-left: .75rem; }
+.heating-evidence { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem 1rem; font-size: .88rem; }
+.heating-evidence dd { margin: 0; font-weight: 600; }
+@media (max-width: 560px) { .heating-settings { padding: .8rem; } .heating-suggestion > .status-pill { display: table; margin: .5rem 0; } }

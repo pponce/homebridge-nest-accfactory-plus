@@ -459,6 +459,18 @@ export class WebDashboard {
         this.send(response, 200, { ...saved, web: this.status() });
         return;
       }
+      if ((request.method === 'GET' && route === '/api/heating-response') ||
+        (request.method === 'POST' && route === '/api/heating-response/apply')) {
+        const automation = this.dashboard.automation;
+        if (!automation || automation.stopping) {
+          throw new DashboardConfigError('Heating recommendations are unavailable. Check the Nest bridge.', 503);
+        }
+        const result = request.method === 'GET'
+          ? await automation.heatingRecommendations()
+          : { ...(await automation.applyHeatingRecommendation(await this.body(request))), web: this.status() };
+        this.send(response, 200, result);
+        return;
+      }
       if (request.method === 'POST' && route === '/api/rules/command') {
         if (!this.dashboard.automation) {
           throw new DashboardConfigError('Restart the Nest bridge to start climate automation.', 503);
