@@ -26,7 +26,7 @@ const fan = { id: 'fan', name: 'Living room fan', kind: 'fan', available: true, 
   running: false, speed: 100, canSetSpeed: true, speedAvailable: true,
   speedCapabilities: speedCapabilities({ perms: ['pr', 'pw'], minStep: 25 }) };
 const commands = [];
-const access = { start: async () => {}, close() {}, refresh: async () => ({ bridges: [], sources: [
+const access = { client: { startDiscovery() {} }, start: async () => {}, close() {}, refresh: async () => ({ bridges: [], sources: [
   { id: 'room', name: 'Living room temperature', kind: 'temperature', available: true, temperature, lastReadAt: Date.now() },
   { ...fan, lastReadAt: Date.now() },
   { id: 'fixed-fan', name: 'Fixed speed fan', kind: 'fan', available: true, canControl: true, running: false, lastReadAt: Date.now() },
@@ -39,7 +39,7 @@ const server = new WebDashboard({ storage, configPath, platformConfig: block, da
 let browser;
 try {
   await server.setupAccount({ username: 'admin', password: 'fixture-password' });
-  server.options.port = 0; await server.start(); server.options.port = server.server.address().port;
+  server.discoveryDelay = 0; server.options.port = 0; await server.start(); server.options.port = server.server.address().port;
   engine = new ClimateAutomation({ directory: server.directory, dashboard, config: server.config, accessFactory: () => access });
   await engine.start({ schedule: false });
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium', headless: true, args: ['--no-sandbox'] });
@@ -49,6 +49,7 @@ try {
   await page.getByLabel('Username').fill('admin'); await page.getByLabel('Password', { exact: true }).fill('fixture-password');
   await page.getByRole('button', { name: /Sign in/ }).click();
   await page.getByRole('tab', { name: /Room fans/ }).click();
+  await page.locator('.pick-source').filter({ hasText: 'Living room fan' }).getByText('Speed control', { exact: false }).waitFor();
   await page.getByLabel('Run condition').selectOption('temperature-speed');
   assert.equal(Number(await page.getByLabel('Comfort target (°F)', { exact: true }).inputValue()), 72);
   assert.equal(Number(await page.getByLabel('Start above target by (°F)', { exact: true }).inputValue()), 2);

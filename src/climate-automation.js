@@ -364,7 +364,7 @@ export class ClimateAutomation {
       } catch (error) {
         if (error.code === 'CLIMATE_CONFLICT') {
           for (const [key, lease] of this.leases) {
-            if (lease.owner === state.rule.id) {
+            if (lease.owner === state.rule.id && (!error.fanTargetId || lease.targetId === error.fanTargetId)) {
               this.leases.delete(key);
             }
           }

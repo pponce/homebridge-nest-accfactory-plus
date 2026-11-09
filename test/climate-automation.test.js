@@ -863,3 +863,30 @@ test('an owned previously running fan stops when no restoration speed fits a red
   await f.engine.tick();
   assert.equal(f.engine.leases.size, 0);
 });
+
+test('a speed conflict on one fan retains restoration ownership for other fans in the rule', async (t) => {
+  const f = await fixture(t, {});
+  f.external.push({ ...f.source('fan'), id: 'fan-2' });
+  const original = f.access.setFanSpeed;
+  f.access.setFanSpeed = async (...args) => {
+    if (args[0] === 'fan-2') {
+      const error = new Error('Manual change before write');
+      error.code = 'CLIMATE_CONFLICT';
+      throw error;
+    }
+    await original(...args);
+    f.source('fan').running = true;
+  };
+  f.rules({ fans: [{ ...speedRule, targetIds: ['fan', 'fan-2'] }] });
+  fahrenheitRoom(f, 74);
+  await f.engine.tick();
+  assert.equal(f.rule('fans').paused, true);
+  assert.equal(f.engine.leases.size, 1);
+  assert.equal(f.source('fan').running, true);
+  await f.engine.tick();
+  assert.equal(f.source('fan').running, false);
+  await f.engine.tick();
+  assert.equal(f.engine.leases.size, 0);
+  assert.equal(f.source('fan-2').running, false);
+  assert.equal(f.source('fan-2').speed, 100);
+});

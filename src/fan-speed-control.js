@@ -56,10 +56,18 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
     maximum: lease.maximum,
     guard: () => restoring || (!engine.stopping && !state.paused),
   };
-  if (speedStep) {
-    await engine.access.setFanSpeed(lease.targetId, desired.speed, lease.before, options);
-  } else {
-    await engine.access.setFan(lease.targetId, desired.running, lease.before, options);
+  try {
+    if (speedStep) {
+      await engine.access.setFanSpeed(lease.targetId, desired.speed, lease.before, options);
+    } else {
+      await engine.access.setFan(lease.targetId, desired.running, lease.before, options);
+    }
+  } catch (error) {
+    // Keep ownership of other fans so a partial group command can still restore them.
+    if (error.code === 'CLIMATE_CONFLICT') {
+      error.fanTargetId = lease.targetId;
+    }
+    throw error;
   }
   if (state) {
     state.phase = 'waiting';
@@ -140,7 +148,7 @@ export async function runFanSpeed(engine, state) {
     state.fanSpeeds.push({
       id,
       name: source?.name || 'Room fan',
-      currentSpeed: source?.running ? source.speed : 0,
+      currentSpeed: ready(source, engine.now()) ? (source.running ? source.speed : 0) : null,
       proposedSpeed: curve.demand ? speed : 0,
       maximumSpeed: rule.maximumSpeed,
     });
