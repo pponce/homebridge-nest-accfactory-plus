@@ -1673,7 +1673,9 @@ test('web editor rejects changed controllers, waits and disk failures without fa
   await f.engine.tick();
   const fresh = f.dashboard.temperatureTarget('T');
   const persist = f.engine.persist;
-  f.engine.persist = async () => { throw new Error('Fixture disk failure'); };
+  f.engine.persist = async () => {
+    throw new Error('Fixture disk failure');
+  };
   await assert.rejects(f.dashboard.setTemperatureTarget({ serial: 'T', expected: fresh.expected, values: { value: 23 } }), /disk failure/);
   f.engine.persist = persist;
   assert.equal(f.rule('rooms').desiredTemperature, 21);

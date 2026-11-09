@@ -20,6 +20,7 @@ export async function checkTemperatureEditor(browser, base, output) {
   const responseFor = (endpoint) => {
     if (endpoint === '/session') return { authenticated: true, username: 'fixture', csrfToken: 'fixture' };
     if (endpoint === '/config') return { revision: '1', config: { temperatureUnit: unit, options: {}, devices: [], rules: { temperature: [], fans: [], occupancy: [] } }, accounts: [], web: {} };
+    if (endpoint === '/heating-response') return { revision: '1', rules: [] };
     if (endpoint === '/sources') return { sources: [], bridges: [] };
     if (endpoint === '/status') return { generatedAt: Date.now(), accounts: [{ id: 'A', authorised: true, observing: true }],
       devices: [{ serial: 'T', id: 'T', account: 'A', type: 'Thermostat', temperatureTarget: model(), lastUpdate: Date.now(),
@@ -135,7 +136,7 @@ export async function checkTemperatureEditor(browser, base, output) {
   // The Homebridge host renders the shared overview without temperature command controls.
   const embedded = await browser.newPage();
   try {
-    await embedded.addInitScript(() => { window.climateHost = { request: (route) => fetch('/api' + route).then((r) => r.json()) }; });
+    await embedded.addInitScript(() => { window.climateHost = { connect() {}, request: (route) => fetch('/api' + route).then((r) => r.json()) }; });
     await embedded.route(base + '/api/**', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(responseFor(new URL(route.request().url()).pathname.slice(4))) }));
     await embedded.goto(base); await embedded.locator('.thermostat-card').waitFor();
     assert.equal(await embedded.locator('.target-edit-button, .target-editor').count(), 0);

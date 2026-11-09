@@ -337,7 +337,10 @@ test('web Nest temperature commands validate modes, limits, capability and stale
   const calls = [];
   const accounts = [{ id: 'A', authorised: true, observing: true }];
   const dashboard = new ClimateDashboard('/unused-web-target', { accounts: () => accounts,
-    command: async (...args) => { calls.push(args); assert.equal(args[2].guard(), true); } });
+    command: async (...args) => {
+      calls.push(args);
+      assert.equal(args[2].guard(), true);
+    } });
   const base = { nest_google_device_uuid: 'device', online: true, eco_mode: false, hvac_mode: 'heat',
     target_temperature_low: 21, target_temperature_high: 25, can_heat: true, can_cool: true, temperature_lock: false };
   dashboard.update('T', 'Thermostat', base, 'A');
@@ -363,10 +366,14 @@ test('web Nest temperature commands validate modes, limits, capability and stale
   await dashboard.setTemperatureTarget(request({ target_temperature_high: 26 }));
   assert.deepEqual(calls.at(-1)[1], { target_temperature_high: 26 });
   dashboard.update('T', 'Thermostat', { hvac_mode: 'range' }, 'A');
-  await assert.rejects(dashboard.setTemperatureTarget(request({ target_temperature_low: 24.5, target_temperature_high: 25 })), { status: 400 });
+  await assert.rejects(dashboard.setTemperatureTarget(request({
+    target_temperature_low: 24.5, target_temperature_high: 25,
+  })), { status: 400 });
   await dashboard.setTemperatureTarget(request({ target_temperature_low: 22, target_temperature_high: 25 }));
   assert.deepEqual(calls.at(-1)[1], { target_temperature_low: 22, target_temperature_high: 25 });
-  dashboard.command = async () => { throw new Error('Nest rejected fixture'); };
+  dashboard.command = async () => {
+    throw new Error('Nest rejected fixture');
+  };
   await assert.rejects(dashboard.setTemperatureTarget(request({ target_temperature_low: 22, target_temperature_high: 25 })), /rejected/);
   assert.equal(dashboard.busy, false);
   dashboard.busy = true;

@@ -248,12 +248,12 @@ export class ClimateDashboard {
       return unavailable('The temperature rule is waiting for feedback. Review Climate rules before changing its target.');
     }
     const fields = room ? [{ key: 'value', label: 'Desired room temperature', value: room.desiredTemperature }] :
-      ['range', 'heatcool'].includes(data.hvac_mode) ? [
-        { key: 'target_temperature_low', label: 'Heat to', value: data.target_temperature_low },
-        { key: 'target_temperature_high', label: 'Cool to', value: data.target_temperature_high },
-      ] : [{ key: data.hvac_mode === 'heat' ? 'target_temperature_low' : 'target_temperature_high',
-        label: data.hvac_mode === 'heat' ? 'Heat to' : 'Cool to',
-        value: (data.hvac_mode === 'heat' ? data.target_temperature_low : data.target_temperature_high) ?? data.target_temperature }];
+        ['range', 'heatcool'].includes(data.hvac_mode) ? [
+          { key: 'target_temperature_low', label: 'Heat to', value: data.target_temperature_low },
+          { key: 'target_temperature_high', label: 'Cool to', value: data.target_temperature_high },
+        ] : [{ key: data.hvac_mode === 'heat' ? 'target_temperature_low' : 'target_temperature_high',
+          label: data.hvac_mode === 'heat' ? 'Heat to' : 'Cool to',
+          value: (data.hvac_mode === 'heat' ? data.target_temperature_low : data.target_temperature_high) ?? data.target_temperature }];
     if (fields.some((field) => !Number.isFinite(field.value)) ||
         (fields.some((field) => field.key === 'target_temperature_low') && data.can_heat === false) ||
         (fields.some((field) => field.key === 'target_temperature_high') && data.can_cool === false)) {
@@ -263,7 +263,8 @@ export class ClimateDashboard {
     const model = { available: true, source: room ? 'room' : 'nest', mode: data.hvac_mode,
       ruleId: rule?.id, ruleName: rule?.name, fields, minimum: 9, maximum: 32, minimumGap: fields.length === 2 ? 1.5 : 0,
       note: room ? 'The selected sensors stay active. Nest adjusts within the rule’s limits and update interval.' :
-        rules.some((entry) => entry.enabled && entry.paused) ? 'The climate rule is paused. This changes Nest directly and leaves the rule paused.' :
+        rules.some((entry) => entry.enabled && entry.paused) ?
+          'The climate rule is paused. This changes Nest directly and leaves the rule paused.' :
           'This changes the target on Nest.' };
     // Reject stale edits without treating ordinary room readings or compensation feedback as edits.
     model.expected = crypto.createHash('sha256').update(JSON.stringify([device.id, model,
@@ -285,7 +286,7 @@ export class ClimateDashboard {
     const values = payload.values;
     if (!values || typeof values !== 'object' || Array.isArray(values) ||
         Object.keys(values).length !== model.fields.length || model.fields.some((field) =>
-          !Number.isFinite(values[field.key]) || values[field.key] < model.minimum || values[field.key] > model.maximum) ||
+      !Number.isFinite(values[field.key]) || values[field.key] < model.minimum || values[field.key] > model.maximum) ||
         (model.fields.length === 2 && values.target_temperature_high - values.target_temperature_low < model.minimumGap - 1e-8)) {
       const error = new Error('Enter temperatures within the displayed limits and keep the heating target below the cooling target.');
       error.status = 400;

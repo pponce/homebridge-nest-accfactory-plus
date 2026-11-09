@@ -549,7 +549,15 @@ export class WebDashboard {
       return;
     }
     if (request.method === 'POST' && route === '/api/temperature-target') {
-      this.send(response, 200, await this.dashboard.setTemperatureTarget(await this.body(request)));
+      const payload = await this.body(request);
+      try {
+        this.send(response, 200, await this.dashboard.setTemperatureTarget(payload));
+      } catch (error) {
+        if ([400, 409].includes(error.status)) {
+          throw new DashboardConfigError(error.message, error.status);
+        }
+        throw new DashboardConfigError('The temperature change could not be confirmed. Refresh and review the thermostat and rule status.', 503);
+      }
       return;
     }
     if (request.method === 'POST' && route === '/api/command') {
