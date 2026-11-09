@@ -55,6 +55,8 @@ The combined sensor does not change Google's Home/Away or Eco settings. You can 
 
 ### Admin interface and visual configuration
 
+Choose **Celsius or Fahrenheit** under **Settings → Your dashboard → Temperature units**, or **Dashboard preferences** in the Homebridge plugin UI. Readings, targets and rule limits use your choice; existing rules retain their temperatures. See [temperature units](WEB_DASHBOARD.md#choose-temperature-units).
+
 Use **Homebridge → Plugins → Nest Climate Cntrl → Settings** for account setup, per-device options, room-sensor previews and web access. The optional standalone dashboard has four areas:
 
 - **Overview:** thermostat cards, supported live controls, schedules and runtime.

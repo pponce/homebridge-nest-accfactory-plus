@@ -60,6 +60,7 @@ function deviceRows(value) {
 function runtimeSignature(block) {
   const runtime = structuredClone(block);
   delete runtime.climateRuleDrafts;
+  delete runtime.dashboardTemperatureUnit;
   for (const device of Array.isArray(runtime.devices) ? runtime.devices : Object.values(runtime.devices ?? {})) {
     if (object(device)) {
       delete device.scheduleTimeZone;
@@ -143,7 +144,7 @@ export function validateRuleDrafts(value) {
           assert(rule.aggregation !== 'single' || sources.length === 1, 'Single-sensor control requires exactly one source.');
           assert(
             Number.isFinite(rule.desiredTemperature) && rule.desiredTemperature >= 9 && rule.desiredTemperature <= 32,
-            'Live heating targets must be between 9 and 32 °C.',
+            'Live heating targets must be between 9 and 32 °C (48.2–89.6 °F).',
           );
         } else if (kind === 'fan') {
           assert(targets.length > 0, 'Select at least one room fan before enabling.');
@@ -238,6 +239,7 @@ export class WebDashboardConfig {
       revision: state.revision,
       config: {
         name: typeof block.name === 'string' ? block.name : 'Nest Climate Cntrl',
+        temperatureUnit: block.dashboardTemperatureUnit === 'F' ? 'F' : 'C',
         options: { eveHistory: block.options?.eveHistory !== false },
         devices,
         rules,
@@ -271,13 +273,17 @@ export class WebDashboardConfig {
 
   async performSave(payload) {
     keys(payload, ['revision', 'config']);
-    keys(payload.config, ['name', 'options', 'devices', 'rules']);
+    keys(payload.config, ['name', 'temperatureUnit', 'options', 'devices', 'rules']);
     const state = await this.read();
     if (payload.revision !== state.revision) {
       throw new DashboardConfigError('Settings changed elsewhere. Reload before saving your changes.', 409);
     }
     const runtimeBefore = runtimeSignature(state.block);
     const patch = payload.config;
+    if (patch.temperatureUnit !== undefined) {
+      assert(['C', 'F'].includes(patch.temperatureUnit), 'Choose Celsius or Fahrenheit for dashboard temperatures.');
+      state.block.dashboardTemperatureUnit = patch.temperatureUnit;
+    }
     if (patch.name !== undefined) {
       assert(text(patch.name, 80), 'Enter a name of 1–80 characters.');
       state.block.name = patch.name;
@@ -347,7 +353,7 @@ export class WebDashboardConfig {
             keys(value, ['selected', 'desired']);
             assert(
               ids(value.selected) && Number.isFinite(value.desired) && value.desired >= 5 && value.desired <= 35,
-              'Select sensors and a room temperature from 5 to 35 °C.',
+              'Select sensors and a room temperature from 5 to 35 °C (41–95 °F).',
             );
           }
           target[key] = structuredClone(value);

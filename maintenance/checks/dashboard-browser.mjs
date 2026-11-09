@@ -106,6 +106,17 @@ try {
   assert.equal(await page.getByLabel('Desired room temperature (°C)').inputValue(), '21');
   assert.deepEqual(await page.evaluate(() => window.saved.at(-1)[0].devices[0].sensorPreview), { selected: ['external'], desired: 21 });
   assert.equal(await page.evaluate(() => window.commands.length), 0);
+  await page.getByLabel('Temperature units', { exact: true }).selectOption('F');
+  await page.waitForFunction(() => window.saved.at(-1)[0].dashboardTemperatureUnit === 'F');
+  assert.equal(await page.getByLabel('Desired room temperature (°F)').inputValue(), '69.8');
+  assert.deepEqual(await page.evaluate(() => window.saved.at(-1)[0].devices[0].sensorPreview), { selected: ['external'], desired: 21 });
+  await page.getByLabel('Desired room temperature (°F)').fill('77');
+  await page.getByLabel('Desired room temperature (°F)').press('Tab');
+  await page.waitForFunction(() => window.saved.at(-1)[0].devices[0].sensorPreview.desired === 25);
+  await page.getByLabel('Temperature units', { exact: true }).selectOption('C');
+  await page.waitForFunction(() => window.saved.at(-1)[0].dashboardTemperatureUnit === 'C');
+  assert.equal(await page.getByLabel('Desired room temperature (°C)').inputValue(), '25');
+  assert.equal(await page.evaluate(() => window.commands.length), 0);
   await page.getByLabel('Temperature controlled by').selectOption('S');
   await page.getByRole('button', { name: 'Use selected sensor' }).click();
   await page.waitForFunction(() => window.commands.length === 1);

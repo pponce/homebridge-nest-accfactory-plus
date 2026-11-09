@@ -1,3 +1,16 @@
+## v0.5.0-beta.7
+
+**Choose Celsius or Fahrenheit for your climate dashboard.**
+
+- In the standalone dashboard, open **Settings → Your dashboard → Temperature units**. In the Homebridge plugin configuration UI, use **Dashboard preferences → Temperature units**. The standard configuration form also exposes the preference under **Web dashboard**.
+- The selected units apply to thermostat readings and schedules, sensor lists, temperature-group targets and adjustment limits, fan thresholds and turn-off gaps, previews and execution status.
+- Existing targets retain the same meaning when units change. Temperature differences use the correct conversion: a 1 °C gap is a 1.8 °F gap. Nest and Apple Home keep their own display-unit settings.
+- Save the preference to share it across browsers and devices. A unit-only change does not require a bridge restart. Refresh another open dashboard to load the saved preference.
+
+The live execution engine supports bounded heating groups, Homebridge room-fan rules and combined occupancy sensors. Rules remain opt-in; review the [first-rule walkthroughs](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.7/WEB_DASHBOARD.md#try-your-first-rules). Existing Climate installations update normally without re-pairing. Accfactory/Plus users follow [MIGRATION.md](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.7/MIGRATION.md).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.6
 
 **Opt-in climate automation for live equipment trials:**

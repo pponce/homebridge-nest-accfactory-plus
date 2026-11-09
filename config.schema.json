@@ -267,6 +267,13 @@
           }
         }
       },
+      "dashboardTemperatureUnit": {
+        "type": "string",
+        "title": "Dashboard temperature units",
+        "enum": ["C", "F"],
+        "default": "C",
+        "description": "Celsius or Fahrenheit for dashboard readings, targets and rule limits. Does not change the thermostat display setting."
+      },
       "climateRuleDrafts": {
         "type": "object",
         "title": "Climate automation rules",
@@ -521,6 +528,12 @@
       "expanded": false,
       "description": "Choose direct HTTP, direct HTTPS, or HTTPS through a local reverse proxy. Create the separate web account in the custom settings page.",
       "items": [
+        {
+          "key": "dashboardTemperatureUnit",
+          "title": "Dashboard temperature units",
+          "type": "select",
+          "titleMap": { "C": "Celsius (°C)", "F": "Fahrenheit (°F)" }
+        },
         {
           "key": "webDashboard.enabled",
           "title": "Enable standalone dashboard"

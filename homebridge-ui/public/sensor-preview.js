@@ -48,7 +48,7 @@ export function previewGroup({ sources, selected, desired, thermostat, now = Dat
     maximumOffset < 0 ||
     maximumOffset > 3
   ) {
-    return { state: 'unavailable', reason: 'Enter a target from 5 to 35 °C.' };
+    return { state: 'unavailable', reason: 'Enter a target from 5 to 35 °C (41–95 °F).' };
   }
   const chosen = ids.map((id) => sources.find((source) => source.id === id));
   if (

@@ -25,6 +25,7 @@ try {
     'homebridge-ui/public/index.html',
     'homebridge-ui/public/nest-climate-cntrl-icon-512.png',
     'homebridge-ui/public/web-dashboard-setup.js',
+    'homebridge-ui/public/climate-utils.js',
     'homebridge-ui/dashboard/index.html',
     'homebridge-ui/dashboard/app.js',
     'homebridge-ui/dashboard/styles.css',
@@ -66,6 +67,10 @@ try {
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'config.schema.json')));
   assert.equal(pkg.name, registered[0]);
   assert.equal(schema.pluginAlias, registered[1]);
+  assert.deepEqual(schema.schema.properties.dashboardTemperatureUnit.enum, ['C', 'F']);
+  const units = await import(pathToFileURL(path.join(root, 'homebridge-ui/public/climate-utils.js')).href);
+  assert.equal(units.celsiusTemperature(77, 'F'), 25);
+  assert.equal(units.celsiusTemperature(1.8, 'F', true), 1);
   assert.deepEqual(schema.schema.properties.webDashboard.properties.protocol.enum, ['https', 'http', 'proxy']);
   const web = await import(pathToFileURL(path.join(root, 'dist/web-dashboard.js')).href);
   const proxy = web.normalizeWebDashboard({ protocol: 'proxy', host: '::', publicOrigin: 'https://climate.example.com' });

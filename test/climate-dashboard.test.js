@@ -4,7 +4,27 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { ClimateDashboard, RuntimeLedger } from '../src/climate-dashboard.js';
-import { nextSetpoint, editableConfig } from '../homebridge-ui/public/climate-utils.js';
+import { nextSetpoint, editableConfig, displayTemperature, celsiusTemperature } from '../homebridge-ui/public/climate-utils.js';
+
+test('dashboard units convert absolute temperatures separately from gaps and preserve bounds', () => {
+  assert.equal(displayTemperature(21, 'F'), 69.8);
+  assert.equal(celsiusTemperature(77, 'F'), 25);
+  assert.equal(displayTemperature(1.5, 'F', true), 2.7);
+  assert.equal(celsiusTemperature(1.8, 'F', true), 1);
+  assert.equal(celsiusTemperature(0.18, 'F', true), 0.1);
+  assert.equal(celsiusTemperature(48.2, 'F'), 9);
+  assert.equal(celsiusTemperature(89.6, 'F'), 32);
+  assert.equal(celsiusTemperature(5.4, 'F', true), 3);
+  for (const unit of ['C', 'F']) {
+    for (const value of [-40, 0, 9, 21.1111111111, 32, 35]) {
+      assert.ok(Math.abs(celsiusTemperature(displayTemperature(value, unit), unit) - value) < 1e-9);
+    }
+    for (const value of [null, undefined, NaN, Infinity, '21']) {
+      assert.ok(Number.isNaN(displayTemperature(value, unit)));
+      assert.ok(Number.isNaN(celsiusTemperature(value, unit)));
+    }
+  }
+});
 
 const start = Date.parse('2026-11-06T23:59:30Z');
 test('runtime prunes old days and periodic sampling persists observed time', async (t) => {

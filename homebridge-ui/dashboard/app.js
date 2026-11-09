@@ -1,4 +1,4 @@
-import { nextSetpoint } from '/shared/climate-utils.js';
+import { nextSetpoint, displayTemperature, celsiusTemperature } from '/shared/climate-utils.js';
 import { sensorSources, previewGroup } from '/shared/sensor-preview.js';
 
 const $ = (id) => document.getElementById(id);
@@ -68,8 +68,17 @@ function empty(host, title, description, symbol = 'sensors', action) {
   content.append(mark, el('h3', title), el('p', description)); if (action) content.append(action);
   host.replaceChildren(content);
 }
-function formatTemp(value, scale = 'C', digits = 1) {
-  return Number.isFinite(value) ? (scale === 'F' ? value * 1.8 + 32 : value).toFixed(digits) + '°' + scale : '—';
+function temperatureUnit() { return state.config?.temperatureUnit === 'F' ? 'F' : 'C'; }
+function formatTemp(value, digits = 1) {
+  return Number.isFinite(value) ? displayTemperature(value, temperatureUnit()).toFixed(digits) + '°' + temperatureUnit() : '—';
+}
+function temperatureField(host, title, value, change, { min, max, difference = false } = {}) {
+  const unit = temperatureUnit();
+  const display = (value) => Number(displayTemperature(value, unit, difference).toFixed(6));
+  const input = inputField(host, title + ' (°' + unit + ')', display(value), (value) => change(celsiusTemperature(value, unit, difference)),
+    { type: 'number', min: display(min), max: display(max), step: 'any' });
+  input.required = true;
+  return input;
 }
 function duration(seconds) {
   if (!Number.isFinite(seconds)) return '—';
@@ -218,17 +227,17 @@ function renderThermostats() {
   $('overview-summary').textContent = devices.length ? online + ' of ' + devices.length + ' thermostats connected. A view of the rooms that matter.' : 'Your Nest thermostats appear here when the account connects.';
   if (!devices.length) empty(host, 'Your thermostats belong here.', 'Connect your Nest account in Homebridge. Live temperatures and controls appear once devices are discovered.', 'thermometer');
   for (const device of devices) {
-    const data = device.data || {}; const available = usable(device); const scale = data.temperature_scale === 'F' ? 'F' : 'C';
+    const data = device.data || {}; const available = usable(device); const scale = temperatureUnit();
     const card = el('article', undefined, 'thermostat-card'); const main = el('div', undefined, 'thermostat-main');
     const top = el('div', undefined, 'card-top'); const title = el('div', undefined, 'card-title'); const symbol = el('span', undefined, 'device-symbol'); symbol.append(icon('thermometer'));
     const text = el('div'); text.append(el('h3', data.description || 'Thermostat'), el('small', data.model || 'Nest thermostat'));
     title.append(symbol, text); top.append(title, pill(available ? (data.eco_mode ? 'Eco' : data.hvac_state === 'heating' ? 'Heating' : data.hvac_state === 'cooling' ? 'Cooling' : 'Idle') : 'Unavailable', available ? data.eco_mode ? 'good' : ['heating', 'cooling'].includes(data.hvac_state) ? data.hvac_state : 'neutral' : 'warn'));
     const row = el('div', undefined, 'temperature-row'); const current = el('div', undefined, 'current-temperature');
-    const actual = Number.isFinite(data.current_temperature) ? (scale === 'F' ? data.current_temperature * 1.8 + 32 : data.current_temperature).toFixed(1) : '—';
+    const actual = Number.isFinite(data.current_temperature) ? displayTemperature(data.current_temperature, scale).toFixed(1) : '—';
     current.append(document.createTextNode(actual), el('span', '°' + scale));
-    current.setAttribute('aria-label', 'Current temperature ' + formatTemp(data.current_temperature, scale));
+    current.setAttribute('aria-label', 'Current temperature ' + formatTemp(data.current_temperature));
     const target = el('div', undefined, 'temperature-target');
-    const targetText = data.hvac_mode === 'range' || data.hvac_mode === 'heatcool' ? formatTemp(data.target_temperature_low, scale) + '–' + formatTemp(data.target_temperature_high, scale) : formatTemp(data.target_temperature, scale);
+    const targetText = data.hvac_mode === 'range' || data.hvac_mode === 'heatcool' ? formatTemp(data.target_temperature_low) + '–' + formatTemp(data.target_temperature_high) : formatTemp(data.target_temperature);
     target.append(el('strong', targetText), document.createTextNode('Target · ' + (data.hvac_mode || 'Unknown mode'))); row.append(current, target);
     const facts = el('div', undefined, 'device-facts');
     if (Number.isFinite(data.current_humidity)) { const fact = el('span'); fact.append(icon('droplet'), document.createTextNode(Math.round(data.current_humidity) + '% humidity')); facts.append(fact); }
@@ -294,7 +303,7 @@ function renderSchedule(device) {
   $('schedule-next').textContent = next ? 'Next planned change · ' + days[next.day] + ' ' + time(next) + ' (' + zone + ')' : entries.length ? 'Your Nest weekly schedule. Set its time zone in Homebridge to calculate the next change.' : 'No schedule has been reported for this thermostat’s current mode.';
   $('schedule-preview').replaceChildren();
   const chosen = next ? [next, ...entries.filter((entry) => entry.day !== next.day || entry.time !== next.time)].slice(0, 3) : entries.slice(0, 3);
-  for (const point of chosen) { const row = el('div', undefined, 'schedule-row'); row.append(el('span', days[point.day] + ' · ' + time(point)), el('strong', formatTemp(point['temp-min'], device?.data?.temperature_scale) + ' / ' + formatTemp(point['temp-max'], device?.data?.temperature_scale))); $('schedule-preview').append(row); }
+  for (const point of chosen) { const row = el('div', undefined, 'schedule-row'); row.append(el('span', days[point.day] + ' · ' + time(point)), el('strong', formatTemp(point['temp-min']) + ' / ' + formatTemp(point['temp-max']))); $('schedule-preview').append(row); }
 }
 async function discoverSources(explicit = true) {
   if (state.discovering || !state.session?.authenticated) return;
@@ -344,6 +353,7 @@ function toggle(host, title, description, value, change) {
 }
 function renderSettings() {
   if (!state.config) return;
+  $('temperature-unit').value = temperatureUnit();
   $('dashboard-name').value = state.config.name || 'Nest Climate Cntrl'; $('eve-history').checked = state.config.options?.eveHistory !== false;
   $('dashboard-url').textContent = state.envelope.web?.url || location.origin;
   $('device-settings').replaceChildren();
@@ -363,6 +373,7 @@ function renderSettings() {
   if (!thermostats().length) $('device-settings').append(el('p', 'Device options appear when your thermostats connect.', 'small-note'));
   renderAccounts();
 }
+$('temperature-unit').addEventListener('change', () => { if (state.config) { state.config.temperatureUnit = $('temperature-unit').value; markDirty(); renderAll(); } });
 $('dashboard-name').addEventListener('input', () => { if (state.config) { state.config.name = $('dashboard-name').value; markDirty(); } });
 $('eve-history').addEventListener('change', () => { if (state.config) { (state.config.options ??= {}).eveHistory = $('eve-history').checked; markDirty(); } });
 function renderAccounts() {
@@ -445,11 +456,11 @@ function renderRuleEditor() {
   toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Temperature and fan rules require Resume after a bridge restart.', rule.enabled, (value) => { rule.enabled = value; renderRules(); });
   if (rule.kind === 'temperature') {
     const target = editorSection(host, '01', 'Choose the room target', 'Pair a thermostat with the temperature you want the selected rooms to reach.');
-    const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); inputField(fields, 'Desired room temperature (°C)', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { type: 'number', min: rule.enabled ? 9 : 5, max: rule.enabled ? 32 : 35, step: .5 }); target.append(fields);
+    const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); temperatureField(fields, 'Desired room temperature', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { min: rule.enabled ? 9 : 5, max: rule.enabled ? 32 : 35 }); target.append(fields);
     const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Use the thermostat, native Nest sensors, other Homebridge sensors, or a mix. Automatic control supports Heat mode, Eco off and Nest’s built-in control sensor.');
     inputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
     const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from the target sent to Nest. Manual changes and Nest schedule boundaries pause the rule. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
-    inputField(limits, 'Maximum target adjustment (°C)', rule.maximumOffset ?? 1.5, (value) => { rule.maximumOffset = value; }, { type: 'number', min: 0, max: 3, step: .5 });
+    temperatureField(limits, 'Maximum target adjustment', rule.maximumOffset ?? 1.5, (value) => { rule.maximumOffset = value; }, { min: 0, max: 3, difference: true });
     inputField(limits, 'Minimum update interval (minutes)', rule.minimumIntervalMinutes ?? 5, (value) => { rule.minimumIntervalMinutes = value; }, { type: 'number', min: 1, max: 60, step: 1 });
   } else if (rule.kind === 'presence') {
     const inputs = editorSection(host, '01', 'Listen for signs of home', 'Choose the motion and occupancy sources to include. Native Nest Home/Away appears when its state is available.'); picker(inputs, rule, 'sourceIds', ['motion', 'occupancy']);
@@ -461,7 +472,7 @@ function renderRuleEditor() {
     const behavior = editorSection(host, '02', 'Choose when the fans run', 'Use temperature or the heating/cooling activity reported by a Nest thermostat. Only fans started by the rule are stopped when the condition clears. Manual changes pause the rule.');
     inputField(behavior, 'Run condition', rule.action || 'temperature', (value) => { rule.action = value; renderRuleEditor(); }, { choices: [['temperature', 'Temperature above threshold'], ['heating', 'Thermostat is heating'], ['cooling', 'Thermostat is cooling']] });
     if (rule.action === 'heating' || rule.action === 'cooling') thermostatSelect(behavior, rule);
-    else { const fields = el('div', undefined, 'form-grid'); inputField(fields, 'Above temperature (°C)', rule.threshold ?? 24, (value) => { rule.threshold = value; }, { type: 'number', min: 5, max: 35, step: .5 }); inputField(fields, 'Turn-off gap (°C)', rule.hysteresis ?? 1, (value) => { rule.hysteresis = value; }, { type: 'number', min: .1, max: 10, step: .1 }); behavior.append(fields); picker(behavior, rule, 'sourceIds', ['temperature']); }
+    else { const fields = el('div', undefined, 'form-grid'); temperatureField(fields, 'Above temperature', rule.threshold ?? 24, (value) => { rule.threshold = value; }, { min: 5, max: 35 }); temperatureField(fields, 'Turn-off gap', rule.hysteresis ?? 1, (value) => { rule.hysteresis = value; }, { min: .1, max: 10, difference: true }); behavior.append(fields); picker(behavior, rule, 'sourceIds', ['temperature']); }
   }
   const runtime = el('div', undefined, 'preview-box'); runtime.id = 'rule-runtime'; runtime.setAttribute('role', 'status'); host.append(runtime);
   const preview = el('div', undefined, 'preview-box'); preview.id = 'rule-preview'; preview.setAttribute('role', 'status'); host.append(preview);

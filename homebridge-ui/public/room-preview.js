@@ -1,6 +1,9 @@
+import { displayTemperature, celsiusTemperature } from './climate-utils.js';
 import { sensorSources, previewGroup } from './sensor-preview.js';
 
 export function mountRoomPreview({ host, homebridge, getStatus, getConfig, changed }) {
+  const unit = () => getConfig()?.dashboardTemperatureUnit === 'F' ? 'F' : 'C';
+  const format = (value) => displayTemperature(value, unit()).toFixed(1) + ' °' + unit();
   let external = { sources: [], bridges: [] };
   let selectedThermostat = '';
   let loading = false;
@@ -26,7 +29,8 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
   target.type = 'number';
   target.min = '5';
   target.max = '35';
-  target.step = '0.5';
+  target.step = 'any';
+  target.required = true;
   target.disabled = true;
   targetLabel.append(target);
   const list = node('div');
@@ -71,15 +75,15 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
     const preview = previewGroup({
       sources: sensorSources(snapshot, external),
       selected: options().selected,
-      desired: Number(target.value),
+      desired: options().desired,
       thermostat,
     });
     const parts = [preview.reason];
     if (Number.isFinite(preview.roomTemperature)) {
-      parts.unshift('Selected rooms: ' + preview.roomTemperature.toFixed(1) + ' °C.');
+      parts.unshift('Selected rooms: ' + format(preview.roomTemperature) + '.');
     }
     if (Number.isFinite(preview.proposedTarget)) {
-      parts.unshift('Illustrative Nest target: ' + preview.proposedTarget.toFixed(1) + ' °C.');
+      parts.unshift('Illustrative Nest target: ' + format(preview.proposedTarget) + '.');
     }
     if (preview.count) {
       parts.push('Sensor measurement age is unknown. Read time is not a physical measurement timestamp.');
@@ -102,7 +106,10 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
       selectedThermostat = devices[0]?.serial ?? '';
     }
     thermostatSelect.value = selectedThermostat;
-    target.value = options().desired;
+    targetLabel.firstChild.textContent = 'Desired room temperature (°' + unit() + ')';
+    target.min = displayTemperature(5, unit());
+    target.max = displayTemperature(35, unit());
+    target.value = Number(displayTemperature(options().desired, unit()).toFixed(6));
     target.disabled = !selectedThermostat;
     thermostatSelect.disabled = !selectedThermostat;
     list.replaceChildren();
@@ -138,7 +145,7 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
             ' · ' +
             (source.bridgeName || 'Missing source') +
             ' · ' +
-            (source.available && Number.isFinite(source.temperature) ? source.temperature.toFixed(1) + ' °C' : 'Unavailable'),
+            (source.available && Number.isFinite(source.temperature) ? format(source.temperature) : 'Unavailable'),
         ),
       );
       list.append(label);
@@ -193,7 +200,7 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
       calculate();
       return;
     }
-    options(true).desired = Number(target.value);
+    options(true).desired = celsiusTemperature(Number(target.value), unit());
     changed();
     calculate();
   };

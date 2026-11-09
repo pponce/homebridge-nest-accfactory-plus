@@ -38,6 +38,14 @@ The web server is off by default. Under **Network and connection settings → Co
 
 Save and restart the Nest child bridge after changing network settings. All three modes require the separate web login. The web port is configurable from 1024–65535.
 
+## Choose temperature units
+
+In the standalone dashboard, open **Settings → Your dashboard → Temperature units**, choose **Celsius (°C)** or **Fahrenheit (°F)**, then **Save changes**. The same preference is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings → Dashboard preferences → Temperature units**; use Homebridge’s Save button there. The standard configuration form includes **Dashboard temperature units** under **Web dashboard**.
+
+Celsius is the default. The choice applies to readings, schedules, sensor previews, room targets, fan thresholds, adjustment limits, turn-off gaps and execution status. It is shared across browsers for this Climate platform. Refresh another open dashboard after saving. Changing only the units requires no bridge restart and preserves the temperatures in existing rules. Nest and Apple Home have separate display-unit settings.
+
+For example, **21 °C = 69.8 °F** for a target, while a **1 °C turn-off gap = 1.8 °F**. A fan set to start above **77 °F**, with a **1.8 °F** gap, stops at **75.2 °F** or below when it is owned by that rule.
+
 ## Try your first rules
 
 Create each rule with **Enable automatic execution** off to inspect its inputs first. Turning it on and selecting **Save changes** starts that rule without a bridge restart. The **Execution status** panel reports the running engine; **Current signals · preview only** is a separate snapshot of the editor's inputs.
@@ -61,9 +69,9 @@ Discovery records when a value was read, which may differ from when the sensor m
 1. On **Overview**, confirm that the thermostat is online and that **Temperature controlled by** is **Thermostat sensor**. If needed, select it and apply the change. Use **Heat** mode and turn **Eco off** through your normal Nest controls. The engine does not change modes or native sensor selection for you.
 2. If Nest reports a weekly schedule, open **Settings** and set **Nest schedule time zone** to the thermostat's IANA time zone, for example `America/Los_Angeles`. Save this before enabling the group.
 3. Open **Climate rules → Temperature → Create temperature group**, or use **+**. Name it **Downstairs comfort** and select the thermostat serving those rooms.
-4. Enter **21** in **Desired room temperature (°C)**. Rule inputs use Celsius; 21 °C is 69.8 °F. Live heating targets must be between 9 and 32 °C.
+4. Enter your target in **Desired room temperature**, using the units shown beside the field. For example, enter **21 °C** or **69.8 °F**. Live heating targets must be between **9 and 32 °C (48.2–89.6 °F)**.
 5. Choose **Equal average of selected sensors** and select two or more inputs. A Nest living-room sensor at **20 °C** plus a Homebridge dining-room sensor at **22 °C** averages **21 °C**. Nest-only, other Homebridge-only and mixed groups are supported. For a single room, choose **One selected sensor** and select exactly one input.
-6. Review **Maximum target adjustment (°C)** and **Minimum update interval (minutes)**. Defaults are **1.5 °C** and **5 minutes**; a **0.5 °C** adjustment limit is a useful starting point for a small, supervised trial.
+6. Review **Maximum target adjustment** and **Minimum update interval (minutes)**. Defaults are **1.5 °C / 2.7 °F** and **5 minutes**; a **0.5 °C / 0.9 °F** adjustment limit is a useful starting point for a small, supervised trial.
 7. Turn on **Enable automatic execution** and select **Save changes**. Watch **Execution status** for the group reading, desired room target, physical Nest target and command feedback. It can take a polling cycle and device feedback for a change to appear.
 8. Confirm the target on the physical thermostat or in Nest. Use **Pause rule** to finish the trial. The engine restores its previous target only while it still owns that setting and Nest remains in the same control context.
 
@@ -87,7 +95,7 @@ Change the **desired room temperature in Climate rules**. Apple Home continues t
 
 1. Discover the fan under **Sensors & fans** and confirm **On/off capable**. Start with the fan off for this trial.
 2. Open **Climate rules → Room fans → Create fan rule**, or use **+**. Name it **Living room cooling** and select the fan.
-3. Choose **Temperature above threshold**, set **Above temperature (°C)** to **24**, and **Turn-off gap (°C)** to **1**.
+3. Choose **Temperature above threshold**, set **Above temperature** to **24 °C / 75.2 °F**, and **Turn-off gap** to **1 °C / 1.8 °F**.
 4. Select the temperature sources. Multiple readings are averaged. To consider the same rooms as a temperature group, select the same sources here; the fan rule has its own selection.
 5. Review the preview, turn on **Enable automatic execution**, and select **Save changes**. Above 24 °C, the rule starts the fan. Once running, it keeps the fan on through the gap and returns it to its previous state at **23 °C or below**.
 6. For a supervised trial without changing the room temperature, save a threshold slightly below the current average and observe the fan starting. Then save a threshold whose **threshold minus turn-off gap** is above the average and observe it stopping. Allow at least **one minute between normal fan commands**, plus the polling interval.

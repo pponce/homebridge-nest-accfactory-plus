@@ -1,3 +1,14 @@
+export function displayTemperature(value, unit = 'C', difference = false) {
+  if (!Number.isFinite(value)) return NaN;
+  return unit === 'F' ? Number((value * 1.8 + (difference ? 0 : 32)).toFixed(10)) : value;
+}
+
+export function celsiusTemperature(value, unit = 'C', difference = false) {
+  if (!Number.isFinite(value)) return NaN;
+  // Remove conversion noise at range boundaries: a 0.18 °F gap is exactly 0.1 °C.
+  return unit === 'F' ? Number(((value - (difference ? 0 : 32)) / 1.8).toFixed(10)) : value;
+}
+
 // Normalize supported legacy containers without discarding credentials or unknown options.
 export function editableConfig(input) {
   const config = structuredClone(input);

@@ -2,7 +2,7 @@
 
 The package and repository are `homebridge-nest-climate-cntrl`. Platform alias: `NestClimateCntrl`.
 
-The current climate release target is `0.5.0-beta.6`. Publish it with the npm `beta` tag. Do not label it `latest`.
+The current climate release target is `0.5.0-beta.7`. Publish it with the npm `beta` tag. Do not label it `latest`.
 
 ## GitHub release
 
@@ -14,7 +14,7 @@ Release assets include the tested npm tarball, a read-only migration preflight, 
 
 The first publication requires the maintainer's authenticated npm account. Do not put npm credentials in a chat, repository or script. Use the checked release tarball with `npm publish --ignore-scripts --access public --tag beta`.
 
-After explicit publication approval, run the current `maintenance/update-checkout-and-publish-beta.sh` from the existing project checkout. The beta.6 release asset of this publisher has a cosmetic report-version error (it reports beta.5); the checkout helper corrects that field. The installer and package are unaffected. It fast-forwards a clean local `main`, updates submodules, downloads and verifies the tested GitHub tarball, and prompts for npm login/2FA if needed. It does not stop Homebridge, install the plugin, alter accessory caches or create backups. A private publication-result report includes a command for copying it to a Mac. Registry propagation is retried; accepted uploads are not republished.
+After explicit publication approval, run the current `maintenance/update-checkout-and-publish-beta.sh` from the existing project checkout. It fast-forwards a clean local `main`, updates submodules, downloads and verifies the tested GitHub tarball, and prompts for npm login/2FA if needed. It does not stop Homebridge, install the plugin, alter accessory caches or create backups. A private publication-result report includes a command for copying it to a Mac. Registry propagation is retried; accepted uploads are not republished.
 
 After the package exists, configure trusted publishing in npm's package settings:
 

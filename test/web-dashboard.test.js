@@ -285,6 +285,30 @@ test('schedule time zone changes apply to the rule engine without requiring a br
   assert.equal(saved.config.devices[0].scheduleTimeZone, 'America/Los_Angeles');
 });
 
+test('dashboard unit preference persists without changing rules, credentials or requiring restart', async (t) => {
+  const state = await fixture(t);
+  const rule = { id: 'room', name: 'Room', kind: 'temperature', thermostatId: 'THERMO', sourceIds: ['nest:T'], targetIds: [], desiredTemperature: 21, maximumOffset: 1.5, enabled: true };
+  state.block.climateRuleDrafts = { temperature: [rule], fans: [], occupancy: [] };
+  await fs.writeFile(state.configPath, JSON.stringify(state.root));
+  const store = new WebDashboardConfig(state.configPath, state.block);
+  let snapshot = await store.snapshot();
+  assert.equal(snapshot.config.temperatureUnit, 'C');
+  for (const unit of ['F', 'C', 'F']) {
+    snapshot = await store.save({ revision: snapshot.revision, config: { temperatureUnit: unit } });
+    assert.equal(snapshot.config.temperatureUnit, unit);
+    assert.equal(snapshot.restartRequired, false);
+    const saved = JSON.parse(await fs.readFile(state.configPath));
+    assert.equal(saved.platforms[1].dashboardTemperatureUnit, unit);
+    assert.deepEqual(saved.platforms[1].climateRuleDrafts, state.block.climateRuleDrafts);
+    assert.deepEqual(saved.platforms[1].accounts, state.block.accounts);
+    assert.deepEqual(saved.platforms[0], state.root.platforms[0]);
+  }
+  assert.equal((await new WebDashboardConfig(state.configPath, state.block).snapshot()).config.temperatureUnit, 'F');
+  for (const value of ['K', 'fahrenheit', null, 1, {}]) {
+    await assert.rejects(store.save({ revision: snapshot.revision, config: { temperatureUnit: value } }), /Celsius or Fahrenheit/);
+  }
+});
+
 test('HTTPS API requires allowed hosts, a local session, matching origin and CSRF for changes', async (t) => {
   const state = await fixture(t);
   const server = new WebDashboard({ ...state, platformConfig: state.block, discoveryDelay: 0 });

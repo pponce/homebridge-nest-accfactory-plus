@@ -1,6 +1,6 @@
 import { mountRoomPreview } from './room-preview.js';
 import { mountWebDashboardSetup } from './web-dashboard-setup.js';
-import { nextSetpoint, editableConfig } from './climate-utils.js';
+import { nextSetpoint, editableConfig, displayTemperature } from './climate-utils.js';
 const hb = window.homebridge;
 const $ = (id) => document.getElementById(id);
 let blocks = [];
@@ -317,11 +317,12 @@ function settings() {
     $('device-settings').append(section);
   }
 }
-function temp(value, data = {}) {
+function temp(value) {
   if (!Number.isFinite(value)) {
     return '—';
   }
-  return (data.temperature_scale === 'F' ? value * 1.8 + 32 : value).toFixed(1) + (data.temperature_scale === 'F' ? ' °F' : ' °C');
+  const unit = config?.dashboardTemperatureUnit === 'F' ? 'F' : 'C';
+  return displayTemperature(value, unit).toFixed(1) + ' °' + unit;
 }
 function when(value) {
   return value ? new Date(value).toLocaleString() : 'Not yet received';
@@ -550,6 +551,7 @@ $('add-home').onclick = () => {
   homes();
   changed();
 };
+$('temperature-unit').onchange = (event) => { config.dashboardTemperatureUnit = event.target.value; changed(); render(); };
 $('eve-history').onchange = (event) => {
   config.options.eveHistory = event.target.checked;
   changed();
@@ -597,6 +599,7 @@ try {
   config = editableConfig(blocks[0]);
   blocks[0] = config;
   $('eve-history').checked = config.options.eveHistory !== false;
+  $('temperature-unit').value = config.dashboardTemperatureUnit === 'F' ? 'F' : 'C';
   $('debug').checked = config.options.debug === true;
   $('support-dump').checked = config.options.supportDump === true;
   accounts();
@@ -612,7 +615,7 @@ try {
   window.addEventListener('pagehide', () => clearInterval(timer), { once: true });
 } catch {
   notice('Configuration could not be loaded. Open the full configuration form to review it.');
-  for (const id of ['add-account', 'add-home', 'eve-history', 'debug', 'support-dump']) {
+  for (const id of ['add-account', 'add-home', 'temperature-unit', 'eve-history', 'debug', 'support-dump']) {
     $(id).disabled = true;
   }
 }
