@@ -87,7 +87,7 @@
           <div class="rule-intro"><div><h2>Make room for smarter comfort.</h2><p>Build a setup around the rooms you use and the signals you trust.</p></div><span class="draft-chip large"><span data-icon="draft"></span>Rule controls</span></div>
           <div class="callout draft-notice"><span data-icon="info"></span><div><strong>Choose which rules run.</strong><p>Enable a rule and save to start automatic heating adjustments, room-fan control or combined Home/Away sensing. Disabled rules remain drafts. Review live status and pause controls in each rule.</p></div></div>
           <div id="rule-tabs" class="rule-tabs" role="tablist" aria-label="Rule type"><button type="button" role="tab" data-kind="temperature" aria-selected="true"><span data-icon="thermometer"></span>Temperature<span class="rule-count" data-count="temperature">0</span></button><button type="button" role="tab" data-kind="presence" aria-selected="false"><span data-icon="home"></span>Home &amp; away<span class="rule-count" data-count="presence">0</span></button><button type="button" role="tab" data-kind="fan" aria-selected="false"><span data-icon="fan"></span>Room fans<span class="rule-count" data-count="fan">0</span></button></div>
-          <div class="rule-workbench"><aside class="panel rule-collection"><div class="section-heading tight"><h3 id="rule-list-title">Temperature groups</h3><button id="new-rule" class="icon-button outlined" type="button" aria-label="Add rule" title="Add rule"><span data-icon="plus"></span></button></div><div id="rule-list"></div></aside><div id="rule-editor" class="panel rule-editor"></div></div>
+          <div class="rule-workbench"><aside class="panel rule-collection"><div class="section-heading tight"><h3 id="rule-list-title">Temperature groups</h3><button id="new-rule" class="icon-button outlined" type="button" aria-label="Add rule" title="Add rule"><span data-icon="plus"></span></button></div><p id="rule-order-help" class="rule-order-help" hidden><strong>Highest priority at the top</strong>Drag a handle, use its arrow keys, or use the move buttons. Save changes to apply.</p><div id="rule-list"></div><p id="rule-order-status" class="rule-order-status" role="status" aria-live="polite" aria-atomic="true"></p></aside><div id="rule-editor" class="panel rule-editor"></div></div>
         </section>
 
         <section id="page-settings" data-section="settings" hidden>
@@ -114,3 +114,4 @@
     <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>
+

@@ -147,19 +147,23 @@ Normal speed adjustments share a one-minute interval across rules. On a temperat
 
 When no rule calls for a fan, automation releases it: a fan started by automation turns off, and a previously running fan returns to its original speed within the final controlling cap. If no supported speed fits a reduced cap, an owned fan is stopped. A cap limits commands from the rule; it does not constrain manual controls or a fan's internal startup behavior. A disconnected Homebridge host cannot send a new speed or stop command.
 
-Review the table, enable the rule, and **Save changes**. **Execution status** reports the current and requested speed, cap, controlling rule and priority for each fan. Fan rules require **Resume automatic control** after a bridge restart.
+Review the table, enable the rule, and **Save changes**. **Execution status** reports the current and requested speed, cap and controlling rule for each fan. Fan rules require **Resume automatic control** after a bridge restart.
 
 ### Multiple rules for one fan
 
-A fan may be selected in several rules. Give enabled rules sharing a fan different **Priority** values from 0 to 100. The highest number among matching rules wins for that fan; equal priorities on overlapping enabled rules are rejected when saving.
+A fan may be selected in several rules. In **Climate rules → Room fans**, drag a rule's dotted handle up or down to set its priority. The highest-priority rule appears at the top with a **Highest priority** badge; numbered positions show the remaining order. The top matching enabled rule controls each fan.
 
-| Priority | Run condition | Fan speed |
+Use the **Move up** and **Move down** buttons on touch screens or with a keyboard. A focused drag handle also supports **Up/Down** arrow keys and **Home/End**. Dragging works with a mouse or touch; **Escape** cancels a drag. The list stays vertical on smaller screens.
+
+Reordering edits a draft. Select **Save changes** to apply the order or **Discard** to keep the saved order. Existing rules appear in their saved priority order. New rules start at the bottom, and disabled rules keep their position without competing for control.
+
+| Position | Run condition | Fan speed |
 | --- | --- | --- |
-| 90 | Room temperature above 74 °F | Temperature-based, capped at 75% |
-| 60 | Thermostat is cooling | Fixed 50% |
-| 30 | Thermostat is heating | Fixed 25% |
+| 1 · Highest | Room temperature above 74 °F | Temperature-based, capped at 75% |
+| 2 | Thermostat is cooling | Fixed 50% |
+| 3 | Thermostat is heating | Fixed 25% |
 
-If the room is warm while the thermostat is cooling, priority 90 controls the fan. When its temperature condition clears, priority 60 takes over while cooling remains active. Matching rules hand control to each other without an unnecessary off/on cycle, retaining the original fan state for eventual restoration. Normal changes still respect the shared interval. Each fan is evaluated separately, so a rule can control some of its selected fans while a higher-priority rule controls others.
+If the room is warm while the thermostat is cooling, the first rule controls the fan. When its temperature condition clears, the second rule takes over while cooling remains active. Matching rules hand control to each other without an unnecessary off/on cycle, retaining the original fan state for eventual restoration. Normal changes still respect the shared interval. Each fan is evaluated separately, so a rule can control some of its selected fans while a higher-priority rule controls others.
 
 A higher-priority rule with missing required temperature or HVAC readings reserves its fans. Lower rules wait until that condition can be evaluated reliably. Owned settings are restored when possible. Pausing, disabling or deleting a rule makes the next matching enabled rule eligible.
 

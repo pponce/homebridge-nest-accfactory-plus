@@ -25,6 +25,9 @@ const iconPaths = {
   droplet: '<path d="M12 3S5 11 5 15a7 7 0 0 0 14 0c0-4-7-12-7-12Z"/>',
   clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   motion: '<circle cx="14" cy="4" r="2"/><path d="m7 10 4-3 5 5 4 1m-9-6-2 7-4 6m4-6 5 2 1 5"/>',
+  grip: '<path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" stroke-width="3" stroke-linecap="round"/>',
+  up: '<path d="m6 14 6-6 6 6"/>',
+  down: '<path d="m6 10 6 6 6-6"/>',
 };
 function icon(name) {
   const node = document.createElement('span');
@@ -205,6 +208,7 @@ async function signOut() {
 }
 $('sign-out').addEventListener('click', signOut);
 function route(focus = true) {
+  cancelFanDrag();
   const page = location.hash.slice(1); state.page = pageDetails[page] ? page : 'overview';
   document.querySelectorAll('[data-section]').forEach((node) => { node.hidden = node.dataset.section !== state.page; });
   document.querySelectorAll('[data-page]').forEach((node) => {
@@ -536,14 +540,105 @@ $('dashboard-url').closest('.panel').append(accountActions);
 
 function rules(kind = state.ruleKind) { return state.config?.rules?.[ruleKey[kind]] || []; }
 function selectedRule() { return rules().find((rule) => rule.id === state.ruleId); }
+function orderedFanRules() { return [...rules('fan')].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)); }
+function setFanRuleOrder(items) {
+  // Preserve the runtime's numeric priority contract while presenting positions in the UI.
+  state.config.rules.fans = items;
+  items.forEach((rule, index) => { rule.priority = items.length - index; });
+}
+function moveFanRule(id, index, focus = 'handle') {
+  if (state.saving || state.restarting) return;
+  const items = orderedFanRules(); const from = items.findIndex((rule) => rule.id === id);
+  if (from < 0 || index < 0 || index >= items.length || from === index) return;
+  const [rule] = items.splice(from, 1); items.splice(index, 0, rule);
+  setFanRuleOrder(items); markDirty(); renderRules();
+  const row = [...$('rule-list').children].find((node) => node.dataset.ruleId === id);
+  const control = row?.querySelector('[data-reorder="' + focus + '"]');
+  (control?.disabled ? row.querySelector('[data-reorder="handle"]') : control)?.focus();
+  $('rule-order-status').textContent = rule.name + ' moved to position ' + (index + 1) + ' of ' + items.length + '. Save changes to apply.';
+}
+let fanDrag = null;
+function cancelFanDrag() {
+  if (!fanDrag) return;
+  const drag = fanDrag; fanDrag = null;
+  cancelAnimationFrame(drag.frame);
+  drag.handle.closest('.fan-rule-row')?.classList.remove('dragging');
+  $('rule-list').querySelectorAll('.drop-before, .drop-after').forEach((row) => row.classList.remove('drop-before', 'drop-after'));
+  if (drag.handle.hasPointerCapture(drag.pointerId)) drag.handle.releasePointerCapture(drag.pointerId);
+}
+function showFanDrop() {
+  if (!fanDrag?.moving) return;
+  const rows = [...$('rule-list').children];
+  rows.forEach((row) => row.classList.remove('drop-before', 'drop-after'));
+  const others = rows.filter((row) => row.dataset.ruleId !== fanDrag.id);
+  const next = others.findIndex((row) => { const bounds = row.getBoundingClientRect(); return fanDrag.y < bounds.top + bounds.height / 2; });
+  fanDrag.index = next < 0 ? others.length : next;
+  if (fanDrag.index !== rows.findIndex((row) => row.dataset.ruleId === fanDrag.id)) {
+    if (next < 0) others.at(-1)?.classList.add('drop-after'); else others[next].classList.add('drop-before');
+  }
+}
+function scrollFanDrag() {
+  if (!fanDrag?.moving) return;
+  const edge = 70;
+  const amount = fanDrag.y < edge ? -12 : fanDrag.y > window.innerHeight - edge ? 12 : 0;
+  if (amount) window.scrollBy(0, amount);
+  showFanDrop(); fanDrag.frame = requestAnimationFrame(scrollFanDrag);
+}
+function startFanDrag(event, rule, handle) {
+  if (event.button !== 0 || !event.isPrimary || state.saving || state.restarting || rules('fan').length < 2) return;
+  cancelFanDrag();
+  fanDrag = { id: rule.id, pointerId: event.pointerId, handle, startY: event.clientY, y: event.clientY, moving: false };
+  handle.setPointerCapture(event.pointerId);
+}
+document.addEventListener('pointermove', (event) => {
+  if (!fanDrag || event.pointerId !== fanDrag.pointerId) return;
+  fanDrag.y = event.clientY;
+  if (!fanDrag.moving && Math.abs(event.clientY - fanDrag.startY) >= 6) {
+    fanDrag.moving = true; fanDrag.handle.closest('.fan-rule-row').classList.add('dragging'); scrollFanDrag();
+  }
+  if (fanDrag.moving) { event.preventDefault(); showFanDrop(); }
+}, { passive: false });
+document.addEventListener('pointerup', (event) => {
+  if (!fanDrag || event.pointerId !== fanDrag.pointerId) return;
+  const drag = fanDrag; cancelFanDrag();
+  if (drag.moving) moveFanRule(drag.id, drag.index);
+});
+document.addEventListener('pointercancel', (event) => { if (event.pointerId === fanDrag?.pointerId) cancelFanDrag(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && fanDrag) { event.preventDefault(); cancelFanDrag(); } });
+function fanRuleRow(rule, index, count, item) {
+  const row = el('div', undefined, 'fan-rule-row'); row.dataset.ruleId = rule.id;
+  const handle = button('', () => {}, 'rule-drag-handle'); handle.append(icon('grip'));
+  handle.dataset.reorder = 'handle'; handle.disabled = count < 2;
+  handle.setAttribute('aria-label', 'Reorder ' + rule.name + ', position ' + (index + 1) + ' of ' + count);
+  handle.setAttribute('aria-describedby', 'rule-order-help'); handle.title = 'Drag to reorder; use arrow keys to move';
+  handle.addEventListener('pointerdown', (event) => startFanDrag(event, rule, handle));
+  handle.addEventListener('lostpointercapture', () => { if (fanDrag?.handle === handle) cancelFanDrag(); });
+  handle.addEventListener('keydown', (event) => {
+    if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    moveFanRule(rule.id, event.key === 'Home' ? 0 : event.key === 'End' ? count - 1 : index + (event.key === 'ArrowUp' ? -1 : 1));
+  });
+  item.prepend(el('span', index === 0 ? '1 · Highest priority' : String(index + 1), 'rule-rank' + (index === 0 ? ' highest' : '')));
+  const controls = el('div', undefined, 'rule-move-buttons');
+  for (const [direction, label, delta] of [['up', 'Move up', -1], ['down', 'Move down', 1]]) {
+    const control = button('', () => moveFanRule(rule.id, index + delta, direction), 'rule-move'); control.append(icon(direction));
+    control.dataset.reorder = direction; control.title = label; control.setAttribute('aria-label', label + ': ' + rule.name);
+    control.disabled = index + delta < 0 || index + delta >= count; controls.append(control);
+  }
+  row.append(handle, item, controls); return row;
+}
 function newRule() {
-  if (!state.config) return;
+  if (!state.config || state.saving || state.restarting) return;
+  if (rules().length >= 32) { toast('Use at most 32 rules per category.'); return; }
   const rule = { id: crypto.randomUUID(), kind: state.ruleKind, enabled: false, sourceIds: [],
     name: state.ruleKind === 'temperature' ? 'New temperature group' : state.ruleKind === 'presence' ? 'Home presence' : 'Room fan comfort' };
   if (state.ruleKind === 'temperature') { rule.aggregation = 'average'; rule.desiredTemperature = 21; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
   else if (state.ruleKind === 'presence') { rule.logic = 'any'; rule.holdMinutes = 10; rule.awayDelayMinutes = 20; const home = sources().find((source) => source.provider === 'nest' && source.kind === 'occupancy'); if (home) rule.sourceIds = [home.id]; }
   else { rule.targetIds = []; rule.action = 'temperature'; rule.speedMode = 'last'; rule.priority = 0; rule.threshold = 24; rule.hysteresis = 1; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
-  ((state.config.rules ??= {})[ruleKey[state.ruleKind]] ??= []).push(rule); state.ruleId = rule.id; markDirty(); renderRules();
+  const fanItems = state.ruleKind === 'fan' ? orderedFanRules() : null;
+  ((state.config.rules ??= {})[ruleKey[state.ruleKind]] ??= []).push(rule);
+  if (fanItems) setFanRuleOrder([...fanItems, rule]);
+  state.ruleId = rule.id; markDirty(); renderRules();
   $('rule-editor').querySelector('input')?.focus();
 }
 $('new-rule').addEventListener('click', newRule);
@@ -552,13 +647,23 @@ document.querySelectorAll('[data-kind]').forEach((tab) => {
   tab.addEventListener('keydown', (event) => { if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return; event.preventDefault(); const tabs = [...document.querySelectorAll('[data-kind]')]; const index = tabs.indexOf(tab); const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length; tabs[next].click(); tabs[next].focus(); });
 });
 function renderRules() {
+  cancelFanDrag();
   if (!state.config) { empty($('rule-editor'), 'Configuration unavailable.', 'Refresh after the plugin has started.', 'rules'); return; }
   document.querySelectorAll('[data-kind]').forEach((tab) => { const active = tab.dataset.kind === state.ruleKind; tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1; });
   document.querySelectorAll('[data-count]').forEach((node) => { node.textContent = rules(node.dataset.count).length; });
   $('rule-list-title').textContent = { temperature: 'Temperature groups', presence: 'Presence rules', fan: 'Fan rules' }[state.ruleKind];
-  const items = rules(); if (!items.some((rule) => rule.id === state.ruleId)) state.ruleId = items[0]?.id || null;
+  const isFan = state.ruleKind === 'fan';
+  const items = isFan ? orderedFanRules() : rules(); if (!items.some((rule) => rule.id === state.ruleId)) state.ruleId = items[0]?.id || null;
+  $('rule-order-help').hidden = !isFan || !items.length;
+  $('rule-order-status').textContent = '';
+  $('rule-list').classList.toggle('fan-rule-list', isFan);
   $('rule-list').replaceChildren();
-  for (const rule of items) { const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item'); item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · ' + (rule.enabled ? 'Enabled' : 'Disabled') + (rule.kind === 'fan' ? ' · Priority ' + (rule.priority ?? 0) : ''))); item.setAttribute('aria-pressed', String(rule.id === state.ruleId)); $('rule-list').append(item); }
+  for (const [index, rule] of items.entries()) {
+    const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item');
+    item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · ' + (rule.enabled ? 'Enabled' : 'Disabled')));
+    item.setAttribute('aria-pressed', String(rule.id === state.ruleId));
+    $('rule-list').append(isFan ? fanRuleRow(rule, index, items.length, item) : item);
+  }
   if (!items.length) {
     $('rule-list').append(el('p', 'No rules yet. Add one to get started.', 'small-note'));
     const details = { temperature: ['Comfort starts with the right room.', 'Select Nest and Homebridge temperature sensors to plan a room-based temperature group.', 'thermometer'], presence: ['Home is more than one signal.', 'Bring motion and occupancy sensors together to explore a Home/Away rule.', 'home'], fan: ['Put room fans in the picture.', 'Choose accessible Homebridge ceiling or room fans and plan when they would run.', 'fan'] }[state.ruleKind];
@@ -683,9 +788,10 @@ function renderRuleEditor() {
       picker(inputs, rule, 'sourceIds', ['temperature']);
     }
     if (rule.speedMode !== 'last') { const curve = el('div', undefined, 'preview-box'); curve.id = 'fan-curve'; behavior.append(curve); }
-    const priority = editorSection(host, rule.action === 'temperature' || rule.speedMode === 'curve' ? '05' : '04', 'Set rule priority', 'Higher numbers win for each fan. Matching rules sharing a fan need different priorities. When a condition clears, the next matching rule can take over. A higher-priority rule with missing readings reserves the fan until readings return.');
-    inputField(priority, 'Priority (higher wins)', rule.priority, (value) => { rule.priority = value; }, { type: 'number', min: 0, max: 100, step: 1 }).required = true;
-    priority.append(el('p', 'Example: room too warm at priority 90 with a speed curve; active cooling at 60 with fixed speed; active heating at 30 with a quieter fixed speed. Manual fan changes suspend every rule for that fan until you Resume it.', 'small-note'));
+    const priority = editorSection(host, rule.action === 'temperature' || rule.speedMode === 'curve' ? '05' : '04', 'Set rule priority', 'Drag fan rules up or down in the list. The top matching enabled rule controls each fan. Use the move buttons or the drag handle’s arrow keys to reorder, then Save changes to apply.');
+    const position = orderedFanRules().findIndex((entry) => entry.id === rule.id) + 1;
+    priority.append(pill('Position ' + position + ' of ' + rules('fan').length + (position === 1 ? ' · Highest priority' : '')));
+    priority.append(el('p', 'Example, from top to bottom: room too warm with a speed curve; active cooling at a fixed speed; active heating at a quieter speed. Disabled rules keep their position but do not compete for control. A higher-priority rule with missing readings reserves the fan until readings return. Manual fan changes suspend every rule for that fan until you Resume it.', 'small-note'));
     priority.append(el('p', 'When no rule calls for the fan, automation restores its original state within the last controlling speed limit. A handoff between matching rules keeps the fan running. Normal changes share a one-minute interval across rules.', 'small-note'));
   }
   const runtime = el('div', undefined, 'preview-box'); runtime.id = 'rule-runtime'; runtime.setAttribute('role', 'status'); host.append(runtime);
@@ -752,7 +858,7 @@ function renderRuleRuntime(rule) {
   host.append(el('strong', current?.phase || 'Not saved'), el('p', current?.reason || 'Save this rule to apply its settings.'));
   if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Nest target: ' + formatTemp(current.nestTarget) + ' · Room target: ' + formatTemp(current.desiredTemperature)));
   for (const fan of current?.fanSpeeds || []) host.append(el('p', fan.name + ': current ' + (Number.isFinite(fan.currentSpeed) ? fan.currentSpeed + '%' : 'unavailable') + ' · requested ' + (Number.isFinite(fan.proposedSpeed) ? fan.proposedSpeed + '%' : 'unsupported') + ' · cap ' + fan.maximumSpeed + '%'));
-  for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Manual override · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller + ' · priority ' + fan.priority : 'No matching rule')));
+  for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Manual override · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
   if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
   if (current?.lastAction) host.append(el('p', current.lastAction.message + ' ' + new Date(current.lastAction.at).toLocaleTimeString()));
@@ -831,7 +937,7 @@ function renderRulePreview() {
         headline = plan.demand ? 'Run condition met now' : 'Run condition not met';
         detail = (rule.action === 'temperature' ? 'Selected rooms average ' + formatTemp(average) + '; threshold ' + formatTemp(rule.threshold) : (thermostat.data.description || 'Thermostat') + ' reports ' + thermostat.data.hvac_state) + '. ';
         detail += !plan.demand ? 'This rule would release control; another matching rule may take over.' : rule.speedMode === 'last' ? 'Send on/off only, using the fan’s startup speed.' : targets.map((source) => (source.name || 'Fan') + ': ' + supportedSpeed(source, plan.speed, limits.minimum, limits.maximum) + '%').join(' · ');
-        detail += ' Priority ' + (rule.priority ?? 0) + '. See Execution status for the controlling rule and live hysteresis state.';
+        detail += ' Position ' + (orderedFanRules().findIndex((entry) => entry.id === rule.id) + 1) + ' in the fan-rule list. See Execution status for the controlling rule and live hysteresis state.';
       }
     }
   }
