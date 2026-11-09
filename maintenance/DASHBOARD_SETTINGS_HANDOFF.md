@@ -32,6 +32,6 @@ Homebridge UI source documents short-lived service-token authentication in src/c
 
 Run the checksum-verified beta.10 publisher from the existing checkout. Confirm its final verified result, then install using the release installer or Homebridge's normal plugin update flow. Refresh the dashboard and explicitly Resume enabled temperature/fan rules. Confirm the detected zone and manual override, one native Nest presence input with saved selections preserved, and child restart/reconnection after a setting that requires restart. Verify unavailable restart access offers Homebridge guidance. Do not publish npm from this development environment.
 
-## Discussion queued for a later feature
+## Related feature
 
-Temperature-based fan speed remains a proposal, not part of beta.10. Suggested settings: desired temperature, start gap, stop gap, minimum running speed, maximum speed, and temperature gap at maximum speed. Example 72°F target, start at 74°F/25%, 76°F/50%, cap at 78°F/75%, stop at 72.5°F. Only fans exposing writable speed would participate. Discussed respecting supported device steps and manual overrides. No speed-control implementation or device changes are authorized by the discussion alone.
+Temperature-based fan speed is implemented on main and validated at 7e0cd70ff87e54250777fc155bf882b434b93d89. It is not part of beta.10. See [FAN_SPEED_HANDOFF.md](FAN_SPEED_HANDOFF.md) for implementation, testing and next-release details.

@@ -20,10 +20,10 @@ Add optional room-fan speed control based on the temperature above a comfort tar
 
 ## Validation
 
-Focused engine, curve, HAP discovery/write, configuration and web tests: 79 passed locally. New runtime module measured 97.40% lines, 98.20% branches and 100% functions before final formatting. Coverage floor added without reducing existing floors.
+Focused engine, curve, HAP discovery/write, configuration and web tests: 81 passed locally. New runtime module measured 100% lines, 99.14% branches and 100% functions. Coverage floor added without reducing existing floors. Package dry-run confirms that the controller, shared model and dashboard are included.
 
-GitHub compatibility, lint/build/coverage and browser suites pending. New real-dashboard browser fixture tests Fahrenheit/Celsius, curve display, supported caps, saved configuration, disabled-draft behavior, staged startup, manual overrides, focus preservation and mobile layout.
+Feature commit 7e0cd70ff87e54250777fc155bf882b434b93d89 passed all six compatibility configurations (Node 22/24/26 and supported Homebridge 1/2 combinations), lint/build/coverage, migration checks and all browser suites in Test run 42560596789. The real-dashboard browser fixture passed Fahrenheit/Celsius, curve display, supported caps, saved configuration, disabled-draft behavior, staged startup, manual overrides, focus preservation and mobile layout. A multi-fan command conflict retains ownership of other changed fans so they can be restored.
 
 ## Remaining
 
-Inspect all GitHub checks and resolve failures. Record final commit and validation here. No release version changed and no npm publication or live installation performed. Physical fan behavior still requires installed-system confirmation. After release, start with one fan, review reported speed steps, enable a conservative cap, and verify startup, speed adjustment, stop threshold and manual override.
+Prepare the next beta release when requested; beta.10 does not contain this feature. No release version changed and no npm publication or live installation performed. Physical fan behavior still requires installed-system confirmation. After release, start with one fan, review reported speed steps, enable a conservative cap, and verify startup, speed adjustment, stop threshold and manual override. API acknowledgment and tests do not prove physical motor behavior; the rule limits the speed values it sends and cannot constrain manual controls or a fan’s internal startup behavior.
