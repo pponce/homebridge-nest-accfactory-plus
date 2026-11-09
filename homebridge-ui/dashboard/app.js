@@ -381,6 +381,7 @@ function renderSources() {
 
 function inputField(host, title, value, change, { type = 'text', min, max, step, choices, description } = {}) {
   const label = el('label', title); const input = el(choices ? 'select' : 'input');
+  input.setAttribute('aria-label', title);
   if (choices) choices.forEach(([value, title]) => { const option = el('option', title); option.value = value; input.append(option); });
   else { input.type = type; if (min !== undefined) input.min = min; if (max !== undefined) input.max = max; if (step !== undefined) input.step = step; if (type === 'text') input.maxLength = 80; }
   input.value = value ?? ''; input.addEventListener(choices ? 'change' : 'input', () => { if (type === 'number' && (input.value === '' || !input.checkValidity())) return; change(type === 'number' ? Number(input.value) : input.value); markDirty(); renderRulePreview(); });
@@ -670,7 +671,7 @@ function renderRuleEditor() {
       picker(inputs, rule, 'sourceIds', ['temperature']);
     }
     if (rule.speedMode !== 'last') { const curve = el('div', undefined, 'preview-box'); curve.id = 'fan-curve'; behavior.append(curve); }
-    const priority = editorSection(host, '05', 'Set rule priority', 'Higher numbers win for each fan. Matching rules sharing a fan need different priorities. When a condition clears, the next matching rule can take over. A higher-priority rule with missing readings reserves the fan until readings return.');
+    const priority = editorSection(host, rule.action === 'temperature' || rule.speedMode === 'curve' ? '05' : '04', 'Set rule priority', 'Higher numbers win for each fan. Matching rules sharing a fan need different priorities. When a condition clears, the next matching rule can take over. A higher-priority rule with missing readings reserves the fan until readings return.');
     inputField(priority, 'Priority (higher wins)', rule.priority, (value) => { rule.priority = value; }, { type: 'number', min: 0, max: 100, step: 1 }).required = true;
     priority.append(el('p', 'Example: room too warm at priority 90 with a speed curve; active cooling at 60 with fixed speed; active heating at 30 with a quieter fixed speed. Manual fan changes suspend every rule for that fan until you Resume it.', 'small-note'));
     priority.append(el('p', 'When no rule calls for the fan, automation restores its original state within the last controlling speed limit. A handoff between matching rules keeps the fan running. Normal changes share a one-minute interval across rules.', 'small-note'));
