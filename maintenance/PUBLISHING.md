@@ -2,7 +2,7 @@
 
 The package and repository are `homebridge-nest-climate-cntrl`. Platform alias: `NestClimateCntrl`.
 
-The current climate release target is `0.5.0-beta.13`. Publish it with the npm `beta` tag. Do not label it `latest`.
+The current climate release target is `0.5.0-beta.14`. Publish it with the npm `beta` tag. Do not label it `latest`.
 
 ## GitHub release
 
@@ -29,4 +29,5 @@ Run **Publish Climate Cntrl to npm** manually for an existing release tag. It do
 ## Migration checkpoint
 
 Accfactory/Plus users follow the fresh cutover in MIGRATION.md: disable the old Nest platform, configure and pair a new Climate child bridge, verify devices, then remove the old Nest setup and rebuild affected Apple Home assignments. Do not run the experimental offline cache-ownership helper. Keep `Keep Accessories Of Uninstalled Plugins` unchanged and clean up only old Nest entries. Backups require explicit maintainer approval. Keep project files in the existing checkout. The preflight remains read-only.
+
 

@@ -2,7 +2,7 @@
   printf '%s\n' '=== Nest Climate execution beta update START ==='
   climate_install_execution_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local version='0.5.0-beta.13'
+    local version='0.5.0-beta.14'
     local package='homebridge-nest-climate-cntrl'
     local release="https://github.com/pponce/$package/releases/download/v$version"
     local directory="$project/maintenance/releases/v$version"
@@ -57,4 +57,5 @@
   unset -f climate_install_execution_beta
   printf '%s\n' '=== Nest Climate execution beta update END ==='
 }
+
 

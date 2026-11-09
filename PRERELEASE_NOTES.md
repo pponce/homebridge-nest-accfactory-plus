@@ -1,3 +1,18 @@
+## v0.5.0-beta.14
+
+**Drag fan rules into priority order.**
+
+- In **Climate rules → Room fans**, drag a rule's dotted handle up or down. The top matching enabled rule controls each shared fan. Numbered positions and a **Highest priority** badge show the order.
+- Reorder with a mouse or touch, the **Move up / Move down** buttons, or the drag handle's **Up/Down** and **Home/End** keys. A drop indicator shows the destination; **Escape** cancels a drag. Fan rules stay in a vertical list on small screens.
+- Changes remain a draft until **Save changes**. **Discard** restores the saved order. Saved numeric priorities load in their existing order; new rules start at the bottom. Disabled rules retain their position without competing for control.
+- Shared-fan handoffs preserve the original fan state and command cooldown. Missing readings in a higher-priority rule still block lower-priority fallback, and manual fan overrides remain in effect until resumed.
+
+After updating, refresh the dashboard and review and **Resume** enabled temperature/fan rules. Arrange fan rules in the desired order, save, and check **Execution status** for the controlling rule.
+
+See the [shared-fan priority guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.14/WEB_DASHBOARD.md#multiple-rules-for-one-fan).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.13
 
 **Assisted Nest sensor setup for mixed temperature groups.**
@@ -922,6 +937,7 @@ Due to the volume of changes in this release, versioning has been reverted to al
 
 - Main changes are around the video/audio pipelines in `webrtc.js` and `streamer.js` to improve stability and recovery from packet loss, especially for video streams
 - Added logging and cleanup around talkback stream handling
+
 
 
 
