@@ -403,6 +403,8 @@ function renderHeatingRecommendations() {
     host.dataset.rendered = signature; host.replaceChildren();
     if (state.dirty) host.append(el('p', 'Save or discard your edits to review and apply recommendations for the saved setup.', 'callout'));
     if (state.heating?.error) host.append(el('p', state.heating.error, 'callout warning'));
+    if (!state.dirty && state.heating?.revision && state.heating.revision !== state.envelope?.revision) host.append(el('p', 'Settings changed elsewhere. Reload the dashboard to review the saved setup before applying.', 'callout warning'));
+    if (state.heating?.error && !entries.length) continue;
     if (!entries.length) host.append(el('p', state.heating ? 'Create and save a temperature rule for this thermostat to see its recommendations.' : 'Loading heating guidance…', 'small-note'));
     for (const entry of entries) {
       const card = el('article', undefined, 'heating-rule'); card.setAttribute('aria-label', entry.name + ' heating recommendations');

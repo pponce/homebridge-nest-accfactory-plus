@@ -83,6 +83,7 @@ const server = http.createServer(async (request, response) => {
     if (route === '/api/logout') { authenticated = false; json(200, { authenticated: false }); return; }
     if (route === '/api/status') { json(statusAvailable ? 200 : 503, statusAvailable ? snapshot() : { error: 'Fixture bridge unavailable.' }); return; }
     if (route === '/api/sources') { json(200, sourceData()); return; }
+    if (route === '/api/heating-response' && request.method === 'GET') { json(200, { revision: String(revision), rules: [] }); return; }
     if (route === '/api/config' && request.method === 'GET') { json(200, envelope()); return; }
     if (route === '/api/config' && request.method === 'PUT') {
       if (conflict || body.revision !== String(revision)) { json(409, { error: 'Configuration changed.' }); return; }

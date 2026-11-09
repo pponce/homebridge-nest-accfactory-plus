@@ -25,6 +25,7 @@ export async function checkSourceRefresh(browser, base) {
     let status = 200;
     if (request.method() !== 'GET') writes.push(endpoint);
     if (endpoint === '/api/session') body = { authenticated: true, username: 'fixture', csrfToken: 'fixture' };
+    else if (endpoint === '/api/heating-response') body = { revision: '1', rules: [] };
     else if (endpoint === '/api/config') body = { revision: '1', config, accounts: [], web: {} };
     else if (endpoint === '/api/status') {
       statusReads++;

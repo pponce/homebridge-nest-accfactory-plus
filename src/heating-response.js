@@ -348,7 +348,7 @@ export class HeatingResponse {
       learned,
       evidence,
       reason,
-      status: record?.status ?? 'Observation is off.',
+      status: record?.status ?? (options.heatingResponseEnabled ? 'Waiting for the next background observation.' : 'Observation is off.'),
     };
   }
 
