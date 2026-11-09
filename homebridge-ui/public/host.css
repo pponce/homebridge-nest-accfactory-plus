@@ -14,3 +14,7 @@
   .homebridge-host .sidebar { position: sticky; top: 0; flex: 0 0 234px; min-height: 75vh; }
   .homebridge-host .workspace { margin-left: 0; min-width: 0; flex: 1; }
 }
+
+@media (min-width: 761px) and (max-width: 1180px) {
+  .homebridge-host .sidebar { flex-basis: 208px; }
+}

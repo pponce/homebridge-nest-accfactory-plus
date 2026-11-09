@@ -180,7 +180,7 @@ try {
   await page.locator('#dashboard-name').fill('A conflicting edit');
   conflict = true;
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Configuration changed.', { exact: true }).waitFor();
+  await page.getByText('Newer configuration found', { exact: true }).waitFor();
   assert.equal(config.name, 'A little more comfort.');
   conflict = false;
   // A fresh opening while the child bridge is unavailable still permits account/network setup.

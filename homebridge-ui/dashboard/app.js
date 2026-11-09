@@ -237,7 +237,7 @@ function showLogin(message = '', setup = false) {
   $('login-error').textContent = message; $('login-error').hidden = !message;
   $('login-form').hidden = setup; $('setup-retry').hidden = !setup;
   $('login-title').textContent = setup ? 'A little setup first.' : 'Welcome home.';
-  $('login-help').textContent = setup ? 'Create your web account in Homebridge → Nest Climate Cntrl → Web dashboard, then return here.' : 'Sign in with your Climate Cntrl web account.';
+  $('login-help').textContent = setup ? 'Create your web account in Homebridge → Nest Climate Cntrl → Connection & advanced setup, then return here.' : 'Sign in with your Climate Cntrl web account.';
 }
 async function checkSession() {
   try {

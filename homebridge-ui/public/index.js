@@ -36,6 +36,15 @@ $('connection-setup').addEventListener('click', async () => {
     hb.showSchemaForm(); hb.enableSaveButton(); notice();
     try {
       const status = await hb.request('/web/status');
+      const link = $('open-climate-web'); link.hidden = true; link.removeAttribute('href');
+      $('web-access-status').textContent = status.available ? 'Standalone dashboard is running.' :
+        status.enabled ? 'Standalone dashboard is unavailable. Check the bridge log.' : 'Standalone web access is disabled.';
+      if (status.available && status.url) {
+        const url = new URL(status.url);
+        if (['http:', 'https:'].includes(url.protocol) && !url.username && !url.password) {
+          link.href = url.href; link.hidden = false;
+        }
+      }
       $('web-account-username').value = status.username || 'admin';
       $('web-account-result').textContent = status.accountConfigured ? 'Web login configured.' : 'Create a web login to use the standalone dashboard.';
     } catch { $('web-account-result').textContent = 'Start the Nest bridge before creating its web login.'; }
