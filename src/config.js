@@ -44,6 +44,10 @@ import { normalizeWebDashboard } from './web-dashboard.js';
 import { FFMPEG_VERSION } from './consts.js';
 
 function processConfig(config, log, api, capabilities = { video: true }) {
+  if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+    log?.warn?.('Nest Climate Cntrl is not configured. Open the plugin Settings to add an account.');
+    return;
+  }
   let migratedAccounts = false;
   let migratedDevices = false;
   config.webDashboard = normalizeWebDashboard(config.webDashboard);

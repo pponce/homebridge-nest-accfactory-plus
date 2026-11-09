@@ -132,7 +132,10 @@ try {
       updatePluginConfig: async (blocks) => { window.staged = blocks; },
       request: async (route, payload) => {
         if (route === '/plugin-config') return { revision: window.configRevision, blocks: [{ platform: 'NestClimateCntrl', accounts: [], devices: { T1: { custom: 'keep' } }, custom: 'keep' }] };
-        if (route === '/web/status') return { enabled: false, accountConfigured: false, instanceId: 'fixture-instance' };
+        if (route === '/web/status') {
+          if (sessionStorage.getItem('runtime-inactive')) throw new Error('Fixture runtime inactive.');
+          return { enabled: false, accountConfigured: false, instanceId: 'fixture-instance' };
+        }
         if (route === '/web/account') { window.webAccounts.push(payload); return {}; }
         if (route !== '/climate') throw new Error('Unexpected host route: ' + route);
         const response = await fetch('/api' + payload.route, { method: payload.method,
@@ -185,10 +188,12 @@ try {
   conflict = false;
   // A fresh opening while the child bridge is unavailable still permits account/network setup.
   statusAvailable = false;
+  await page.evaluate(() => sessionStorage.setItem('runtime-inactive', 'true'));
   await page.reload();
-  await page.locator('#connection-setup').click();
   await page.locator('#connection-panel').waitFor();
-  assert.equal(await page.evaluate(() => window.schemaShown), true);
+  assert.equal(await page.evaluate(() => window.schemaShown && window.outerSave), true);
+  await page.getByText('Standalone web access is optional and off by default.', { exact: false }).waitFor();
+  assert.equal(await page.locator('#open-climate-web').isVisible(), false);
   assert.deepEqual(errors, []);
   console.log('Homebridge shared climate UI: settings, rules, persistence, conflicts, setup and offline access passed.');
 } finally {

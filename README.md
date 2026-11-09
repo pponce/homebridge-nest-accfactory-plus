@@ -115,6 +115,8 @@ Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0
 
 Google issue-token/cookie credentials and compatible existing legacy refresh tokens are supported. Legacy Nest access tokens are available for supported accounts. **No SDM project is required.** See [account setup](AUTHENTICATION.md).
 
+The plugin stays inactive until a usable, non-excluded Nest or Google account is configured. It starts no dashboard listeners or climate automation in that state. Homebridge Settings remains available for account setup. Standalone web access is **off by default** and requires explicitly enabling **Web dashboard → Enable standalone dashboard**.
+
 Live action buttons send commands immediately. Climate configuration uses **Save changes** in the shared interface. Accounts and network settings are under **Connection & advanced setup** and use Homebridge's **Save** button. Accessory and connection changes may require a bridge restart.
 
 External discovery requires readable Homebridge accessories and the bridge's accessory-control configuration. Sensors or fans visible only in Apple Home are not accessible. Bridge PINs stay on the server.

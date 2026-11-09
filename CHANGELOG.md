@@ -1,10 +1,22 @@
+## v0.5.1
+
+**Configured startup and resilient climate services.**
+
+- Keep the plugin inactive until a usable, non-excluded Nest or Google account is configured. No dashboard listeners, automation timers or discovery start without an account, even when standalone web access is requested.
+- Keep standalone web access off by default. Homebridge Settings remains available for account setup and opens the connection form when the climate runtime is unavailable. Configure an account, save and restart the bridge before setting up optional web access.
+- Handle missing or malformed platform configuration with a logged message instead of an uncaught exception. Catch startup failures, clean up partially started services and retain native thermostat integration when optional climate services cannot start.
+- Complete remaining shutdown steps if a component fails, and prevent services from starting after shutdown is requested. Log unexpected configuration-request, cached-accessory and Apple Home status-update failures without exposing their error contents.
+- Clarify the climate feature set, independent project maintenance and supported device scope in the README. Project funding links point to pponce's GitHub Sponsors and PayPal.
+
+Existing configured installations retain their saved web access setting, climate rules and accessory identities. This release does not enable standalone web access automatically.
+
 ## v0.5.0
 
 **Nest Climate Cntrl: room temperature groups, fan automation and a live climate dashboard.**
 
 - Adjust temperature directly on a standalone dashboard thermostat card using an inline editor with plus/minus controls, a numeric field, Apply and Cancel. Active climate rules edit the desired room temperature and show the adjusted Nest target separately. Native control and paused rules edit Nest heating/cooling targets, including both limits in Heat • Cool mode. Celsius and Fahrenheit are supported.
 - Temperature commands show the requested target while checking feedback for up to 30 seconds. Failed or unconfirmed commands show the last reported setting. Stop waiting dismisses the check without reversing a command already sent. Stale edits, unsupported modes, Eco, lock, offline devices and invalid target ranges are checked before dispatch.
-- Combine selected Nest and Homebridge temperature sensors using an equal or weighted average. Heating rules apply bounded target adjustments while retaining Nest's built-in control sensor. Confirmed built-in selection works when optional room-sensor scheduling metadata is absent. Missing or conflicting active-sensor feedback prevents compensation.
+- Combine selected Nest and Homebridge temperature sensors using an equal average. Heating rules apply bounded target adjustments while retaining Nest's built-in control sensor. Confirmed built-in selection works when optional room-sensor scheduling metadata is absent. Missing or conflicting active-sensor feedback prevents compensation.
 - Manual Nest target changes move the group's desired temperature by the same increase or decrease by default. Each rule can instead pause after a manual change. The optional per-thermostat Apple Home room-temperature display shows the group reading and desired target; it defaults off. Direct room-target edits retain the group and its adjustment interval.
 - Previously active temperature and fan rules recover after a bridge restart once current readings and equipment checks pass. Explicit pauses remain paused. Pause after bridge restart is optional and defaults off. The overview distinguishes native control, active rules, waiting conditions and paused rules.
 - Run Homebridge room fans by temperature or Nest heating/cooling activity. Choose the last setting, a fixed speed or a bounded temperature-based speed curve. Order competing rules by dragging them, with keyboard controls also available. Manual fan overrides suspend automatic control until Resume.

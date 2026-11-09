@@ -14,6 +14,7 @@ import { DEVICE_TYPE, DEVICE_CATEGORY_MAP } from '../src/consts.js';
 let { default: registerPlatform } = await importSource(new URL('../src/index.js', import.meta.url));
 let { loadDeviceModules, getDeviceHKCategory } = await importSource(new URL('../src/devices.js', import.meta.url));
 let { default: Platform } = await importSource(new URL('../src/system.js', import.meta.url));
+let { default: Connections } = await importSource(new URL('../src/connections.js', import.meta.url));
 let log = { debug() {}, info() {}, warn() {}, error() {}, success() {} };
 
 for (let api of [undefined, null, {}, { registerPlatform: true }]) {
@@ -108,6 +109,7 @@ test('platform restores valid cached identity, removes stale cache and shuts dow
 });
 
 test('automation runs with web access disabled and restores a separate cached presence accessory', async (context) => {
+  context.mock.method(Connections.prototype, 'start', () => {});
   const directory = await mkdtemp(path.join(tmpdir(), 'climate-platform-'));
   const configPath = path.join(directory, 'config.json');
   const callbacks = new Map();
@@ -128,7 +130,7 @@ test('automation runs with web access disabled and restores a separate cached pr
   };
   const config = {
     platform: 'NestClimateCntrl',
-    accounts: [],
+    accounts: [{ name: 'Fixture', type: 'nest', access_token: 'synthetic-test-token' }],
     webDashboard: { enabled: false },
     climateRuleDrafts: {
       occupancy: [

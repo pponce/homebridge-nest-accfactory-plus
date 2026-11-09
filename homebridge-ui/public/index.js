@@ -26,7 +26,7 @@ window.climateHost = {
   },
 };
 
-$('connection-setup').addEventListener('click', async () => {
+async function openConnectionSetup() {
   if (climate?.hasEdits()) { notice('Save or discard your climate edits before opening connection setup.'); return; }
   try {
     const current = await hb.request('/plugin-config');
@@ -34,9 +34,9 @@ $('connection-setup').addEventListener('click', async () => {
     await hb.updatePluginConfig(current.blocks.length ? current.blocks.map(editableConfig) : [{ platform: 'NestClimateCntrl', name: 'Nest Climate Cntrl' }]);
     setupOpen = true; $('connection-panel').hidden = false; $('climate-mount').hidden = true;
     hb.showSchemaForm(); hb.enableSaveButton(); notice();
+    const link = $('open-climate-web'); link.hidden = true; link.removeAttribute('href');
     try {
       const status = await hb.request('/web/status');
-      const link = $('open-climate-web'); link.hidden = true; link.removeAttribute('href');
       $('web-access-status').textContent = status.available ? 'Standalone dashboard is running.' :
         status.enabled ? 'Standalone dashboard is unavailable. Check the bridge log.' : 'Standalone web access is disabled.';
       if (status.available && status.url) {
@@ -47,9 +47,13 @@ $('connection-setup').addEventListener('click', async () => {
       }
       $('web-account-username').value = status.username || 'admin';
       $('web-account-result').textContent = status.accountConfigured ? 'Web login configured.' : 'Create a web login to use the standalone dashboard.';
-    } catch { $('web-account-result').textContent = 'Start the Nest bridge before creating its web login.'; }
+    } catch {
+      $('web-access-status').textContent = 'The climate runtime is inactive or unavailable.';
+      $('web-account-result').textContent = 'Configure a Nest or Google account and restart the bridge before creating its web login.';
+    }
   } catch (error) { notice(error.message || 'Connection settings could not be loaded.'); }
-});
+}
+$('connection-setup').addEventListener('click', openConnectionSetup);
 $('return-to-climate').addEventListener('click', async () => {
   try {
     const current = await hb.request('/plugin-config');
@@ -94,4 +98,11 @@ try {
   await import('./climate/app.js');
 } catch (error) {
   $('climate-mount').replaceChildren(); notice(error.message || 'Climate controls could not load. Connection setup remains available.');
+}
+
+try {
+  await hb.request('/web/status');
+} catch {
+  await openConnectionSetup();
+  notice('Climate controls are inactive or unavailable. Configure a Nest or Google account here, save, then restart the bridge. Standalone web access is optional and off by default.');
 }

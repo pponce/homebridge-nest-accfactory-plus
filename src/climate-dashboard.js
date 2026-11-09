@@ -114,7 +114,16 @@ export class ClimateDashboard {
     } catch {
       /* First run or unreadable history starts with no observed time. */
     }
-    this.server = http.createServer((request, response) => this.handle(request, response));
+    this.server = http.createServer((request, response) => {
+      this.handle(request, response).catch(() => {
+        this.log?.warn?.('The climate configuration request could not be completed.');
+        if (!response.headersSent && !response.destroyed) {
+          response.writeHead(500).end('{}');
+        } else {
+          response.destroy();
+        }
+      });
+    });
     this.server.requestTimeout = 10000;
     await new Promise((resolve, reject) => {
       this.server.once('error', reject);

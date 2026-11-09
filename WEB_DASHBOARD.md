@@ -19,6 +19,8 @@ The standalone dashboard provides a visual interface for daily use and supported
 
 The same climate application is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings**. Open **Connection & advanced setup** there for Google/Nest credentials and web login, certificate and network settings. Named rules and live controls are available in both interfaces.
 
+The runtime starts only with a usable, non-excluded Nest or Google account. Without one, no climate listeners, automation or discovery run. Homebridge Settings opens connection setup when the runtime is unavailable, so you can add an account, save and restart the bridge. Once configured, the Homebridge interface works with standalone web access disabled. Standalone web access defaults off; creating web login credentials does not enable it.
+
 Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
 
 ## Enable web access
