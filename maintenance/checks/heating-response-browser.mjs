@@ -153,6 +153,7 @@ try {
   assert.equal(await restartButton.isEnabled(), false);
   page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.locator('#save-bar').waitFor({ state: 'hidden' });
   assert.equal(await restartButton.isEnabled(), true);
   await page.screenshot({ path: path.join(output, 'restart-required-mobile.png'), fullPage: true });
   await restartButton.click();

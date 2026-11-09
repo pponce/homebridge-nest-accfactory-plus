@@ -448,8 +448,11 @@ export class ClimateAutomation {
 
   refreshSnapshot() {
     this.live = this.dashboard.snapshot();
-    this.sources = new Map(automationSources(this.live, this.external).flatMap((source) =>
-      [source.id, ...(source.aliases ?? [])].map((id) => [id, source])));
+    this.sources = new Map(
+      automationSources(this.live, this.external).flatMap((source) =>
+        [source.id, ...(source.aliases ?? [])].map((id) => [id, source]),
+      ),
+    );
   }
 
   heatingDeviceOptions(options) {

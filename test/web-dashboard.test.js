@@ -114,7 +114,10 @@ test('child restart requires authentication, origin and CSRF, acknowledges befor
     async prepare(payload) {
       assert.deepEqual(Object.keys(payload), ['revision']);
       this.phase = 'prepared';
-      return async () => { executed++; this.phase = 'requested'; };
+      return async () => {
+        executed++;
+        this.phase = 'requested';
+      };
     },
   };
   const server = new WebDashboard({ ...state, platformConfig: state.block, restartFactory: () => restart });

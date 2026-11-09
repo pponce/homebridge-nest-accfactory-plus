@@ -105,8 +105,10 @@ export class ChildBridgeRestart {
     };
     const bridges = await this.request(connection, '/api/status/homebridge/child-bridges');
     const matches = Array.isArray(bridges) ? bridges.filter((bridge) => bridge.username?.toUpperCase() === this.username) : [];
-    if (matches.length !== 1 || matches[0].plugin !== PLUGIN ||
-        matches[0].identifier?.split('.').at(-1) !== 'NestClimateCntrl' || matches[0].pid !== this.pid || matches[0].manuallyStopped) {
+    if (
+      matches.length !== 1 || matches[0].plugin !== PLUGIN ||
+      matches[0].identifier?.split('.').at(-1) !== 'NestClimateCntrl' || matches[0].pid !== this.pid || matches[0].manuallyStopped
+    ) {
       throw fail('Homebridge could not identify this running Nest child bridge. ' + fallback);
     }
     return { connection, revision: state.revision };

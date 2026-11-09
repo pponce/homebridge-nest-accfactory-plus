@@ -68,7 +68,12 @@ async function fixture(t, tls = false) {
     await new Promise((resolve) => uiServer.close(resolve));
     await fs.rm(storage, { recursive: true, force: true });
   });
-  return { storage, config, restart, metadata, root, calls, write, mode: (value) => { responseMode = value; } };
+  return {
+    storage, config, restart, metadata, root, calls, write,
+    mode: (value) => {
+      responseMode = value;
+    },
+  };
 }
 
 test('explicit restart authenticates locally and targets only the current child process', async (t) => {
