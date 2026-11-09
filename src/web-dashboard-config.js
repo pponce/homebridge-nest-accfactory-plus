@@ -277,6 +277,7 @@ export class WebDashboardConfig {
   }
 
   async performSave(payload) {
+    this.beforeSave?.();
     keys(payload, ['revision', 'config']);
     keys(payload.config, ['name', 'temperatureUnit', 'options', 'devices', 'rules']);
     const state = await this.read();

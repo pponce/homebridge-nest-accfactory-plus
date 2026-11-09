@@ -214,6 +214,11 @@
     "branches": 90,
     "functions": 100
   },
+  "src/child-bridge-restart.js": {
+    "lines": 95,
+    "branches": 80,
+    "functions": 90
+  },
   "src/heating-response.js": {
     "lines": 95,
     "branches": 90,

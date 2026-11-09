@@ -256,3 +256,17 @@ The suggested interval combines response delay, estimated time to warm another 0
 Save or discard any pending edits before applying a recommendation. **Apply to this rule** saves only that rule's minimum update interval and maximum adjustment. Its desired temperature, sensors, enabled/paused state and all other rules are preserved. An enabled rule uses the new limits on its next normal execution check. No bridge restart is required. Recommendations cannot be applied if their evidence or saved configuration has changed since they were displayed; refresh and review again.
 
 For background on radiant response and stored heat, see [Google's True Radiant explanation](https://support.google.com/googlehome/answer/9250165) and [Watts' radiant heating FAQ](https://www.watts.com/support/faq-radiant). The numeric suggestions above are this plugin's own heuristics.
+
+## Restart after saving
+
+Changes to Apple Home accessories, such as Eco switches or a separate humidity sensor, require a child-bridge restart. After saving, the dashboard offers **Restart child bridge** when Homebridge UI can authenticate locally and identify this exact running Nest child bridge. Save or discard unsaved edits before restarting.
+
+The button restarts only the identified Nest child bridge. The dashboard briefly disconnects, checks for a new running instance, and asks you to sign in again. Review the equipment and **Resume** enabled temperature and fan rules afterward. Restart requests are not repeated automatically if their result cannot be confirmed.
+
+If direct restart is unavailable, the notice explains that the child bridge must be restarted in Homebridge. A plugin running on the main bridge or sharing a child bridge with another configured plugin must be restarted there. Homebridge UI must be reachable locally and its service authentication must be available; HTTPS connections retain certificate verification.
+
+## Nest occupancy inputs
+
+The Nest occupancy input represents Nest's Home/Away decision. When the same accessory is also discovered through Homebridge, the source picker shows one Nest input using the accessory identity. Sensors with the same display name but different identities remain separate. Existing rules that selected the Homebridge copy continue to resolve that input.
+
+Each enabled Home presence rule exposes one combined occupancy sensor, named after the rule. Its output is excluded from the input picker to prevent feedback. The combined sensor is separate from Nest's native Home/Away state and does not change Google's Home/Away or Eco settings.

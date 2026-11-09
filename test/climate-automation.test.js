@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { ClimateAutomation, heatingTarget } from '../src/climate-automation.js';
+import { ClimateAutomation, heatingTarget, automationSources } from '../src/climate-automation.js';
 import { ClimateDashboard } from '../src/climate-dashboard.js';
 import { validateRuleDrafts } from '../src/web-dashboard-config.js';
 
@@ -388,6 +388,29 @@ test('any/all conditions and expiring manual presence overrides operate without 
   f.advance(minute);
   await f.engine.tick();
   assert.equal(f.rule('presence').home, true);
+  assert.equal(f.commands.length, 0);
+});
+
+test('Nest occupancy has one source while saved Homebridge aliases still resolve and rule outputs are excluded', async (t) => {
+  const rule = { ...presenceRule, sourceIds: ['hap:home-copy'], awayDelayMinutes: 0 };
+  const f = await fixture(t, { occupancy: [rule] });
+  f.dashboard.update('HOME', 'HomeAway', { nest_google_device_uuid: 'structure-home', occupancy: true, online: true }, 'A');
+  f.external.push(
+    { id: 'hap:home-copy', serial: 'home', kind: 'occupancy', detected: false, available: true },
+    { id: 'hap:rule-output', serial: 'CLIMATE-PRESENCE-TEST', kind: 'occupancy', detected: true, available: true },
+  );
+  await f.engine.tick();
+  const sources = automationSources(f.engine.live, f.engine.external);
+  assert.equal(sources.some((source) => source.id === 'hap:home-copy' || source.id === 'hap:rule-output'), false);
+  assert.deepEqual(sources.find((source) => source.id === 'nest:structure-home').aliases, ['hap:home-copy']);
+  assert.equal(f.rule('presence').home, true);
+  assert.deepEqual(f.engine.rules.find((entry) => entry.id === 'presence').sourceIds, ['hap:home-copy']);
+  f.dashboard.update('HOME', 'HomeAway', { occupancy: false }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('presence').home, false);
+  f.dashboard.invalidate('A');
+  await f.engine.tick();
+  assert.equal(f.rule('presence').fault, true);
   assert.equal(f.commands.length, 0);
 });
 

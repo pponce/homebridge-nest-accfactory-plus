@@ -7,6 +7,7 @@ import https from 'node:https';
 import http from 'node:http';
 import net from 'node:net';
 import crypto from 'node:crypto';
+import { EventEmitter } from 'node:events';
 import { WebDashboardAuth, SESSION_COOKIE, HTTP_SESSION_COOKIE } from '../src/web-dashboard-auth.js';
 import { WebDashboardConfig, validateRuleDrafts } from '../src/web-dashboard-config.js';
 import { WebDashboard, normalizeWebDashboard, loadWebCertificate } from '../src/web-dashboard.js';
@@ -74,7 +75,10 @@ async function call(
     },
   };
   const result = { status: 200, headers: {}, body: '' };
+  const events = new EventEmitter();
   const response = {
+    once: events.once.bind(events),
+    writableFinished: false,
     setHeader(key, value) {
       result.headers[key.toLowerCase()] = value;
     },
@@ -87,6 +91,9 @@ async function call(
     },
     end(value) {
       result.body = value?.toString() ?? '';
+      this.writableFinished = true;
+      events.emit('finish');
+      events.emit('close');
     },
   };
   await server.handle(request, response);
@@ -97,6 +104,47 @@ async function call(
   }
   return result;
 }
+
+test('child restart requires authentication, origin and CSRF, acknowledges before dispatch and blocks concurrent saves', async (t) => {
+  const state = await fixture(t);
+  let executed = 0;
+  const restart = {
+    phase: 'idle',
+    capability: async () => ({ available: true }),
+    async prepare(payload) {
+      assert.deepEqual(Object.keys(payload), ['revision']);
+      this.phase = 'prepared';
+      return async () => { executed++; this.phase = 'requested'; };
+    },
+  };
+  const server = new WebDashboard({ ...state, platformConfig: state.block, restartFactory: () => restart });
+  t.after(() => server.stop());
+  await server.auth.setup({ username: 'admin', password: 'test-password' });
+  const login = await call(server, '/api/login', { method: 'POST', body: { username: 'admin', password: 'test-password' } });
+  const cookie = login.headers['set-cookie'].split(';')[0];
+  const csrf = login.data.csrfToken;
+  const view = await server.config.snapshot();
+  const request = { method: 'POST', cookie, csrf, body: { revision: view.revision } };
+  assert.equal((await call(server, '/api/bridge/restart')).status, 401);
+  assert.equal((await call(server, '/api/bridge/restart', { ...request, csrf: null })).status, 403);
+  assert.equal((await call(server, '/api/bridge/restart', { ...request, origin: 'https://other.local' })).status, 403);
+  assert.equal(executed, 0);
+  server.config.restartRequired = true;
+  assert.equal((await call(server, '/api/config', { cookie })).data.restart.available, true);
+  const result = await call(server, '/api/bridge/restart', request);
+  assert.equal(result.status, 202);
+  assert.equal(result.data.instanceId, server.instanceId);
+  assert.equal(executed, 0);
+  assert.equal((await call(server, '/api/bridge/restart', request)).status, 409);
+  const saveDuringRestart = await call(server, '/api/config', {
+    ...request, method: 'PUT', body: { revision: view.revision, config: {} },
+  });
+  assert.equal(saveDuringRestart.status, 409);
+  await assert.rejects(server.config.save({ revision: view.revision, config: {} }), { status: 409 });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(executed, 1);
+  assert.equal((await call(server, '/api/bridge/restart', { cookie })).data.phase, 'requested');
+});
 
 test('web accounts use private password hashes, expire sessions and invalidate sign-ins after reset', async (t) => {
   const { storage } = await fixture(t);

@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { ClimateAccess } from '../homebridge-ui/climate-access.js';
 import { HeatingResponse } from './heating-response.js';
 import { DashboardConfigError } from './web-dashboard-config.js';
-import { sensorSources } from '../homebridge-ui/public/sensor-preview.js';
+import { sensorSources, presenceSources } from '../homebridge-ui/public/sensor-preview.js';
 import { scheduleTimeZone } from '../homebridge-ui/public/climate-utils.js';
 
 const MINUTE = 60000;
@@ -64,30 +64,12 @@ function schedulePosition(entries, timeZone, now) {
 export function automationSources(snapshot, external) {
   const temperatures = sensorSources(snapshot, external);
   const serials = new Set(snapshot.devices.map((device) => device.serial));
-  const presence = snapshot.devices
-    .filter((device) => device.type === 'HomeAway')
-    .map((device) => {
-      const account = snapshot.accounts.find((entry) => entry.id === device.account);
-      return {
-        id: 'nest:' + device.id,
-        kind: 'occupancy',
-        detected: device.data.occupancy,
-        lastReadAt: snapshot.generatedAt,
-        available: Boolean(
-          account?.authorised &&
-          account.observing &&
-          !device.needsUpdate &&
-          device.data.online !== false &&
-          typeof device.data.occupancy === 'boolean',
-        ),
-      };
-    });
   return [
     ...temperatures,
-    ...presence,
+    ...presenceSources(snapshot, external),
     ...(external.sources ?? []).filter(
       (source) =>
-        source.kind !== 'temperature' &&
+        !['temperature', 'occupancy'].includes(source.kind) &&
         !String(source.serial ?? '').startsWith('CLIMATE-PRESENCE-') &&
         !(source.kind === 'fan' && (serials.has(source.serial) || /nest|google/i.test(source.manufacturer ?? ''))),
     ),
@@ -466,7 +448,8 @@ export class ClimateAutomation {
 
   refreshSnapshot() {
     this.live = this.dashboard.snapshot();
-    this.sources = new Map(automationSources(this.live, this.external).map((source) => [source.id, source]));
+    this.sources = new Map(automationSources(this.live, this.external).flatMap((source) =>
+      [source.id, ...(source.aliases ?? [])].map((id) => [id, source])));
   }
 
   heatingDeviceOptions(options) {

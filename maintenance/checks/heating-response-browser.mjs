@@ -26,7 +26,21 @@ const device = { id: 'T', serial: 'T', account: 'A', type: 'Thermostat', data: {
 const dashboard = { devices: new Map([['T', device]]), snapshot: () => ({ generatedAt: Date.now(), devices: [device],
   accounts: [{ id: 'A', authorised: true, observing: true }], automation: engine?.snapshot() }),
   control: async (payload) => { commands.push(payload); return {}; }, setAutomationTarget: async (...args) => commands.push(args) };
-const server = new WebDashboard({ storage, configPath, platformConfig: block, dashboard,
+let restartRequests = 0;
+let canRestart = true;
+const restartManager = {
+  phase: 'idle', message: null,
+  capability: async () => ({ available: canRestart, message: canRestart ? null : 'Restart this child bridge from Homebridge.' }),
+  async prepare() {
+    this.phase = 'prepared';
+    return async () => {
+      restartRequests++;
+      if (restartRequests === 1) { this.phase = 'failed'; this.message = 'Fixture restart request failed.'; return; }
+      this.phase = 'idle'; server.instanceId = 'fixture-restarted'; server.auth.sessions.clear(); server.config.restartRequired = false;
+    };
+  },
+};
+const server = new WebDashboard({ storage, configPath, platformConfig: block, dashboard, restartFactory: () => restartManager,
   accessFactory: () => ({ start: async () => {}, refresh: async () => ({ sources: [], bridges: [] }), close() {} }) });
 let engine;
 let browser;
@@ -130,6 +144,34 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   await page.screenshot({ path: path.join(output, 'heating-response-mobile.png'), fullPage: true });
   assert.equal(commands.length, 0);
+  await page.getByRole('switch', { name: 'Separate humidity sensor' }).check();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.locator('#save-bar').waitFor({ state: 'hidden' });
+  const restartButton = page.getByRole('button', { name: 'Restart child bridge', exact: true });
+  assert.equal(await restartButton.isEnabled(), true);
+  await page.getByLabel('Dashboard name', { exact: true }).fill('Pending edit');
+  assert.equal(await restartButton.isEnabled(), false);
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  assert.equal(await restartButton.isEnabled(), true);
+  await page.screenshot({ path: path.join(output, 'restart-required-mobile.png'), fullPage: true });
+  await restartButton.click();
+  assert.equal(await restartButton.isEnabled(), false);
+  await page.getByText('Fixture restart request failed.', { exact: true }).waitFor();
+  assert.equal(await restartButton.isEnabled(), true);
+  await restartButton.click();
+  await page.getByText('Child bridge restarted. Sign in again, then Resume your temperature and fan rules.', { exact: true }).waitFor();
+  assert.equal(restartRequests, 2);
+  await page.getByLabel('Password', { exact: true }).fill('fixture-password');
+  await page.getByRole('button', { name: /Sign in/ }).click();
+  await page.locator('#app').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#restart-notice').isVisible(), false);
+  canRestart = false;
+  await page.getByRole('switch', { name: 'Separate humidity sensor' }).uncheck();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.locator('#save-bar').waitFor({ state: 'hidden' });
+  assert.equal(await restartButton.isVisible(), false);
+  assert.match(await page.locator('#restart-detail').innerText(), /from Homebridge/);
   assert.deepEqual(errors, []);
   process.stdout.write('Heating settings, explicit Apply, learned evidence, Fahrenheit, focus and mobile layout passed.\n');
 } finally {

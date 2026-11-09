@@ -28,6 +28,7 @@ try {
     'homebridge-ui/public/climate-utils.js',
     'homebridge-ui/public/time-zone-picker.js',
     'dist/schedule-time-zone.js',
+    'dist/child-bridge-restart.js',
     'homebridge-ui/dashboard/index.html',
     'homebridge-ui/dashboard/app.js',
     'homebridge-ui/dashboard/styles.css',

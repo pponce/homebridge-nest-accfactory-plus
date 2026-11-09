@@ -1,6 +1,6 @@
 import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone } from '/shared/climate-utils.js';
 import { mountTimeZonePicker } from '/shared/time-zone-picker.js';
-import { sensorSources, previewGroup } from '/shared/sensor-preview.js';
+import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
 
 const $ = (id) => document.getElementById(id);
 for (const id of ['http-login-warning', 'http-session-warning']) $(id).hidden = window.location.protocol !== 'http:';
@@ -33,7 +33,7 @@ function icon(name) {
 }
 document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(icon(node.dataset.icon)));
 const state = {
-  session: null, envelope: null, config: null, dirty: false, saving: false, live: false, heating: null,
+  session: null, envelope: null, config: null, dirty: false, saving: false, live: false, heating: null, restarting: false, restartMessage: '',
   status: { accounts: [], devices: [] }, external: { sources: [], bridges: [] },
   page: 'overview', sourceFilter: 'all', ruleKind: 'temperature', ruleId: null, discovering: false,
 };
@@ -105,31 +105,29 @@ function sources() {
   const current = state.live ? state.status : { ...state.status, accounts: [] };
   const temperature = sensorSources(current, state.external);
   const nativeSerials = new Set((current.devices || []).map((device) => String(device.serial).toUpperCase()));
-  const external = (state.external.sources || []).filter((source) => source.kind !== 'temperature' &&
+  const external = (state.external.sources || []).filter((source) => !['temperature', 'occupancy'].includes(source.kind) &&
+    !String(source.serial ?? '').toUpperCase().startsWith('CLIMATE-PRESENCE-') &&
     !(source.kind === 'fan' && (nativeSerials.has(String(source.serial).toUpperCase()) || /nest|google/i.test(source.manufacturer || ''))));
-  const homeAway = (current.devices || []).filter((device) => device.type === 'HomeAway').map((device) => {
-    const account = current.accounts?.find((entry) => entry.id === device.account);
-    return { id: 'nest:' + device.id, name: device.data.description || 'Nest Home/Away', kind: 'occupancy', provider: 'nest',
-      bridgeName: 'Nest', detected: device.data.occupancy, lastReadAt: current.generatedAt, measuredAt: null,
-      available: Boolean(account?.authorised && account?.observing && !device.needsUpdate && device.data.online !== false && typeof device.data.occupancy === 'boolean') };
-  });
+  const homeAway = presenceSources(current, state.external);
   const now = Date.now();
   return [...temperature, ...homeAway, ...external].map((source) => ({
     ...source,
     available: Boolean(source.available && Number.isFinite(source.lastReadAt) && now - source.lastReadAt <= 90000 && source.lastReadAt <= now + 1000),
   }));
 }
+const matchesSource = (source, id) => source.id === id || source.aliases?.includes(id);
 function markDirty() {
   state.dirty = true; $('save-bar').hidden = false; $('save-title').textContent = 'You have unsaved changes';
   $('save-detail').textContent = 'Saving applies enabled rules. Disabled rules remain drafts.'; $('save').disabled = state.saving;
   renderHeatingRecommendations();
+  renderRestart();
 }
-async function api(route, { method = 'GET', body, anonymous = false } = {}) {
+async function api(route, { method = 'GET', body, anonymous = false, timeout = 20000 } = {}) {
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (!['GET', 'HEAD'].includes(method) && state.session?.csrfToken) headers['X-CSRF-Token'] = state.session.csrfToken;
   const response = await fetch('/api' + route, { method, headers, credentials: 'same-origin', cache: 'no-store',
-    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20000) });
+    body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(timeout) });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && !anonymous) showLogin('Your session expired. Sign in to continue. Unsaved changes stay in this page.');
@@ -174,6 +172,7 @@ $('login-form').addEventListener('submit', async (event) => {
 });
 $('setup-retry').addEventListener('click', checkSession);
 async function signOut() {
+  if (state.restarting) return;
   if (state.dirty && !window.confirm('Discard unsaved changes and sign out?')) return;
   try { await api('/logout', { method: 'POST', body: {} }); } catch (error) { if (error.status !== 401) { notice(error.message, 'danger'); return; } }
   state.session = null; state.config = null; state.envelope = null; state.dirty = false; state.live = false;
@@ -197,6 +196,7 @@ window.addEventListener('hashchange', () => route());
 window.addEventListener('beforeunload', (event) => { if (state.dirty) { event.preventDefault(); event.returnValue = ''; } });
 
 async function refreshStatus() {
+  if (state.restarting) return;
   if (refreshPromise) return refreshPromise;
   $('refresh-status').disabled = true;
   refreshPromise = (async () => {
@@ -373,7 +373,7 @@ function toggle(host, title, description, value, change) {
 let heatingRequest;
 const timeZonePickers = new Map();
 async function refreshHeating() {
-  if (!state.session?.authenticated || !state.config) return;
+  if (!state.session?.authenticated || !state.config || state.restarting) return;
   if (heatingRequest) return heatingRequest;
   const session = state.session;
   heatingRequest = (async () => {
@@ -547,7 +547,7 @@ function picker(host, rule, key, kinds) {
   const hint = el('div', undefined, 'empty-state compact'); const hintText = el('p'); hint.append(hintText, button('Discover sources', () => discoverSources(), 'button secondary'));
   const render = () => {
     const selected = rule[key] || []; const candidates = sources().filter((source) => kinds.includes(source.kind));
-    for (const id of selected) if (!candidates.some((source) => source.id === id)) candidates.push({ id, name: 'Unavailable selected source', available: false, kind: kinds[0] });
+    for (const id of selected) if (!candidates.some((source) => matchesSource(source, id))) candidates.push({ id, name: 'Unavailable selected source', available: false, kind: kinds[0] });
     const query = search.value.trim().toLowerCase(); const matches = candidates.filter((source) => !query || ((source.name || '') + ' ' + (source.bridgeName || '')).toLowerCase().includes(query));
     const visible = new Set(matches.map((source) => source.id));
     for (const [id, row] of rows) if (!visible.has(id)) { row.label.remove(); rows.delete(id); }
@@ -556,12 +556,13 @@ function picker(host, rule, key, kinds) {
       let row = rows.get(source.id);
       if (!row) {
         const label = el('label', undefined, 'pick-source'); const checkbox = el('input'); checkbox.type = 'checkbox';
-        checkbox.addEventListener('change', () => { const next = new Set(rule[key] || []); if (checkbox.checked) next.add(source.id); else next.delete(source.id); rule[key] = [...next]; markDirty(); renderRulePreview(); });
+        checkbox.addEventListener('change', () => { const next = new Set(rule[key] || []); for (const id of [row.source.id, ...(row.source.aliases || [])]) next.delete(id); if (checkbox.checked) next.add(row.source.id); rule[key] = [...next]; markDirty(); renderRulePreview(); });
         const text = el('div'); const name = el('strong'); const origin = el('small'); text.append(name, origin);
         const sample = el('span', undefined, 'pick-reading'); label.append(checkbox, text, sample);
         row = { label, checkbox, name, origin, sample }; rows.set(source.id, row);
       }
-      row.checkbox.checked = selected.includes(source.id);
+      row.source = source;
+      row.checkbox.checked = selected.some((id) => matchesSource(source, id));
       row.name.textContent = source.name || 'Source'; row.origin.textContent = (source.bridgeName || 'Missing source') + ' · ' + source.kind;
       row.sample.textContent = reading(source);
       // Keep existing controls in place so polling preserves keyboard focus and edits.
@@ -636,7 +637,7 @@ function renderRulePreview() {
   const host = $('rule-preview'); const rule = selectedRule(); if (!host || !rule) return;
   renderRuleRuntime(rule);
   host.replaceChildren(el('h4', 'Current signals · preview only'));
-  const all = sources(); const chosen = (rule.sourceIds || []).map((id) => all.find((source) => source.id === id));
+  const all = sources(); const chosen = [...new Set((rule.sourceIds || []).map((id) => all.find((source) => matchesSource(source, id))))];
   const fresh = (source) => source?.available && Number.isFinite(source.lastReadAt) && Date.now() - source.lastReadAt <= 90000 && source.lastReadAt <= Date.now() + 1000;
   let headline = 'Choose your inputs'; let detail = 'Select sources above to preview their current readings.';
   if (rule.kind === 'temperature') {
@@ -664,17 +665,18 @@ async function save() {
   if (!state.dirty || state.saving || !state.config || !state.envelope) return;
   const invalid = [...document.querySelectorAll('#page-settings input, #rule-editor input')].find((input) => !input.checkValidity());
   if (invalid) { invalid.reportValidity(); return; }
-  state.saving = true; $('save').disabled = true; $('discard').disabled = true;
+  state.saving = true; $('save').disabled = true; $('discard').disabled = true; renderRestart();
   try {
     const envelope = await api('/config', { method: 'PUT', body: { revision: state.envelope.revision, config: state.config } });
     state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true;
-    notice(envelope.restartRequired ? 'Saved. Enabled rules apply now. Restart the Nest child bridge in Homebridge to apply accessory settings; resume equipment rules afterward.' : 'Saved. Enabled rules run automatically; disabled rules remain drafts.');
+    state.restartMessage = '';
+    notice(envelope.restartRequired ? 'Saved. Restart the child bridge to apply accessory settings.' : 'Saved. Enabled rules run automatically; disabled rules remain drafts.');
     renderAll(); toast(envelope.restartRequired ? 'Setup saved · child-bridge restart required' : 'Rules saved');
     api('/status').then((status) => { state.status = status; renderLive(); }).catch(() => {});
   } catch (error) {
     notice(error.status === 409 ? 'The configuration changed elsewhere. Your edits are still here, but nothing was saved. Discard to load the latest setup, then reapply your changes.' : error.message, error.status === 409 ? 'warning' : 'danger');
     $('save-title').textContent = error.status === 409 ? 'Newer configuration found' : 'Changes not saved';
-  } finally { state.saving = false; $('save').disabled = !state.dirty; $('discard').disabled = false; }
+  } finally { state.saving = false; $('save').disabled = !state.dirty; $('discard').disabled = false; renderRestart(); }
 }
 $('save').addEventListener('click', save);
 $('discard').addEventListener('click', async () => {
@@ -683,6 +685,53 @@ $('discard').addEventListener('click', async () => {
   catch (error) { notice(error.message, 'danger'); }
 });
 function renderLive() { renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePickers(); renderRulePreview(); for (const device of thermostats()) timeZonePickers.get(device.serial)?.update(device.data); }
-function renderAll() { renderLive(); renderSettings(); renderRules(); }
+function renderRestart() {
+  const restart = state.envelope?.restart;
+  $('restart-notice').hidden = !state.envelope?.restartRequired && !state.restarting && !state.restartMessage;
+  $('restart-title').textContent = state.restarting ? 'Restarting child bridge…' : 'Restart required';
+  $('restart-detail').textContent = state.restartMessage || (state.dirty ? 'Save or discard your edits before restarting.' :
+    restart?.available ? 'Restart this Nest child bridge to apply saved settings. The dashboard will briefly disconnect. Sign in again afterward, then Resume temperature and fan rules.' :
+      restart?.message || 'Restart this child bridge from Homebridge to apply saved settings, then Resume temperature and fan rules.');
+  $('restart-child').hidden = !restart?.available;
+  $('restart-child').disabled = state.restarting || state.dirty || state.saving || ['prepared', 'requested'].includes(restart?.phase);
+  for (const section of document.querySelectorAll('[data-section]')) section.inert = state.restarting;
+  $('sign-out').disabled = state.restarting;
+}
+async function restartChildBridge() {
+  if (state.restarting || state.dirty || state.saving || !state.envelope?.restart?.available) return;
+  const before = state.envelope.web.instanceId;
+  state.restarting = true; state.restartMessage = 'Requesting a restart of this Nest child bridge. Waiting for the dashboard to reconnect…'; renderRestart();
+  try {
+    await api('/bridge/restart', { method: 'POST', body: { revision: state.envelope.revision } });
+    state.envelope.restart.phase = 'requested';
+  } catch (error) {
+    // A bridge can stop before the HTTP reply arrives. Check for a new instance; never resend automatically.
+    if (error.status) { state.restarting = false; state.restartMessage = error.message; renderRestart(); return; }
+  }
+  for (let attempt = 0; attempt < 45 && state.restarting; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const session = await api('/session', { anonymous: true, timeout: 3000 });
+      if (session.instanceId && session.instanceId !== before) {
+        state.restarting = false; state.restartMessage = ''; state.envelope = null; state.config = null; state.live = false; state.heating = null;
+        state.session = session; renderRestart();
+        if (session.authenticated) { await enterDashboard(); notice('Child bridge restarted. Review your equipment, then Resume temperature and fan rules.'); }
+        else showLogin('Child bridge restarted. Sign in again, then Resume your temperature and fan rules.', session.setupRequired);
+        return;
+      }
+      if (session.authenticated) {
+        const result = await api('/bridge/restart', { anonymous: true, timeout: 3000 });
+        if (result.phase === 'failed') {
+          state.restarting = false; state.envelope.restart.phase = 'failed'; state.restartMessage = result.message; renderRestart(); return;
+        }
+      }
+    } catch { /* Temporary connection failures are expected while the bridge restarts. */ }
+  }
+  state.restarting = false;
+  state.restartMessage = 'Restart could not be confirmed. Reload this dashboard or check the child bridge in Homebridge. The request will not be repeated automatically.';
+  renderRestart();
+}
+$('restart-child').addEventListener('click', restartChildBridge);
+function renderAll() { renderLive(); renderSettings(); renderRules(); renderRestart(); }
 checkSession();
 

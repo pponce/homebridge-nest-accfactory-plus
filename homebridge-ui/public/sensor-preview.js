@@ -1,4 +1,23 @@
 // Pure read-only planning model. Nothing in this module sends thermostat or fan commands.
+export function presenceSources(snapshot, external) {
+  const remaining = (external?.sources ?? []).filter((source) =>
+    source.kind === 'occupancy' && !String(source.serial ?? '').toUpperCase().startsWith('CLIMATE-PRESENCE-'));
+  const native = (snapshot?.devices ?? []).filter((device) => device.type === 'HomeAway').map((device) => {
+    const account = snapshot.accounts?.find((entry) => entry.id === device.account);
+    const copies = remaining.filter((source) => source.serial && device.serial &&
+      String(source.serial).toUpperCase() === String(device.serial).toUpperCase());
+    return {
+      id: 'nest:' + device.id, aliases: copies.map((source) => source.id),
+      name: device.data.description || 'Nest Home/Away', kind: 'occupancy', provider: 'nest', bridgeName: 'Nest',
+      detected: device.data.occupancy, lastReadAt: snapshot.generatedAt, measuredAt: null,
+      available: Boolean(account?.authorised && account?.observing && !device.needsUpdate &&
+        device.data.online !== false && typeof device.data.occupancy === 'boolean'),
+    };
+  });
+  const duplicates = new Set(native.flatMap((source) => source.aliases));
+  return [...native, ...remaining.filter((source) => !duplicates.has(source.id))];
+}
+
 export function sensorSources(snapshot, external) {
   const devices = snapshot?.devices ?? [];
   const serials = new Set(devices.map((device) => String(device.serial).toUpperCase()));

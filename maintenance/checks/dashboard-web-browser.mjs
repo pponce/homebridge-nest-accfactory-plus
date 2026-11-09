@@ -49,6 +49,8 @@ const snapshot = () => ({
 const sourceData = () => ({ bridges: [{ id: 'B1', name: 'Room devices', kind: 'child', available: true }, { id: 'B2', name: 'Hallway', kind: 'child', available: true }], sources: [
   { id: 'office-temp', name: 'Office sensor', bridgeName: 'Room devices', provider: 'homebridge', kind: 'temperature', available: true, temperature: 20.1, lastReadAt: Date.now(), measuredAt: null },
   { id: 'hall-motion', name: 'Hallway motion', bridgeName: 'Hallway', provider: 'homebridge', kind: 'motion', available: true, detected: false, lastReadAt: Date.now(), measuredAt: null },
+  { id: 'nest-home-copy', serial: 'h1', name: 'Nest Home/Away', bridgeName: 'Nest Climate Cntrl', kind: 'occupancy', available: true, detected: true, lastReadAt: Date.now() },
+  { id: 'rule-output', serial: 'CLIMATE-PRESENCE-FIXTURE', name: 'Combined output', bridgeName: 'Nest Climate Cntrl', kind: 'occupancy', available: true, detected: true, lastReadAt: Date.now() },
   { id: 'living-presence', name: 'Living room presence', bridgeName: 'Room devices', provider: 'homebridge', kind: 'occupancy', available: true, detected: true, lastReadAt: Date.now(), measuredAt: null },
   { id: 'living-fan', name: 'Living room ceiling fan', bridgeName: 'Room devices', provider: 'homebridge', kind: 'fan', available: true, running: false, canControl: true, lastReadAt: Date.now(), measuredAt: null },
   { id: 'bedroom-fan', name: 'Bedroom fan', bridgeName: 'Room devices', provider: 'homebridge', kind: 'fan', available: true, running: true, canControl: true, lastReadAt: Date.now(), measuredAt: null },
@@ -58,7 +60,7 @@ let config = {
   devices: [{ serialNumber: 'T1', ecoSwitch: false, humiditySensor: true, fanPresetSwitches: false, fanDuration: '1h', scheduleTimeZone: 'America/Los_Angeles' }],
   rules: {
     temperature: [{ id: 'temperature-1', kind: 'temperature', name: 'Living room balance', enabled: false, thermostatId: 'T1', sourceIds: ['nest:thermostat-living'], aggregation: 'average', desiredTemperature: 21 }],
-    occupancy: [{ id: 'presence-1', kind: 'presence', name: 'Someone is home', enabled: false, sourceIds: ['hall-motion', 'living-presence'], logic: 'any', holdMinutes: 10, awayDelayMinutes: 20 }],
+    occupancy: [{ id: 'presence-1', kind: 'presence', name: 'Someone is home', enabled: false, sourceIds: ['hall-motion', 'living-presence', 'nest-home-copy'], logic: 'any', holdMinutes: 10, awayDelayMinutes: 20 }],
     fans: [{ id: 'fan-1', kind: 'fan', name: 'Cooler evenings', enabled: false, sourceIds: ['office-temp'], targetIds: ['living-fan'], action: 'temperature', threshold: 24, hysteresis: 1 }],
   },
 };
@@ -323,6 +325,19 @@ try {
   const apple = await (await page.request.get(base + '/apple-touch-icon.png')).body();
   assert.equal(apple.readUInt32BE(16), 180);
   assert.equal(apple.readUInt32BE(20), 180);
+  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  await page.locator('[data-kind="presence"]').click();
+  const nestInput = page.locator('.pick-source').filter({ hasText: 'Nest Home/Away' });
+  assert.equal(await nestInput.count(), 1);
+  assert.equal(await nestInput.locator('input').isChecked(), true);
+  assert.equal(await page.locator('.pick-source').filter({ hasText: 'Combined output' }).count(), 0);
+  assert.ok(config.rules.occupancy[0].sourceIds.includes('nest-home-copy'));
+  await nestInput.locator('input').uncheck();
+  await nestInput.locator('input').check();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  assert.ok(config.rules.occupancy[0].sourceIds.includes('nest:home-away'));
+  assert.equal(config.rules.occupancy[0].sourceIds.includes('nest-home-copy'), false);
   assert.deepEqual(errors, []);
   assert.deepEqual(cspErrors, []);
   console.log('PASS standalone dashboard: login, live controls, preview isolation, opt-in execution, pause/resume, durable config payload, preserved custom durations, revision conflicts, offline controls, 360px layout, mobile save workflow, text contrast, phone hit targets, dark mode, CSP, iOS icons');

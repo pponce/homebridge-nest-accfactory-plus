@@ -12,6 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { WebDashboardAuth, SESSION_COOKIE, HTTP_SESSION_COOKIE } from './web-dashboard-auth.js';
 import { WebDashboardConfig, DashboardConfigError } from './web-dashboard-config.js';
 import { ClimateAccess } from '../homebridge-ui/climate-access.js';
+import { ChildBridgeRestart } from './child-bridge-restart.js';
 
 const execute = promisify(execFile);
 const root = fileURLToPath(new URL('../homebridge-ui/', import.meta.url));
@@ -148,6 +149,7 @@ export class WebDashboard {
     tlsFactory = loadWebCertificate,
     assetRoot = root,
     discoveryDelay = 3500,
+    restartFactory = (options) => new ChildBridgeRestart(options),
   }) {
     const username = platformConfig?._bridge?.username;
     const instance =
@@ -162,6 +164,13 @@ export class WebDashboard {
     this.sessionCookie = this.options.protocol === 'http' ? HTTP_SESSION_COOKIE : SESSION_COOKIE;
     this.cookieAttributes = '; Path=/; HttpOnly;' + (this.options.protocol !== 'http' ? ' Secure;' : '') + ' SameSite=Strict; Max-Age=';
     this.config = new WebDashboardConfig(configPath, platformConfig, { knownDevices: () => [...dashboard.devices.keys()] });
+    this.instanceId = crypto.randomUUID();
+    this.childRestart = restartFactory({ storage, config: this.config, username });
+    this.config.beforeSave = () => {
+      if (['prepared', 'requested'].includes(this.childRestart.phase)) {
+        throw new DashboardConfigError('A child-bridge restart is pending. Wait for it to reconnect.', 409);
+      }
+    };
     this.accessFactory = accessFactory ?? (() => new ClimateAccess(configPath));
     this.tlsFactory = tlsFactory;
     this.assetRoot = assetRoot;
@@ -194,6 +203,15 @@ export class WebDashboard {
       accountConfigured: Boolean(this.auth.account),
       username: this.auth.account?.username,
       error: this.error,
+      instanceId: this.instanceId,
+    };
+  }
+
+  async configuration(saved) {
+    const view = saved ?? await this.config.snapshot();
+    return {
+      ...view, web: this.status(),
+      restart: view.restartRequired ? await this.childRestart.capability() : { available: false },
     };
   }
 
@@ -398,6 +416,7 @@ export class WebDashboard {
       if (request.method === 'GET' && route === '/api/session') {
         this.send(response, 200, {
           authenticated: Boolean(session),
+          instanceId: this.instanceId,
           setupRequired: !this.auth.account,
           username: session?.username,
           csrfToken: session?.csrfToken,
@@ -446,18 +465,44 @@ export class WebDashboard {
         this.send(response, 200, this.dashboard.snapshot());
         return;
       }
+      if (request.method === 'GET' && route === '/api/bridge/restart') {
+        this.send(response, 200, { phase: this.childRestart.phase, message: this.childRestart.message });
+        return;
+      }
+      if (mutation && ['prepared', 'requested'].includes(this.childRestart.phase)) {
+        throw new DashboardConfigError('A child-bridge restart is pending. Wait for it to reconnect.', 409);
+      }
+      if (request.method === 'POST' && route === '/api/bridge/restart') {
+        const restart = await this.childRestart.prepare(await this.body(request));
+        response.once('finish', () => {
+          this.restartTimer = setTimeout(() => {
+            if (!this.stopping) {
+              void restart();
+            }
+          }, 200);
+          this.restartTimer.unref();
+        });
+        response.once('close', () => {
+          if (!response.writableFinished && this.childRestart.phase === 'prepared') {
+            this.childRestart.phase = 'failed';
+            this.childRestart.message = 'The connection closed before the restart could be requested.';
+          }
+        });
+        this.send(response, 202, { accepted: true, instanceId: this.instanceId });
+        return;
+      }
       if (request.method === 'GET' && route === '/api/sources') {
         this.send(response, 200, await this.sources());
         return;
       }
       if (request.method === 'GET' && route === '/api/config') {
-        this.send(response, 200, { ...(await this.config.snapshot()), web: this.status() });
+        this.send(response, 200, await this.configuration());
         return;
       }
       if (request.method === 'PUT' && route === '/api/config') {
         const saved = await this.config.save(await this.body(request));
         await this.dashboard.automation?.tick();
-        this.send(response, 200, { ...saved, web: this.status() });
+        this.send(response, 200, await this.configuration(saved));
         return;
       }
       if (
@@ -471,7 +516,7 @@ export class WebDashboard {
         const result =
           request.method === 'GET'
             ? await automation.heatingRecommendations()
-            : { ...(await automation.applyHeatingRecommendation(await this.body(request))), web: this.status() };
+            : await this.configuration(await automation.applyHeatingRecommendation(await this.body(request)));
         this.send(response, 200, result);
         return;
       }
@@ -504,6 +549,7 @@ export class WebDashboard {
   }
 
   async stop() {
+    clearTimeout(this.restartTimer);
     this.stopping = true;
     this.closing.abort();
     this.auth.close();
