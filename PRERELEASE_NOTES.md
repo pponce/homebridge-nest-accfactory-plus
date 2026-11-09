@@ -1,3 +1,17 @@
+## v0.5.0-beta.21
+
+**Reliable built-in thermostat sensor feedback for climate rules.**
+
+- A confirmed built-in Nest sensor remains identifiable throughout Google data mapping, live status and automatic target commands. Temperature groups can use that thermostat with Homebridge room sensors, including when optional native sensor scheduling metadata is absent.
+- Remote and unknown sensor selections are kept distinct. Switching away from the built-in sensor stops heating compensation; missing feedback does not authorize native sensor-setting changes.
+- Restart recovery reports the specific requirement still missing, such as Eco status or the operating mode.
+
+After updating, reload the dashboard and check the temperature rule’s execution status. A Waiting rule reevaluates automatically as current feedback arrives. An already-paused rule requires **Resume**. A thermostat can be idle while a temperature rule controls its target.
+
+See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.21/WEB_DASHBOARD.md).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.20
 
 **The full climate interface in Homebridge, with automatic restart recovery.**
