@@ -75,6 +75,14 @@ try {
   assert.match(await page.locator('#fan-curve').innerText(), /74.0°F.*Minimum/s);
   assert.match(await page.locator('#fan-curve').innerText(), /76.0°F.*Halfway/s);
   assert.match(await page.locator('#fan-curve').innerText(), /78.0°F.*Maximum/s);
+  await page.getByRole('button', { name: 'Help for Increase speed above target by (°F)', exact: true }).click();
+  assert.match(await page.getByRole('tooltip').innerText(), /above 74.0°F/);
+  await page.getByRole('button', { name: 'Help for Reach maximum speed above target by (°F)', exact: true }).click();
+  assert.match(await page.getByRole('tooltip').innerText(), /at 78.0°F/);
+  await page.getByLabel('Comfort target (°F)', { exact: true }).fill('73');
+  await page.getByRole('button', { name: 'Help for Reach maximum speed above target by (°F)', exact: true }).click();
+  assert.match(await page.getByRole('tooltip').innerText(), /at 79.0°F/, 'Help uses the current draft');
+  await page.getByLabel('Comfort target (°F)', { exact: true }).fill('72');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
   assert.equal(commands.length, 0, 'Disabled drafts send no commands');

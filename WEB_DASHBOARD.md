@@ -48,6 +48,8 @@ For example, **21 °C = 69.8 °F** for a target, while a **1 °C turn-off gap = 
 
 ## Try your first rules
 
+Small information icons beside rule field names explain what each setting does. Hover over an icon, focus it with the keyboard, or tap it on a phone. Press **Escape**, tap the icon again, or click outside to close the help. Temperature examples use the current draft and your selected Fahrenheit or Celsius units. Reading help does not change or save a rule.
+
 Create each rule with **Enable automatic execution** off to inspect its inputs first. Turning it on and selecting **Save changes** enables that rule without a bridge restart. It starts when its required inputs and thermostat setup are ready. The **Execution status** panel reports the running engine; **Current signals · preview only** is a separate snapshot of the editor's inputs.
 
 The engine checks rules approximately every **15 seconds**, including when no browser is open. Slow bridge responses can extend this interval. Motion inputs are polled, so very short pulses between polls may be missed. Sensors that maintain an occupancy state are useful alongside motion sensors.

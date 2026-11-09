@@ -1,3 +1,19 @@
+## v0.5.0-beta.16
+
+**Field help for climate rules and SSH-friendly npm authorization.**
+
+- Small information icons beside rule fields explain temperature groups, Home/Away logic, fan run conditions, speed settings, source selections and priority.
+- Open help with a hover, keyboard focus or phone tap. Escape, an outside click or a second tap dismisses it. Help fits the viewport in light and dark themes.
+- Fan temperature examples use the current draft and selected units, including the turn-off temperature, the point where speed begins increasing and the temperature for maximum speed.
+- The npm publication helper prints login and authorization links for opening on your own computer. It waits for approval in the terminal and does not launch a browser from SSH.
+- The installer can retrieve release files through the GitHub asset API when the direct release download fails. Package checksums are verified before installation.
+
+After updating, refresh the dashboard. Hover over an information icon in **Climate rules** to inspect a setting. Review enabled temperature and fan rules and **Resume** those you want to run after the bridge restart.
+
+See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.16/WEB_DASHBOARD.md#try-your-first-rules).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.15
 
 **Clear sensor selection and thermostat diagnostics.**

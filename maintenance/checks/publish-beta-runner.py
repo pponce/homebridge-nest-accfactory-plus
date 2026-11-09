@@ -57,8 +57,13 @@ if name == 'curl':
 if name == 'sleep': sys.exit(0)
 if name == 'npm':
     args = args[2:]
-    if args[0] == 'whoami': sys.exit(0)
+    if args[0] == 'whoami': sys.exit(1 if scenario == 'web-login' else 0)
+    if args[0] == 'login':
+        assert '--auth-type=web' in args and '--browser=false' in args
+        print('Open this URL on your computer: https://www.npmjs.com/login?next=/login/cli/fixture')
+        sys.exit(0)
     if args[0] == 'publish':
+        assert '--browser=false' in args
         if scenario == 'publish-failure': sys.exit(1)
         (root / 'published').write_text('yes')
         sys.exit(0)
@@ -127,9 +132,12 @@ def run_case(scenario):
                                 env=env, text=True, capture_output=True, timeout=45)
         calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
         publishes = [call for call in calls if call[0] == 'npm' and call[3] == 'publish']
-        expected = 'SUCCESS' if scenario in ['success', 'existing', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 'PENDING' if scenario == 'pending' else 'FAILED'
+        expected = 'SUCCESS' if scenario in ['success', 'web-login', 'existing', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 'PENDING' if scenario == 'pending' else 'FAILED'
         assert 'END: ' + expected in result.stdout, (scenario, result.stdout, result.stderr)
-        assert len(publishes) == (1 if scenario in ['success', 'publish-failure', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 0), (scenario, publishes)
+        assert len(publishes) == (1 if scenario in ['success', 'web-login', 'publish-failure', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 0), (scenario, publishes)
+        if scenario == 'web-login':
+            assert len([call for call in calls if call[0] == 'npm' and call[3] == 'login']) == 1
+            assert 'https://www.npmjs.com/login?' in result.stdout
         if scenario in ['dirty', 'diverged']:
             assert not any(call[0] in ['curl', 'npm'] for call in calls), (scenario, calls)
         if scenario in ['checksum', 'download-failure', 'invalid-release', 'api-json']:
@@ -152,7 +160,7 @@ def run_case(scenario):
         print(scenario + ': passed')
 
 
-for case in ['success', 'existing', 'pending', 'dirty', 'diverged', 'checksum', 'mismatch', 'registry-failure', 'publish-failure', 'artifacts',
+for case in ['success', 'web-login', 'existing', 'pending', 'dirty', 'diverged', 'checksum', 'mismatch', 'registry-failure', 'publish-failure', 'artifacts',
              'fallback-archive', 'fallback-checksum', 'download-failure', 'invalid-release', 'api-json']:
     run_case(case)
 

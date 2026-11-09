@@ -61,6 +61,65 @@ function button(text, action, className = 'button secondary') {
   const node = el('button', text, className);
   node.type = 'button'; node.addEventListener('click', action); return node;
 }
+let helpSequence = 0;
+let activeHelp;
+let helpTimer;
+function hideFieldHelp() {
+  clearTimeout(helpTimer);
+  if (activeHelp) activeHelp.popup.hidden = true;
+  activeHelp = null;
+}
+function positionFieldHelp() {
+  if (!activeHelp) return;
+  const { trigger, popup } = activeHelp;
+  const anchor = trigger.getBoundingClientRect();
+  const width = document.documentElement.clientWidth; const height = window.innerHeight;
+  popup.style.maxHeight = Math.max(40, height - 24) + 'px';
+  const bounds = popup.getBoundingClientRect();
+  popup.style.left = Math.max(12, Math.min(anchor.left, width - bounds.width - 12)) + 'px';
+  const below = anchor.bottom + 8;
+  popup.style.top = Math.max(12, Math.min(below + bounds.height <= height - 12 ? below : anchor.top - bounds.height - 8, height - bounds.height - 12)) + 'px';
+}
+function fieldHelpLabel(title, help, input) {
+  const row = el('div', undefined, 'field-label-row');
+  const id = 'field-help-' + ++helpSequence;
+  const label = el(input ? 'label' : 'span', title);
+  const popup = el('span', help(), 'field-help-popup'); popup.id = id; popup.hidden = true; popup.setAttribute('role', 'tooltip');
+  const trigger = button('', () => {
+    if (activeHelp?.trigger === trigger && activeHelp.pinned) hideFieldHelp();
+    else { show(); activeHelp.pinned = true; }
+  }, 'field-help-button');
+  trigger.setAttribute('aria-label', 'Help for ' + title); trigger.setAttribute('aria-describedby', id); trigger.append(icon('info'));
+  const show = () => {
+    if (activeHelp?.trigger !== trigger) { hideFieldHelp(); activeHelp = { trigger, popup, pinned: false }; }
+    clearTimeout(helpTimer); popup.textContent = help(); popup.hidden = false; positionFieldHelp();
+  };
+  const leave = () => {
+    clearTimeout(helpTimer);
+    helpTimer = setTimeout(() => {
+      if (activeHelp?.trigger === trigger && !activeHelp.pinned && document.activeElement !== trigger && !popup.matches(':hover')) hideFieldHelp();
+    }, 150);
+  };
+  trigger.addEventListener('pointerenter', (event) => { if (event.pointerType !== 'touch') show(); });
+  trigger.addEventListener('pointerleave', leave); trigger.addEventListener('focus', show); trigger.addEventListener('blur', leave);
+  popup.addEventListener('pointerenter', () => clearTimeout(helpTimer)); popup.addEventListener('pointerleave', leave);
+  if (input) {
+    input.id = id + '-input'; label.htmlFor = input.id; input.setAttribute('aria-describedby', id);
+    // Descriptions stay current for screen readers as well as the visible tooltip.
+    for (const event of ['input', 'change', 'focus']) input.addEventListener(event, () => { popup.textContent = help(); });
+  }
+  row.append(label, trigger, popup); return row;
+}
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && activeHelp) { event.preventDefault(); hideFieldHelp(); } });
+document.addEventListener('pointerdown', (event) => {
+  if (activeHelp && !activeHelp.trigger.contains(event.target) && !activeHelp.popup.contains(event.target)) hideFieldHelp();
+});
+document.addEventListener('scroll', (event) => {
+  if (!activeHelp || activeHelp.popup.contains(event.target)) return;
+  const anchor = activeHelp.trigger.getBoundingClientRect();
+  if (anchor.bottom < 0 || anchor.top > window.innerHeight) hideFieldHelp(); else positionFieldHelp();
+}, true);
+window.addEventListener('resize', hideFieldHelp);
 function notice(message = '', kind = '') {
   $('notice').hidden = !message; $('notice').textContent = message; $('notice').className = 'callout ' + kind;
 }
@@ -102,7 +161,7 @@ function formatTemp(value, digits = 1) {
 function temperatureField(host, title, value, change, { min, max, difference = false } = {}) {
   const unit = temperatureUnit();
   const display = (value) => Number(displayTemperature(value, unit, difference).toFixed(6));
-  const input = inputField(host, title + ' (°' + unit + ')', display(value), (value) => change(celsiusTemperature(value, unit, difference)),
+  const input = ruleInputField(host, title + ' (°' + unit + ')', display(value), (value) => change(celsiusTemperature(value, unit, difference)),
     { type: 'number', min: display(min), max: display(max), step: 'any' });
   input.required = true;
   return input;
@@ -208,6 +267,7 @@ async function signOut() {
 }
 $('sign-out').addEventListener('click', signOut);
 function route(focus = true) {
+  hideFieldHelp();
   cancelFanDrag();
   const page = location.hash.slice(1); state.page = pageDetails[page] ? page : 'overview';
   document.querySelectorAll('[data-section]').forEach((node) => { node.hidden = node.dataset.section !== state.page; });
@@ -440,18 +500,24 @@ function renderSources() {
   if (!(state.external.bridges || []).length) $('bridge-list').append(el('p', 'No Homebridge sources have been discovered yet.', 'small-note'));
 }
 
-function inputField(host, title, value, change, { type = 'text', min, max, step, choices, description } = {}) {
+function inputField(host, title, value, change, { type = 'text', min, max, step, choices, description, help } = {}) {
   const label = el('label', title); const input = el(choices ? 'select' : 'input');
   input.setAttribute('aria-label', title);
   if (choices) choices.forEach(([value, title]) => { const option = el('option', title); option.value = value; input.append(option); });
   else { input.type = type; if (min !== undefined) input.min = min; if (max !== undefined) input.max = max; if (step !== undefined) input.step = step; if (type === 'text') input.maxLength = 80; }
   input.value = value ?? ''; input.addEventListener(choices ? 'change' : 'input', () => { if (type === 'number' && (input.value === '' || !input.checkValidity())) return; change(type === 'number' ? Number(input.value) : input.value); markDirty(); renderRulePreview(); });
-  label.append(input); if (description) label.append(el('small', description, 'small-note')); host.append(label); return input;
+  const field = help ? el('div', undefined, 'help-field') : label;
+  if (help) field.append(fieldHelpLabel(title, help, input));
+  field.append(input); if (description) field.append(el('small', description, 'small-note')); host.append(field); return input;
 }
-function toggle(host, title, description, value, change) {
+function toggle(host, title, description, value, change, help) {
   const label = el('label', undefined, 'toggle-row'); const text = el('span'); text.append(el('strong', title), el('small', description));
   const input = el('input'); input.type = 'checkbox'; input.setAttribute('role', 'switch'); input.checked = value === true;
-  input.addEventListener('change', () => { change(input.checked); markDirty(); renderRulePreview(); }); label.append(text, input); host.append(label);
+  input.addEventListener('change', () => { change(input.checked); markDirty(); renderRulePreview(); });
+  if (help) {
+    const row = el('div', undefined, 'toggle-row');
+    text.replaceChildren(fieldHelpLabel(title, help, input), el('small', description)); row.append(text, input); host.append(row);
+  } else { label.append(text, input); host.append(label); }
 }
 let heatingRequest;
 const timeZonePickers = new Map();
@@ -721,12 +787,54 @@ function renderRules() {
 function editorSection(host, number, title, description) {
   const section = el('section', undefined, 'editor-section'); const heading = el('h4'); heading.append(el('span', number, 'step-number'), document.createTextNode(title)); section.append(heading, el('p', description)); host.append(section); return section;
 }
+function ruleFieldHelp(title, rule) {
+  switch (title.replace(/ \(°[CF]\)$/, '')) {
+    case 'Rule name': return 'Choose a name that identifies this rule in the list and its execution status. For a Home/Away rule, this also names its combined occupancy sensor.';
+    case 'Enable automatic execution': return rule.kind === 'presence'
+      ? 'After saving, publish the combined Home/Away result as an Apple Home occupancy sensor. This does not change Google Home/Away or Nest Eco settings.'
+      : 'After saving, allow this rule to control its selected equipment when its conditions are met. Temperature and fan rules require Resume after a bridge restart. Review execution status for any setup or pause.';
+    case 'Thermostat': return rule.kind === 'fan'
+      ? 'Watch this thermostat for active heating or cooling. Selecting Heat or Cool mode alone does not start the fans; the equipment must actually be running. This rule does not switch the HVAC system on.'
+      : 'Choose the Nest thermostat whose heating target this group adjusts. Its own temperature counts toward the group only if you also select it under Temperature sources.';
+    case 'Desired room temperature': return 'The temperature you want the selected rooms to reach. The group adjusts the Nest heating target within your maximum adjustment to help the selected reading or average reach this temperature.';
+    case 'Combine readings': return 'Equal average gives each selected temperature sensor the same weight. One selected sensor uses just that sensor and requires exactly one selection. Missing or stale selected readings pause automatic heating adjustments.';
+    case 'Maximum target adjustment': return 'Limits how far the heating target sent to Nest can differ from your desired room temperature, in either direction. With this draft, the limit is ±' + formatDifference(rule.maximumOffset ?? 1.5) + '. Nest targets also stay within the supported heating range.';
+    case 'Minimum update interval (minutes)': return 'The shortest wait between automatic heating-target changes. Readings can refresh more often, and an unchanged target does not need another command. Review heating response in Settings for tuning suggestions.';
+    case 'Consider home when': return 'Any means one positive selected source is enough for Home. All means every selected source must be positive. Motion holds count as positive. Missing readings prevent a new Away result.';
+    case 'Motion hold (minutes)': return 'Keep a motion source positive for this long after its last detected motion. Further detections extend the hold. Continuous occupancy stays positive while the sensor reports occupancy; it does not use this hold.';
+    case 'Delay before Away (minutes)': return 'Wait this long after the Home condition stops matching before reporting Away. A matching Home condition resets the wait. Missing readings prevent Away and retain the last confirmed state.';
+    case 'Room fans': return 'Choose the Homebridge room or ceiling fans this rule can control. A fan may belong to several rules; the highest-priority matching rule controls it. Fixed and temperature-based speeds need readable, writable speed control.';
+    case 'Presence sources': return 'Choose motion, occupancy or native Nest Home/Away inputs for this rule. Their combined result is a separate occupancy sensor for Apple Home automations.';
+    case 'Temperature sources': return rule.kind === 'fan'
+      ? 'Selected temperatures are averaged equally. This average drives the temperature run condition and temperature-based speed when used. Missing or stale selected readings pause control; a higher-priority rule can reserve its fans while waiting.'
+      : 'Select the readings used by this temperature group. Include the controlled thermostat here to count its temperature, or select only other room sensors. Paired Nest sensors and Homebridge temperature sensors can be combined.';
+    case 'Run condition': return 'Decides when this rule calls for the fans: above a temperature threshold, during active heating, or during active cooling. Fan speed is chosen separately. When no rule calls for a fan, automation restores its original state within the last controlling speed limit.';
+    case 'Above temperature': return 'Start calling for the fans when the selected temperature average rises above ' + formatTemp(rule.threshold ?? 24) + '. The turn-off gap determines how far it must fall before this rule stops calling for them.';
+    case 'At or above temperature': return 'Start calling for the fans when the selected temperature average reaches ' + formatTemp(rule.threshold ?? 24) + ' or higher. The turn-off gap determines when this rule stops calling for them.';
+    case 'Turn-off gap': return 'Keeps the rule active as the room cools, to avoid switching near the start threshold. With this draft, it stops calling for the fans at ' + formatTemp((rule.threshold ?? 24) - (rule.hysteresis ?? 1)) + ' or below. This is a temperature difference, not a time delay.';
+    case 'Fan speed': return 'Use last setting sends on/off commands only; the fan plugin chooses its startup speed. Fixed speed requests one speed. Temperature-based speed increases airflow as the selected temperature average rises. All three use the run condition above.';
+    case 'Fixed fan speed (%)': return 'The requested speed while this rule is active. Each fan uses the nearest supported speed at or below this setting. The preview shows the resulting speed for each selected fan.';
+    case 'Comfort target': return 'The reference temperature for the fan speed curve. It does not change the thermostat target or decide whether the fan runs. The two temperature differences below set where speed starts increasing and reaches the maximum.';
+    case 'Increase speed above target by': return 'How far above the comfort target the room must get before speed rises above the minimum. With this draft, the increase begins above ' + formatTemp(rule.desiredTemperature + rule.startGap) + '. Speed then rises gradually toward the maximum.';
+    case 'Reach maximum speed above target by': return 'How far above the comfort target the room must get to reach your maximum fan speed. With this draft, the cap is reached at ' + formatTemp(rule.desiredTemperature + rule.fullSpeedGap) + '. This difference must be larger than the increase-start difference.';
+    case 'Minimum running speed (%)': return 'The lowest requested speed while this rule calls for the fans, including when the room is at or below the curve’s starting temperature. It does not keep fans on when the run condition is inactive. Supported fan speeds may be discrete steps.';
+    case 'Maximum fan speed (%)': return 'Caps this rule’s fan speed, even when the room gets hotter than the curve’s maximum-speed temperature. Each fan uses supported speeds within your minimum and maximum; check the preview for the actual values.';
+    case 'Rule priority': return 'The top matching enabled rule controls each fan. Drag rules or use the move buttons to change their order, then Save changes. Disabled rules do not compete. A higher-priority rule waiting for missing readings reserves its fans.';
+    default: return '';
+  }
+}
+function ruleInputField(host, title, value, change, options = {}) {
+  const rule = selectedRule();
+  return inputField(host, title, value, change, { ...options, help: () => ruleFieldHelp(title, rule) });
+}
 function thermostatSelect(host, rule) {
   const choices = [['', 'Select a thermostat'], ...thermostats().map((device) => [device.serial, device.data.description || 'Thermostat'])];
   if (rule.thermostatId && !choices.some(([id]) => id === rule.thermostatId)) choices.push([rule.thermostatId, 'Unavailable selected thermostat']);
-  inputField(host, 'Thermostat', rule.thermostatId || '', (value) => { if (value) rule.thermostatId = value; else delete rule.thermostatId; }, { choices });
+  ruleInputField(host, 'Thermostat', rule.thermostatId || '', (value) => { if (value) rule.thermostatId = value; else delete rule.thermostatId; }, { choices });
 }
 function picker(host, rule, key, kinds) {
+  const title = key === 'targetIds' ? 'Room fans' : rule.kind === 'presence' ? 'Presence sources' : 'Temperature sources';
+  host.append(fieldHelpLabel(title, () => ruleFieldHelp(title, rule)));
   const search = el('input'); search.type = 'search'; search.placeholder = 'Find a room or source'; search.setAttribute('aria-label', key === 'targetIds' ? 'Find room fans' : 'Find rule inputs'); host.append(search);
   const list = el('div', undefined, 'source-picker'); host.append(list);
   const rows = new Map();
@@ -764,11 +872,12 @@ function renderRulePickers() {
   for (const { render } of rulePickers) render();
 }
 function renderRuleEditor() {
+  hideFieldHelp();
   const rule = selectedRule(); if (!rule) return;
   rulePickers = [];
   const host = $('rule-editor'); host.replaceChildren();
   const head = el('div', undefined, 'editor-header'); head.append(el('h3', { temperature: 'A temperature group', presence: 'A sense of home', fan: 'Air, when you want it' }[rule.kind]), el('span', rule.enabled ? 'Execution enabled' : 'Disabled draft', 'draft-chip')); host.append(head);
-  inputField(host, 'Rule name', rule.name, (value) => {
+  ruleInputField(host, 'Rule name', rule.name, (value) => {
     rule.name = value; const active = $('rule-list').querySelector('[aria-pressed="true"] strong'); if (active) active.textContent = value;
     const row = active?.closest('.fan-rule-row');
     if (row) {
@@ -777,27 +886,27 @@ function renderRuleEditor() {
       for (const [direction, label] of [['up', 'Move up'], ['down', 'Move down']]) row.querySelector('[data-reorder="' + direction + '"]').setAttribute('aria-label', label + ': ' + value);
     }
   });
-  toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Temperature and fan rules require Resume after a bridge restart.', rule.enabled, (value) => { rule.enabled = value; renderRules(); });
+  toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Temperature and fan rules require Resume after a bridge restart.', rule.enabled, (value) => { rule.enabled = value; renderRules(); }, () => ruleFieldHelp('Enable automatic execution', rule));
   if (rule.kind === 'temperature') {
     const target = editorSection(host, '01', 'Choose the room target', 'Choose the thermostat this rule will control and the temperature you want the selected rooms to reach.');
     const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); temperatureField(fields, 'Desired room temperature', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { min: rule.enabled ? 9 : 5, max: rule.enabled ? 32 : 35 }); target.append(fields);
     const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Only selected readings count toward the room average. Include the controlled thermostat here if you want its temperature counted; you can also use only other room sensors. Automatic control requires Heat mode, Eco off and Nest’s built-in control sensor.');
-    inputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
+    ruleInputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
     const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from the target sent to Nest. Manual changes and Nest schedule boundaries pause the rule. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
     const tuningLink = el('a', 'Review heating response & tuning in Settings', 'small-note'); tuningLink.href = '#settings'; limits.append(tuningLink);
     temperatureField(limits, 'Maximum target adjustment', rule.maximumOffset ?? 1.5, (value) => { rule.maximumOffset = value; }, { min: 0, max: 3, difference: true });
-    inputField(limits, 'Minimum update interval (minutes)', rule.minimumIntervalMinutes ?? 5, (value) => { rule.minimumIntervalMinutes = value; }, { type: 'number', min: 1, max: 60, step: 1 });
+    ruleInputField(limits, 'Minimum update interval (minutes)', rule.minimumIntervalMinutes ?? 5, (value) => { rule.minimumIntervalMinutes = value; }, { type: 'number', min: 1, max: 60, step: 1 });
   } else if (rule.kind === 'presence') {
     const inputs = editorSection(host, '01', 'Listen for signs of home', 'Choose the motion and occupancy sources to include. Native Nest Home/Away appears when its state is available.'); picker(inputs, rule, 'sourceIds', ['motion', 'occupancy']);
     const behavior = editorSection(host, '02', 'Give arrivals and departures some time', 'Continuous occupancy remains positive while reported. A motion hold keeps a brief detection useful.');
-    inputField(behavior, 'Consider home when', rule.logic || 'any', (value) => { rule.logic = value; }, { choices: [['any', 'Any selected source is positive'], ['all', 'All selected sources are positive']] });
-    const fields = el('div', undefined, 'form-grid'); inputField(fields, 'Motion hold (minutes)', rule.holdMinutes ?? 10, (value) => { rule.holdMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); inputField(fields, 'Delay before Away (minutes)', rule.awayDelayMinutes ?? 20, (value) => { rule.awayDelayMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); behavior.append(fields);
+    ruleInputField(behavior, 'Consider home when', rule.logic || 'any', (value) => { rule.logic = value; }, { choices: [['any', 'Any selected source is positive'], ['all', 'All selected sources are positive']] });
+    const fields = el('div', undefined, 'form-grid'); ruleInputField(fields, 'Motion hold (minutes)', rule.holdMinutes ?? 10, (value) => { rule.holdMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); ruleInputField(fields, 'Delay before Away (minutes)', rule.awayDelayMinutes ?? 20, (value) => { rule.awayDelayMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); behavior.append(fields);
   } else {
     Object.assign(rule, normalizeFanRule(rule));
     const outputs = editorSection(host, '01', 'Choose your room fans', 'Select Homebridge ceiling or room fans. A fan can belong to several rules; only its highest-priority matching rule controls it. Nest’s HVAC blower has separate controls on Overview.');
     picker(outputs, rule, 'targetIds', ['fan']);
     const trigger = editorSection(host, '02', 'Choose when the fans run', 'Temperature and active thermostat heating/cooling are run conditions. The speed choice below determines the airflow while this condition is met.');
-    inputField(trigger, 'Run condition', rule.action, (value) => { rule.action = value; rule.threshold ??= 24; rule.hysteresis ??= 1; renderRuleEditor(); },
+    ruleInputField(trigger, 'Run condition', rule.action, (value) => { rule.action = value; rule.threshold ??= 24; rule.hysteresis ??= 1; renderRuleEditor(); },
       { choices: [['temperature', 'Temperature above threshold'], ['heating', 'Thermostat is heating'], ['cooling', 'Thermostat is cooling']] });
     if (rule.action === 'temperature') {
       const fields = el('div', undefined, 'form-grid');
@@ -810,7 +919,7 @@ function renderRuleEditor() {
       trigger.append(el('p', rule.action === 'cooling' ? 'Use room fans to circulate cooled air while AC is actively cooling. This rule does not switch the AC on.' : 'Use room fans to circulate warm air while the thermostat is actively heating. Fan direction remains a manual setting.', 'small-note'));
     }
     const behavior = editorSection(host, '03', 'Choose how fast the fans run', 'These speed choices work with every run condition. Fixed and temperature-based speeds require a fan with readable, writable speed control.');
-    inputField(behavior, 'Fan speed', rule.speedMode, (value) => {
+    ruleInputField(behavior, 'Fan speed', rule.speedMode, (value) => {
       rule.speedMode = value;
       if (value === 'fixed') rule.fixedSpeed ??= 50;
       if (value === 'curve') {
@@ -825,7 +934,7 @@ function renderRuleEditor() {
     if (rule.speedMode === 'last') {
       behavior.append(el('p', 'Only on/off commands are sent. The fan’s Homebridge plugin restores its last speed or uses its configured startup speed.', 'small-note'));
     } else if (rule.speedMode === 'fixed') {
-      const input = inputField(behavior, 'Fixed fan speed (%)', rule.fixedSpeed, (value) => { rule.fixedSpeed = value; }, { type: 'number', min: 1, max: 100, step: 1 }); input.required = true;
+      const input = ruleInputField(behavior, 'Fixed fan speed (%)', rule.fixedSpeed, (value) => { rule.fixedSpeed = value; }, { type: 'number', min: 1, max: 100, step: 1 }); input.required = true;
       behavior.append(el('p', 'Uses the nearest supported speed at or below this setting. The preview shows the speed each selected fan can use.', 'small-note'));
     } else {
       const fields = el('div', undefined, 'form-grid');
@@ -834,7 +943,7 @@ function renderRuleEditor() {
         ['Reach maximum speed above target by', 'fullSpeedGap', .1, 20, true],
       ]) temperatureField(fields, title, rule[key], (value) => { rule[key] = value; }, { min, max, difference });
       for (const [title, key] of [['Minimum running speed (%)', 'minimumSpeed'], ['Maximum fan speed (%)', 'maximumSpeed']]) {
-        const input = inputField(fields, title, rule[key], (value) => { rule[key] = value; }, { type: 'number', min: 1, max: 100, step: 1 }); input.required = true;
+        const input = ruleInputField(fields, title, rule[key], (value) => { rule[key] = value; }, { type: 'number', min: 1, max: 100, step: 1 }); input.required = true;
       }
       behavior.append(fields, el('p', 'The curve chooses speed only; the run condition decides on/off. While heating or cooling is active, a cooler room uses minimum speed. Airflow increases as the room gets warmer, up to your cap. The comfort target does not change a thermostat.', 'small-note'));
     }
@@ -845,6 +954,7 @@ function renderRuleEditor() {
     if (rule.speedMode !== 'last') { const curve = el('div', undefined, 'preview-box'); curve.id = 'fan-curve'; behavior.append(curve); }
     const priority = editorSection(host, rule.action === 'temperature' || rule.speedMode === 'curve' ? '05' : '04', 'Set rule priority', 'Drag fan rules up or down in the list. The top matching enabled rule controls each fan. Use the move buttons or the drag handle’s arrow keys to reorder, then Save changes to apply.');
     const position = orderedFanRules().findIndex((entry) => entry.id === rule.id) + 1;
+    priority.append(fieldHelpLabel('Rule priority', () => ruleFieldHelp('Rule priority', rule)));
     priority.append(pill('Position ' + position + ' of ' + rules('fan').length + (position === 1 ? ' · Highest priority' : '')));
     priority.append(el('p', 'Example, from top to bottom: room too warm with a speed curve; active cooling at a fixed speed; active heating at a quieter speed. Disabled rules keep their position but do not compete for control. A higher-priority rule with missing readings reserves the fan until readings return. Manual fan changes suspend every rule for that fan until you Resume it.', 'small-note'));
     priority.append(el('p', 'When no rule calls for the fan, automation restores its original state within the last controlling speed limit. A handoff between matching rules keeps the fan running. Normal changes share a one-minute interval across rules.', 'small-note'));

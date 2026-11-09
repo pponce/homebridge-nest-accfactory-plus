@@ -2,7 +2,7 @@
 
 The package and repository are `homebridge-nest-climate-cntrl`. Platform alias: `NestClimateCntrl`.
 
-The current climate release target is `0.5.0-beta.15`. Publish it with the npm `beta` tag. Do not label it `latest`.
+The current climate release target is `0.5.0-beta.16`. Publish it with the npm `beta` tag. Do not label it `latest`.
 
 ## GitHub release
 
@@ -14,7 +14,7 @@ Release assets include the tested npm tarball, a read-only migration preflight, 
 
 The first publication requires the maintainer's authenticated npm account. Do not put npm credentials in a chat, repository or script. Use the checked release tarball with `npm publish --ignore-scripts --access public --tag beta`.
 
-After explicit publication approval, run the current `maintenance/update-checkout-and-publish-beta.sh` from the existing project checkout. It fast-forwards a clean local `main`, updates submodules, downloads and verifies the tested GitHub tarball, and prompts for npm login/2FA if needed. It does not stop Homebridge, install the plugin, alter accessory caches or create backups. A private publication-result report includes a command for copying it to a Mac. Registry propagation is retried; accepted uploads are not republished.
+After explicit publication approval, run the current `maintenance/update-checkout-and-publish-beta.sh` from the existing project checkout. It fast-forwards a clean local `main`, updates submodules, downloads and verifies the tested GitHub tarball, and prints the npm login/authorization URL when needed. Open that URL in a browser on your own computer; the SSH terminal waits for approval without asking Enter to launch a browser. The helper uses npm’s per-command `--browser=false` option and does not change global npm settings. It does not stop Homebridge, install the plugin, alter accessory caches or create backups. A private publication-result report includes a command for copying it to a Mac. Registry propagation is retried; accepted uploads are not republished.
 
 After the package exists, configure trusted publishing in npm's package settings:
 

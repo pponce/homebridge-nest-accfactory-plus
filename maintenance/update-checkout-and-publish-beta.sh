@@ -36,7 +36,7 @@ NODE
   }
   nest_publish_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.15'
+    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.16'
     local release_dir="$project/maintenance/releases/v$version"
     local asset origin branch worktree_status ignored tool attempt tag_value
     for tool in git curl node npm tar sha256sum; do
@@ -111,9 +111,9 @@ if (pkg.name !== name || pkg.version !== version) throw new Error('Release tarba
 console.log('Verified tested GitHub package: ' + name + '@' + version);
 NODE
     if [ "$?" -ne 0 ]; then return 1; fi
-    printf '%s\n' 'Checking npm sign-in. Complete login/2FA here if prompted.'
+    printf '%s\n' 'Checking npm sign-in. If npm prints a URL, open it on your computer and complete sign-in. This terminal will wait for confirmation.'
     npm --cache "$release_dir/npm-cache" whoami --registry=https://registry.npmjs.org >/dev/null 2>&1 ||
-      npm --cache "$release_dir/npm-cache" login --registry=https://registry.npmjs.org || return 1
+      npm --cache "$release_dir/npm-cache" login --auth-type=web --browser=false --registry=https://registry.npmjs.org || return 1
     if npm --cache "$release_dir/npm-cache" view "$package@$version" dist.integrity --json --prefer-online \
       --fetch-retries=0 --fetch-timeout=10000 --registry=https://registry.npmjs.org \
       > "$release_dir/registry-integrity.json" 2> "$release_dir/registry-error.log"; then
@@ -126,7 +126,7 @@ process.exitCode = /\bE404\b/.test(fs.readFileSync(process.argv[2], 'utf8')) ? 0
 NODE
     then
       npm --cache "$release_dir/npm-cache" publish "$release_dir/$package-$version.tgz" \
-        --ignore-scripts --access public --tag beta --registry=https://registry.npmjs.org || return 1
+        --ignore-scripts --access public --tag beta --browser=false --registry=https://registry.npmjs.org || return 1
       printf '%s\n' "$package@$version" > "$release_dir/npm-upload-accepted" || return 1
     else
       printf '%s\n' 'Registry lookup failed for a reason other than a missing version. No publication attempted.'
@@ -164,7 +164,7 @@ NODE
     node - "$nest_publish_report" "$nest_publish_result" "$nest_publish_head" <<'NODE'
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], JSON.stringify({
-  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.15',
+  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.16',
   result: ({ 0: 'verified', 2: 'pending_verification' })[process.argv[3]] || 'failed',
   checkoutCommit: process.argv[4], homebridgeChanged: false,
 }, null, 2) + '\n', { mode: 0o600 });
