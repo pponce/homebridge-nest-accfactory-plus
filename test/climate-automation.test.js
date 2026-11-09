@@ -14,7 +14,9 @@ test('a failed Apple Home status update cannot reject a background tick or stop 
   const f = await fixture(t, {});
   const warnings = [];
   f.engine.log = { warn: (message) => warnings.push(message) };
-  f.engine.onState = () => { throw new Error('SENSITIVE-FIXTURE'); };
+  f.engine.onState = () => {
+    throw new Error('SENSITIVE-FIXTURE');
+  };
   await assert.doesNotReject(f.engine.tick());
   await assert.doesNotReject(f.engine.stop());
   assert.equal(f.engine.stopping, true);

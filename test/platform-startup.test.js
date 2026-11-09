@@ -53,7 +53,11 @@ for (const config of [undefined, null, false, 'invalid', []]) {
 
 test('configuration processing exceptions are logged without escaping or revealing their contents', () => {
   const errors = [];
-  const config = { get webDashboard() { throw new Error('SENSITIVE-FIXTURE'); } };
+  const config = {
+    get webDashboard() {
+      throw new Error('SENSITIVE-FIXTURE');
+    },
+  };
   const api = { on: () => assert.fail('Invalid configuration must stay inactive') };
   assert.doesNotThrow(() => new Platform({ error: (message) => errors.push(message), debug() {} }, config, api));
   assert.equal(errors.length, 1);
@@ -99,7 +103,9 @@ test('configured startup is idempotent and standalone web access remains off by 
 
 test('connection preparation failures are caught at the Homebridge event boundary', async (t) => {
   const f = await fixture(t);
-  t.mock.method(Connections, 'fromConfig', () => { throw new Error('SENSITIVE-FIXTURE'); });
+  t.mock.method(Connections, 'fromConfig', () => {
+    throw new Error('SENSITIVE-FIXTURE');
+  });
   await assert.doesNotReject(f.callbacks.get('didFinishLaunching')());
   assert.deepEqual(f.starts, []);
   assert.equal(f.platform.dashboard, undefined);
@@ -107,7 +113,9 @@ test('connection preparation failures are caught at the Homebridge event boundar
   assert.ok(!JSON.stringify(f.logs).includes('SENSITIVE-FIXTURE'));
 });
 
-for (const [name, Type] of [['configuration dashboard', ClimateDashboard], ['web dashboard', WebDashboard], ['automation', ClimateAutomation]]) {
+for (const [name, Type] of [
+  ['configuration dashboard', ClimateDashboard], ['web dashboard', WebDashboard], ['automation', ClimateAutomation],
+]) {
   test(name + ' startup failure closes partial services and keeps native connections available', async (t) => {
     const f = await fixture(t);
     const original = Type.prototype.start;
@@ -180,7 +188,11 @@ test('shutdown during startup waits for the pending listener and prevents furthe
 
 test('cached accessory restoration errors are logged and do not escape into Homebridge', async (t) => {
   const f = await fixture(t);
-  const accessory = { get services() { throw new Error('SENSITIVE-FIXTURE'); } };
+  const accessory = {
+    get services() {
+      throw new Error('SENSITIVE-FIXTURE');
+    },
+  };
   assert.doesNotThrow(() => f.platform.configureAccessory(accessory));
   assert.ok(f.logs.some((entry) => entry[0] === 'warn' && entry[1].includes('cached Nest accessory')));
   assert.ok(!JSON.stringify(f.logs).includes('SENSITIVE-FIXTURE'));

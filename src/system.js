@@ -155,7 +155,9 @@ export default class NestAccfactory {
         return Promise.resolve();
       }
       this.#starting ??= this.#start().catch(async () => {
-        this.log?.error?.('Nest Climate Cntrl could not start. Check the plugin configuration and storage permissions, then restart the bridge.');
+        this.log?.error?.(
+          'Nest Climate Cntrl could not start. Check the plugin configuration and storage permissions, then restart the bridge.',
+        );
         await this.#stop();
       });
       return this.#starting;
@@ -174,7 +176,9 @@ export default class NestAccfactory {
     // Building account entries performs no I/O. Do not create listeners, files, timers or devices without a usable account.
     this.#connections = this.#createConnections();
     if (this.#connections.size === 0) {
-      this.log?.error?.('No active connections are configured. Add a Nest or Google account in Connection & advanced setup, then restart the bridge. The plugin is inactive.');
+      this.log?.error?.(
+        'No active connections are configured. Add an account in Connection & advanced setup, then restart the bridge.',
+      );
       return;
     }
     this.#deviceModules = await loadDeviceModules(this.log, 'plugins', [
@@ -235,9 +239,10 @@ export default class NestAccfactory {
           await this.automation.start();
         }
       }
-
     } catch {
-      this.log?.warn?.('Climate dashboard and automation could not start. Check the plugin storage and dashboard settings. Native thermostat controls remain available.');
+      this.log?.warn?.(
+        'Climate services could not start. Check plugin storage and dashboard settings. Native thermostat controls remain available.',
+      );
       await this.#stopClimateServices();
     }
 

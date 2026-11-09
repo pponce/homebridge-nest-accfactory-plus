@@ -32,7 +32,9 @@ test('unexpected request handler errors return a failure without rejecting into 
   const f = await fixture(t);
   const warnings = [];
   f.dashboard.log = { warn: (message) => warnings.push(message) };
-  t.mock.method(f.dashboard, 'handle', async () => { throw new Error('SENSITIVE-FIXTURE'); });
+  t.mock.method(f.dashboard, 'handle', async () => {
+    throw new Error('SENSITIVE-FIXTURE');
+  });
   const response = await fetch('http://127.0.0.1:' + f.dashboard.server.address().port + '/status');
   assert.equal(response.status, 500);
   assert.deepEqual(await response.json(), {});
