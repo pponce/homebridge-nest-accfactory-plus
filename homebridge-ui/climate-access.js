@@ -3,6 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { BridgeDiscovery } from './bridge-discovery.js';
+import { speedCapabilities, supportedSpeed, validFanState, sameFanState, fanState } from './public/fan-speed.js';
 
 const uuid = (value) => {
   const text = String(value ?? '').toUpperCase();
@@ -159,7 +160,7 @@ export class ClimateAccess {
         for (let offset = 0; offset < candidates.length; offset += 32) {
           const batch = candidates.slice(offset, offset + 32);
           const ids = batch.flatMap(({ accessory, service, reading }) =>
-            [reading, characteristic(service, '75'), characteristic(service, '77')]
+            [reading, characteristic(service, '75'), characteristic(service, '77'), ...(['40', 'B7'].includes(uuid(service.type)) ? [characteristic(service, '29')] : [])]
               .filter((c) => c?.perms?.includes('pr'))
               .map((c) => accessory.aid + '.' + c.iid),
           );
@@ -186,9 +187,15 @@ export class ClimateAccess {
             const sensor = type === '8A';
             const unitSupported = !sensor || [undefined, 'celsius', 'fahrenheit'].includes(reading.unit);
             const sourceId = 'hap:' + id + '/' + accessory.aid + '/' + service.iid;
+            const rotation = ['40', 'B7'].includes(type) ? characteristic(service, '29') : undefined;
+            const capabilities = Number.isInteger(rotation?.iid) ? speedCapabilities(rotation) : null;
+            const speedSample = current(rotation);
+            const speed = speedSample?.value;
+            const speedAvailable = Boolean(capabilities && (speedSample?.status ?? 0) === 0 &&
+              Number.isFinite(speed) && speed >= 0 && speed <= 100);
             if (['40', 'B7'].includes(type) && reading.perms.includes('pw') &&
                 !reading.perms.includes('tw') && !reading.perms.includes('aa')) {
-              fanControls.set(sourceId, { bridge: id, aid: accessory.aid, iid: reading.iid, type });
+              fanControls.set(sourceId, { bridge: id, aid: accessory.aid, iid: reading.iid, type, speedIid: capabilities ? rotation.iid : undefined });
             }
             bridgeSources.push({
               id: sourceId,
@@ -207,6 +214,12 @@ export class ClimateAccess {
                 (!sensor || (Number.isFinite(sample?.value) && Number.isFinite(temperature) && temperature >= -100 && temperature <= 100)),
               temperature: sensor && Number.isFinite(temperature) ? temperature : null,
               running: sensor ? undefined : sample?.value === true || sample?.value === 1,
+              ...(['40', 'B7'].includes(type) ? {
+                speed: speedAvailable ? speed : null,
+                canSetSpeed: Boolean(capabilities && fanControls.has(sourceId)),
+                speedAvailable,
+                speedCapabilities: capabilities,
+              } : {}),
               detected: ['85', '86'].includes(type) ? sample?.value === true || sample?.value === 1 : undefined,
               canControl:
                 ['40', 'B7'].includes(type) &&
@@ -243,8 +256,9 @@ export class ClimateAccess {
     return { sources, bridges, discoveryError: this.discoveryError ?? null };
   }
 
-  async setFan(id, running, expected) {
-    if (this.closed || typeof running !== 'boolean' || typeof expected !== 'boolean') {
+  async setFan(id, running, expected, options = {}) {
+    const speedMode = validFanState(expected);
+    if (this.closed || typeof running !== 'boolean' || (typeof expected !== 'boolean' && !speedMode)) {
       throw new Error('Invalid room-fan command.');
     }
     // Resolve the service and permissions again before each write; the browser never supplies endpoints or IIDs.
@@ -252,18 +266,41 @@ export class ClimateAccess {
     const source = this.sources.find((entry) => entry.id === id);
     const control = this.fanControls.get(id);
     const instance = control && this.instances.get(control.bridge);
-    if (!source?.available || !source.canControl || !instance || source.running !== expected) {
+    if (!source?.available || !source.canControl || !instance ||
+        (speedMode ? !source.speedAvailable || !sameFanState(fanState(source), expected) : source.running !== expected) ||
+        (speedMode && running && supportedSpeed(source, source.speed, options.minimum, options.maximum) !== source.speed)) {
       const error = new Error('Room fan changed or is unavailable.');
       error.code = 'CLIMATE_CONFLICT';
       throw error;
     }
+    if (options.guard && !options.guard()) throw new Error('Room-fan command cancelled.');
+    await this.writeFan(instance, control, control.iid, control.type === '40' ? running : Number(running));
+  }
+
+  async setFanSpeed(id, speed, expected, options = {}) {
+    if (this.closed || !Number.isFinite(speed) || !validFanState(expected)) throw new Error('Invalid room-fan speed command.');
+    await this.refresh();
+    const source = this.sources.find((entry) => entry.id === id);
+    const control = this.fanControls.get(id);
+    const instance = control && this.instances.get(control.bridge);
+    if (!source?.available || !source.speedAvailable || !instance || !Number.isInteger(control.speedIid) ||
+        !sameFanState(fanState(source), expected) || supportedSpeed(source, speed, options.minimum, options.maximum) !== speed) {
+      const error = new Error('Room fan changed or its speed is outside the supported limits.');
+      error.code = 'CLIMATE_CONFLICT';
+      throw error;
+    }
+    if (options.guard && !options.guard()) throw new Error('Room-fan command cancelled.');
+    await this.writeFan(instance, control, control.speedIid, speed);
+  }
+
+  async writeFan(instance, control, iid, value) {
     const host = instance.ipAddress.includes(':') ? '[' + instance.ipAddress + ']' : instance.ipAddress;
     const response = await this.request('http://' + host + ':' + instance.port + '/characteristics', {
       method: 'PUT',
       redirect: 'error',
       signal: AbortSignal.timeout(5000),
       headers: { Authorization: this.bridges.get(control.bridge).pin, 'Content-Type': 'application/hap+json' },
-      body: JSON.stringify({ characteristics: [{ aid: control.aid, iid: control.iid, value: control.type === '40' ? running : Number(running) }] }),
+      body: JSON.stringify({ characteristics: [{ aid: control.aid, iid, value }] }),
     });
     // Never retry a write at an alternate address: a timeout may follow an accepted command.
     if (response.status === 204) {
@@ -271,7 +308,7 @@ export class ClimateAccess {
     }
     if (response.status === 207) {
       const result = await response.json();
-      const status = result.characteristics?.find((item) => item.aid === control.aid && item.iid === control.iid);
+      const status = result.characteristics?.find((item) => item.aid === control.aid && item.iid === iid);
       if (status?.status === 0) {
         return;
       }

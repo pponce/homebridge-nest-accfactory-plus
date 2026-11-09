@@ -223,5 +223,10 @@
     "lines": 95,
     "branches": 90,
     "functions": 90
+  },
+  "src/fan-speed-control.js": {
+    "lines": 95,
+    "branches": 95,
+    "functions": 100
   }
 }

@@ -6,6 +6,8 @@ import { HeatingResponse } from './heating-response.js';
 import { DashboardConfigError } from './web-dashboard-config.js';
 import { sensorSources, presenceSources } from '../homebridge-ui/public/sensor-preview.js';
 import { scheduleTimeZone } from '../homebridge-ui/public/climate-utils.js';
+import { speedAction } from '../homebridge-ui/public/fan-speed.js';
+import { runFanSpeed, releaseFanSpeed, validSpeedLease } from './fan-speed-control.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
@@ -142,9 +144,9 @@ export class ClimateAutomation {
           typeof lease.targetId !== 'string' ||
           key !== lease.kind + ':' + lease.targetId ||
           !this.states.has(lease.owner) ||
-          !validValue(lease.baseline) ||
-          !validValue(lease.expected) ||
-          !validValue(lease.before) ||
+          (lease.mode === 'speed'
+            ? lease.kind !== 'fan' || !validSpeedLease(lease)
+            : !validValue(lease.baseline) || !validValue(lease.expected) || !validValue(lease.before)) ||
           !Number.isFinite(lease.sentAt)
         ) {
           throw new Error('Invalid saved command');
@@ -211,6 +213,7 @@ export class ClimateAutomation {
         reason: state.reason,
         paused: state.paused === true,
         roomTemperature: state.roomTemperature,
+        fanSpeeds: state.fanSpeeds,
         desiredTemperature: state.rule.desiredTemperature,
         nestTarget: state.nestTarget,
         proposedTarget: state.proposedTarget,
@@ -281,6 +284,13 @@ export class ClimateAutomation {
       if (old && JSON.stringify(old.rule.sourceIds) !== JSON.stringify(rule.sourceIds)) {
         state.holds = {};
         state.awaySince = null;
+        state.demand = false;
+      }
+      if (old && old.rule.action !== rule.action) {
+        state.demand = false;
+        state.fanObserved = {};
+        state.fanSpeedObserved = {};
+        state.fanSpeeds = [];
       }
       state.rule = rule;
       this.states.set(rule.id, state);
@@ -319,6 +329,7 @@ export class ClimateAutomation {
         owner?.rule.enabled &&
         owner.rule.kind === lease.kind &&
         !owner.paused &&
+        (lease.kind !== 'fan' || (lease.mode === 'speed') === (owner.rule.action === speedAction)) &&
         (lease.kind === 'temperature' ? owner.rule.thermostatId === lease.targetId : owner.rule.targetIds.includes(lease.targetId));
       if (!assigned || lease.restoring) {
         await this.release(key, lease);
@@ -637,6 +648,10 @@ export class ClimateAutomation {
 
   async fan(state) {
     const rule = state.rule;
+    if (rule.action === speedAction) {
+      await runFanSpeed(this, state);
+      return;
+    }
     let demand;
     if (['heating', 'cooling'].includes(rule.action)) {
       const device = this.device(rule.thermostatId);
@@ -782,6 +797,10 @@ export class ClimateAutomation {
   }
 
   async release(key, lease) {
+    if (lease.mode === 'speed') {
+      await releaseFanSpeed(this, key, lease);
+      return;
+    }
     const device = lease.kind === 'temperature' ? this.device(lease.targetId) : undefined;
     const source = lease.kind === 'fan' ? this.sources.get(lease.targetId) : undefined;
     if (lease.kind === 'temperature' ? !this.connected(device) : !fresh(source, this.now()) || !source.canControl) {
@@ -888,6 +907,8 @@ export class ClimateAutomation {
         if (!state.paused) {
           state.controlStarted = false;
           state.fanObserved = {};
+          state.fanSpeedObserved = {};
+          state.demand = false;
         }
       }
       await this.persist();

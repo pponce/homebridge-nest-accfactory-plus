@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { HEATING_PROFILES } from './heating-response.js';
 import { parseDurationToSeconds } from './utils.js';
+import { fanCurveError, speedAction } from '../homebridge-ui/public/fan-speed.js';
 
 const DEVICE_FIELDS = [
   'name',
@@ -103,6 +104,11 @@ export function validateRuleDrafts(value) {
         'desiredTemperature',
         'maximumOffset',
         'minimumIntervalMinutes',
+        'startGap',
+        'stopGap',
+        'fullSpeedGap',
+        'minimumSpeed',
+        'maximumSpeed',
       ]);
       assert(
         typeof rule.id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(rule.id) && !known.has(rule.id),
@@ -122,7 +128,7 @@ export function validateRuleDrafts(value) {
       for (const [field, choices] of [
         ['aggregation', ['single', 'average']],
         ['logic', ['any', 'all']],
-        ['action', ['heating', 'cooling', 'temperature']],
+        ['action', ['heating', 'cooling', 'temperature', speedAction]],
       ]) {
         if (rule[field] !== undefined) {
           assert(choices.includes(rule[field]), 'Choose a supported rule option.');
@@ -136,6 +142,11 @@ export function validateRuleDrafts(value) {
         ['desiredTemperature', 5, 35],
         ['maximumOffset', 0, 3],
         ['minimumIntervalMinutes', 1, 60],
+        ['startGap', 0.1, 10],
+        ['stopGap', 0, 10],
+        ['fullSpeedGap', 0.2, 20],
+        ['minimumSpeed', 1, 100],
+        ['maximumSpeed', 1, 100],
       ]) {
         if (rule[field] !== undefined) {
           assert(Number.isFinite(rule[field]) && rule[field] >= low && rule[field] <= high, 'A rule value is outside its supported range.');
@@ -153,7 +164,11 @@ export function validateRuleDrafts(value) {
           );
         } else if (kind === 'fan') {
           assert(targets.length > 0, 'Select at least one room fan before enabling.');
-          if (['heating', 'cooling'].includes(rule.action)) {
+          if (rule.action === speedAction) {
+            assert(sources.length > 0, 'Select temperature sources for temperature-based fan speed.');
+            const curveError = fanCurveError(rule);
+            assert(!curveError, curveError);
+          } else if (['heating', 'cooling'].includes(rule.action)) {
             assert(text(rule.thermostatId, 256), 'Select the thermostat that the fans should follow.');
           } else {
             assert(sources.length > 0 && Number.isFinite(rule.threshold), 'Select temperature sources and a fan threshold.');

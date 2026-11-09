@@ -58,7 +58,7 @@ The engine checks rules approximately every **15 seconds**, including when no br
 2. Check **Bridge connections & source availability** if a source is missing. Homebridge accessory control (`-I`) must be enabled on the source bridge, and that bridge must be reachable with its configured credentials.
 3. Use the **Temperature**, **Presence** and **Fans** filters to inspect readings and availability.
 
-Third-party devices must expose a compatible temperature, motion, occupancy or fan service through Homebridge. Devices available only in Apple Home are not discoverable here. Room fans need standard writable on/off control; a generic switch is not automatically treated as a fan. Combined Climate presence outputs are excluded from discovery to prevent feedback loops.
+Third-party devices must expose a compatible temperature, motion, occupancy or fan service through Homebridge. Devices available only in Apple Home are not discoverable here. Room fans need standard writable on/off control; temperature-based speed also needs readable, writable percentage speed control. A generic switch is not automatically treated as a fan. Combined Climate presence outputs are excluded from discovery to prevent feedback loops.
 
 The visible dashboard refreshes Nest and external Homebridge readings every **30 seconds** and refreshes immediately when you return to its browser tab. **Refresh status** also updates external readings. Temperature sources, fan states and presence signals update in place while you edit a rule, preserving selections, search text and keyboard focus.
 
@@ -103,9 +103,34 @@ Change the **desired room temperature in Climate rules**. Apple Home continues t
 6. For a supervised trial without changing the room temperature, save a threshold slightly below the current average and observe the fan starting. Then save a threshold whose **threshold minus turn-off gap** is above the average and observe it stopping. Allow at least **one minute between normal fan commands**, plus the polling interval.
 7. Restore the threshold you want, or use **Pause rule** to end the trial.
 
-An enabled rule does not stop a fan that was already running before the rule took control. A manual fan change pauses the rule instead of being repeatedly overwritten. Only one enabled rule can own a given fan. Speed and direction are not set by these rules.
+An on/off rule does not stop a fan that was already running before the rule took control. A manual fan change pauses the rule instead of being repeatedly overwritten. Only one enabled rule can own a given fan. Fan direction remains a manual setting.
 
 To circulate air with the HVAC system, choose **Thermostat is heating** or **Thermostat is cooling** and select the thermostat. The fan follows its reported activity. **Nest HVAC fan timers** are separate controls on **Overview** for the blower connected to Nest; they do not operate these room fans.
+
+### Temperature-based fan speed
+
+Choose **Temperature-based speed** as a fan rule's **Run condition** to increase airflow as the selected rooms get warmer. This uses a separate comfort target; it does not change a thermostat target. Airflow is intended to help people feel cooler, so a fan can remain running even when it does not lower the measured room temperature.
+
+Select fans marked **Speed control** and one or more temperature sources. Their readings are averaged equally. Configure the comfort target, start gap, stop gap, minimum running speed, maximum speed, and temperature gap at maximum speed. For example:
+
+| Setting | Example |
+| --- | --- |
+| Comfort target | 72 °F |
+| Start above target by | 2 °F |
+| Stop above target by | 0.5 °F |
+| Minimum running speed | 25% |
+| Maximum fan speed | 75% |
+| Reach maximum speed above target by | 6 °F |
+
+The rule stays idle at 73 °F, starts at 74 °F with 25% speed, reaches 50% at 76 °F, and requests at most 75% at 78 °F or above. Between the start and maximum-speed temperatures, requested speed rises linearly. Once running, the rule keeps minimum speed between the stop and start temperatures and releases control at 72.5 °F or below.
+
+**Your speed curve** shows these temperatures in your selected units, plus each selected fan's supported speed steps. The nearest usable step is chosen within both speed limits; ties use the lower step. For a fan with 25%, 50%, 75% and 100% steps, a 70% cap permits at most 50%. If no running step fits the limits, that fan cannot follow the curve. Check its source status and adjust the limits or selection. Fans with only on/off control use the on/off rule modes.
+
+Normal speed adjustments are spaced at least one minute apart. Changes smaller than five percentage points are ignored except when reaching minimum or maximum speed. Lowering the cap can reduce an owned fan's speed immediately. A speed command is confirmed before a separate on command is sent; some fans turn on as part of setting their speed. Confirmation can therefore take additional polling cycles. Unsupported or unconfirmed speed control never falls back to starting a fan at an unspecified speed.
+
+When demand ends, a fan started by the rule turns off. A fan already running returns to its previous speed within the configured cap. Pausing, disabling, removing a fan, or losing temperature readings also releases owned settings. If no supported speed fits a reduced cap, an owned fan is stopped. Manual speed or power changes pause the rule and remain in place until you explicitly Resume. A cap limits this rule's commands; it does not restrict manual controls in Apple Home or a fan's own app. A disconnected or stopped Homebridge host cannot send a new speed or stop command.
+
+Review the table, enable the rule, and **Save changes**. **Execution status** reports each fan's current speed, curve speed and cap. Speed rules require **Resume automatic control** after a bridge restart.
 
 ### Home/Away example
 

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ClimateAutomation, heatingTarget, automationSources } from '../src/climate-automation.js';
 import { ClimateDashboard } from '../src/climate-dashboard.js';
 import { validateRuleDrafts } from '../src/web-dashboard-config.js';
+import { fanState, speedCapabilities } from '../homebridge-ui/public/fan-speed.js';
 
 const minute = 60000;
 const temperatureRule = {
@@ -47,6 +48,7 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
   let clock = Date.parse('2026-11-02T10:00:00Z');
   const commands = [];
   const fanCommands = [];
+  const fanSpeedCommands = [];
   const accounts = [{ id: 'A', authorised: true, observing: true }];
   let failCommand = false;
   let acknowledge = true;
@@ -86,7 +88,8 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
   dashboard.update('S', 'TemperatureSensor', { nest_google_device_uuid: 'S', current_temperature: 20, online: true }, 'A');
   const external = [
     { id: 'room', kind: 'temperature', temperature: 20, available: true },
-    { id: 'fan', kind: 'fan', running: false, canControl: true, available: true },
+    { id: 'fan', kind: 'fan', running: false, canControl: true, available: true, canSetSpeed: true, speedAvailable: true, speed: 100,
+      speedCapabilities: speedCapabilities({ perms: ['pr', 'pw'] }) },
     { id: 'motion', kind: 'motion', detected: false, available: true },
     { id: 'occupancy', kind: 'occupancy', detected: false, available: true },
   ];
@@ -97,11 +100,37 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
       sources: external.map((source) => ({ ...source, lastReadAt: source.stale ? clock - 100000 : clock })),
       bridges: [],
     }),
-    setFan: async (id, running, expected) => {
+    setFan: async (id, running, expected, options = {}) => {
       const source = external.find((entry) => entry.id === id);
-      assert.equal(source.running, expected);
+      if (typeof expected === 'boolean') {
+        assert.equal(source.running, expected);
+      }
+      else {
+        assert.deepEqual(fanState(source), expected);
+      }
+      if (options.guard) {
+        assert.equal(options.guard(), true);
+      }
       fanCommands.push({ id, running });
-      source.running = running;
+      if (failCommand) {
+        throw new Error('fan unavailable');
+      }
+      if (acknowledge) {
+        source.running = running;
+      }
+    },
+    setFanSpeed: async (id, speed, expected, options) => {
+      const source = external.find((entry) => entry.id === id);
+      assert.deepEqual(fanState(source), expected);
+      assert.ok(speed <= options.maximum);
+      assert.equal(options.guard(), true);
+      fanSpeedCommands.push({ id, speed });
+      if (failCommand) {
+        throw new Error('fan unavailable');
+      }
+      if (acknowledge) {
+        source.speed = speed;
+      }
     },
   };
   let rules = validateRuleDrafts(initial);
@@ -123,6 +152,7 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
     access,
     commands,
     fanCommands,
+    fanSpeedCommands,
     accounts,
     external,
     devices,
@@ -622,4 +652,200 @@ test('local observation reads disabled-rule sensors without commands and discard
   f.devices[0].heatingResponseEnabled = false;
   await f.engine.tick();
   assert.equal(f.engine.heatingResponse.records.size, 0);
+});
+
+const speedRule = {
+  ...fanRule, action: 'temperature-speed', desiredTemperature: (72 - 32) / 1.8,
+  startGap: 2 / 1.8, stopGap: 0.5 / 1.8, fullSpeedGap: 6 / 1.8, minimumSpeed: 25, maximumSpeed: 75,
+};
+const fahrenheitRoom = (f, value) => {
+  f.source('room').temperature = (value - 32) / 1.8;
+};
+async function startSpeedFan(f, temperature = 74) {
+  fahrenheitRoom(f, temperature);
+  await f.engine.tick(); // Stage speed while off.
+  await f.engine.tick(); // Confirm speed, then turn on.
+  await f.engine.tick(); // Confirm power.
+}
+
+test('speed fan starts at 74F, ramps to 50% at 76F, caps at 75%, holds through 73F and stops at 72.5F', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  fahrenheitRoom(f, 73);
+  await f.engine.tick();
+  assert.equal(f.fanCommands.length + f.fanSpeedCommands.length, 0);
+  fahrenheitRoom(f, 74);
+  await f.engine.tick();
+  assert.deepEqual(f.fanSpeedCommands, [{ id: 'fan', speed: 25 }]);
+  assert.equal(f.fanCommands.length, 0, 'Power waits for confirmed speed');
+  await f.engine.tick();
+  assert.deepEqual(f.fanCommands, [{ id: 'fan', running: true }]);
+  await f.engine.tick();
+  fahrenheitRoom(f, 76);
+  f.advance(59000);
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.length, 1);
+  f.advance(1000);
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 50);
+  await f.engine.tick();
+  f.advance(minute);
+  fahrenheitRoom(f, 76.1);
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.length, 2, 'Tiny changes are ignored');
+  fahrenheitRoom(f, 90);
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 75);
+  await f.engine.tick();
+  f.advance(minute);
+  fahrenheitRoom(f, 73);
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 25);
+  await f.engine.tick();
+  fahrenheitRoom(f, 72.5);
+  await f.engine.tick();
+  assert.equal(f.fanCommands.at(-1).running, false);
+  await f.engine.tick();
+  assert.equal(f.engine.leases.size, 0);
+  assert.equal(f.rule('fans').paused, false);
+});
+
+test('speed writes that also start a fan need no redundant power command', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  const write = f.access.setFanSpeed;
+  f.access.setFanSpeed = async (...args) => {
+    await write(...args);
+    f.source('fan').running = true;
+  };
+  await startSpeedFan(f);
+  assert.equal(f.fanSpeedCommands.length, 1);
+  assert.equal(f.fanCommands.length, 0);
+  assert.equal(f.rule('fans').paused, false);
+});
+
+test('manual speed and power changes pause speed rules without undoing user intent', async (t) => {
+  for (const change of [{ speed: 60 }, { running: false }]) {
+    const f = await fixture(t, { fans: [speedRule] });
+    await startSpeedFan(f);
+    Object.assign(f.source('fan'), change);
+    await f.engine.tick();
+    await f.engine.tick();
+    assert.equal(f.rule('fans').paused, true);
+    assert.equal(f.fanSpeedCommands.length, 1);
+    assert.equal(f.fanCommands.length, 1);
+    assert.equal(f.engine.leases.size, 0);
+    await f.engine.control({ id: 'fans', action: 'resume' });
+    assert.equal(f.rule('fans').paused, false);
+  }
+});
+
+test('speed control restores a previously running fan within the cap after pause or loss of temperature input', async (t) => {
+  for (const baseline of [60, 100]) {
+    const f = await fixture(t, {});
+    f.source('fan').running = true;
+    f.source('fan').speed = baseline;
+    f.rules({ fans: [speedRule] });
+    fahrenheitRoom(f, 74);
+    await f.engine.tick();
+    await f.engine.tick();
+    assert.equal(f.source('fan').speed, 25);
+    if (baseline === 60) {
+      await f.engine.control({ id: 'fans', action: 'pause' });
+    }
+    else {
+      f.source('room').available = false;
+      await f.engine.tick();
+    }
+    assert.equal(f.fanSpeedCommands.at(-1).speed, Math.min(baseline, 75));
+    await f.engine.tick();
+    assert.equal(f.source('fan').running, true);
+    assert.equal(f.fanCommands.length, 0);
+    assert.equal(f.engine.leases.size, 0);
+  }
+});
+
+test('lower caps take priority over the interval and unsupported cap restoration stops only an owned fan', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  await startSpeedFan(f, 90);
+  f.rules({ fans: [{ ...speedRule, maximumSpeed: 50 }] });
+  await f.engine.tick();
+  assert.equal(f.source('fan').speed, 50);
+  f.source('fan').speedCapabilities = speedCapabilities({ perms: ['pr', 'pw'], minStep: 25 });
+  f.rules({ fans: [{ ...speedRule, minimumSpeed: 1, maximumSpeed: 20 }] });
+  await f.engine.tick();
+  assert.equal(f.source('fan').running, false);
+  assert.ok(f.fanSpeedCommands.every((command) => command.speed <= 75));
+});
+
+test('missing speed feedback or unsupported fans never fall back to unrestricted on/off commands', async (t) => {
+  for (const change of [{ canSetSpeed: false }, { speedAvailable: false }, { speed: null }, { available: false }, { stale: true }]) {
+    const f = await fixture(t, { fans: [speedRule] });
+    Object.assign(f.source('fan'), change);
+    fahrenheitRoom(f, 90);
+    await f.engine.tick();
+    assert.equal(f.fanCommands.length + f.fanSpeedCommands.length, 0);
+    assert.equal(f.rule('fans').phase, 'waiting');
+  }
+});
+
+test('unconfirmed speed writes time out without turning on or retrying the fan', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  f.noAck();
+  fahrenheitRoom(f, 78);
+  await f.engine.tick();
+  f.advance(minute);
+  await f.engine.tick();
+  assert.equal(f.rule('fans').phase, 'waiting');
+  f.advance(minute);
+  await f.engine.tick();
+  await f.engine.tick();
+  assert.equal(f.rule('fans').paused, true);
+  assert.equal(f.fanSpeedCommands.length, 1);
+  assert.equal(f.fanCommands.length, 0);
+});
+
+test('a failed speed command pauses, and a manual change before ownership is respected', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  f.fail();
+  fahrenheitRoom(f, 78);
+  await f.engine.tick();
+  assert.equal(f.rule('fans').paused, true);
+  assert.equal(f.fanCommands.length, 0);
+  const g = await fixture(t, { fans: [speedRule] });
+  g.source('fan').speed = 60;
+  await g.engine.tick();
+  assert.equal(g.rule('fans').paused, true);
+  assert.equal(g.fanSpeedCommands.length, 0);
+});
+
+test('disconnected owned speed fans restore on reconnection, and restarted rules require Resume', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  await startSpeedFan(f);
+  f.source('fan').available = false;
+  await f.engine.control({ id: 'fans', action: 'pause' });
+  assert.equal(f.engine.snapshot().pendingRestorations, 1);
+  f.source('fan').available = true;
+  await f.engine.tick();
+  await f.engine.tick();
+  assert.equal(f.source('fan').running, false);
+  await f.engine.control({ id: 'fans', action: 'resume' });
+  f.advance(minute);
+  await f.engine.tick();
+  await f.engine.tick();
+  const restarted = new ClimateAutomation({ directory: f.directory, dashboard: f.dashboard, config: f.config,
+    accessFactory: () => f.access, now: f.now });
+  await restarted.start({ schedule: false });
+  assert.equal(restarted.snapshot().rules[0].paused, true);
+  assert.equal(restarted.recoveryRequired, undefined);
+  await restarted.stop();
+});
+
+test('changing between speed and on/off modes releases old ownership before a different controller can write', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  await startSpeedFan(f);
+  f.rules({ fans: [{ ...fanRule, threshold: 30 }] });
+  await f.engine.tick();
+  await f.engine.tick();
+  assert.equal(f.source('fan').running, false);
+  assert.equal(f.engine.leases.size, 0);
+  assert.equal(f.rule('fans').paused, false);
 });

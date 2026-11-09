@@ -9,7 +9,7 @@ import { sensorSources, previewGroup } from '../homebridge-ui/public/sensor-prev
 import { BridgeDiscovery } from '../homebridge-ui/bridge-discovery.js';
 
 const bridge = 'AA:BB:CC:DD:EE:FF';
-async function fixture(t) {
+async function fixture(t, speedProperties) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'climate-sources-'));
   t.after(() => rm(directory, { force: true, recursive: true }));
   const config = path.join(directory, 'config.json');
@@ -26,6 +26,8 @@ async function fixture(t) {
   let failed = false;
   let faulty = false;
   let fanValue = 1;
+  let speedValue = 50;
+  let speedStatus = 0;
   let putStatus = 204;
   let writeFailure = false;
   const requests = [];
@@ -37,12 +39,18 @@ async function fixture(t) {
         if (writeFailure) {
           throw new Error('Write timed out after delivery');
         }
-        fanValue = JSON.parse(options.body).characteristics[0].value;
+        const command = JSON.parse(options.body).characteristics[0];
+        if (command.iid === 22) {
+          speedValue = command.value;
+        }
+        else {
+          fanValue = command.value;
+        }
         return {
           status: putStatus,
           ok: putStatus < 300,
           json: async () => ({
-            characteristics: [{ aid: 2, iid: 21, status: putStatus === 207 ? 0 : -70402 }],
+            characteristics: [{ aid: 2, iid: command.iid, status: putStatus === 207 ? 0 : -70402 }],
           }),
         };
       }
@@ -74,7 +82,16 @@ async function fixture(t) {
                       { iid: 12, type: '77', perms: ['pr'], value: 0 },
                     ],
                   },
-                  { iid: 20, type: 'B7', characteristics: [{ iid: 21, type: 'B0', perms: ['pr', 'pw'], value: 0 }] },
+                  {
+                    iid: 20,
+                    type: 'B7',
+                    characteristics: [
+                      { iid: 21, type: 'B0', perms: ['pr', 'pw'], value: 0 },
+                      ...(speedProperties
+                        ? [{ iid: 22, type: '29', perms: ['pr', 'pw'], unit: 'percentage', value: 100, ...speedProperties }]
+                        : []),
+                    ],
+                  },
                   { iid: 30, type: '85', characteristics: [{ iid: 31, type: '22', perms: ['pr'], value: false }] },
                   { iid: 40, type: '86', characteristics: [{ iid: 41, type: '71', perms: ['pr'], value: 1 }] },
                 ],
@@ -91,6 +108,7 @@ async function fixture(t) {
             { aid: 2, iid: 11, value: 68 },
             { aid: 2, iid: 12, value: faulty ? 1 : 0 },
             { aid: 2, iid: 21, value: fanValue },
+            ...(speedProperties ? [{ aid: 2, iid: 22, value: speedValue, status: speedStatus }] : []),
             { aid: 2, iid: 31, value: false },
             { aid: 2, iid: 41, value: 1 },
           ],
@@ -106,6 +124,12 @@ async function fixture(t) {
     access,
     client,
     requests,
+    speedValue: (value) => {
+      speedValue = value;
+    },
+    speedStatus: (value) => {
+      speedStatus = value;
+    },
     fanValue: (value) => {
       fanValue = value;
     },
@@ -408,4 +432,88 @@ test('preview refuses missing, stale and invalid inputs and pauses for native so
     f.sources[0].lastReadAt = lastReadAt;
     assert.equal(previewGroup(args).state, 'paused');
   }
+});
+
+test('speed discovery reads fresh RotationSpeed feedback and reports supported steps without leaking control identifiers', async (t) => {
+  const f = await fixture(t, { minStep: 25 });
+  const fan = (await f.access.refresh()).sources.find((source) => source.kind === 'fan');
+  assert.equal(fan.speed, 50, 'The cached accessory value is not used');
+  assert.equal(fan.canSetSpeed, true);
+  assert.equal(fan.speedAvailable, true);
+  assert.deepEqual(fan.speedCapabilities.values, [0, 25, 50, 75, 100]);
+  assert.ok(f.requests.some((request) => request.url.includes('2.22')));
+  assert.equal(fan.speedIid, undefined);
+  f.speedStatus(-70402);
+  const invalid = (await f.access.refresh()).sources.find((source) => source.kind === 'fan');
+  assert.equal(invalid.speedAvailable, false);
+  assert.equal(invalid.available, true, 'On/off access remains independently available');
+  assert.equal(invalid.speed, null);
+  await assert.rejects(f.access.setFanSpeed(fan.id, 25, { running: true, speed: 50 }, { minimum: 25, maximum: 75 }),
+    { code: 'CLIMATE_CONFLICT' });
+});
+
+test('speed writes validate fresh state, permissions, supported steps, caps and cancellation', async (t) => {
+  const f = await fixture(t, { minStep: 25 });
+  const id = 'hap:' + bridge + '/2/20';
+  const limits = { minimum: 25, maximum: 75 };
+  await f.access.setFanSpeed(id, 75, { running: true, speed: 50 }, limits);
+  const put = f.requests.find((entry) => entry.options.method === 'PUT');
+  assert.deepEqual(JSON.parse(put.options.body), { characteristics: [{ aid: 2, iid: 22, value: 75 }] });
+  for (const speed of [100, 60, 0]) {
+    await assert.rejects(f.access.setFanSpeed(id, speed, { running: true, speed: 75 }, limits), { code: 'CLIMATE_CONFLICT' });
+  }
+  await assert.rejects(f.access.setFanSpeed(id, 50, { running: true, speed: 50 }, limits), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(f.access.setFanSpeed(id, 50, { running: true, speed: 75 }, { ...limits, guard: () => false }), /cancelled/);
+  f.putStatus(207);
+  await f.access.setFanSpeed(id, 50, { running: true, speed: 75 }, limits);
+  await f.access.setFan(id, false, { running: true, speed: 50 }, limits);
+  await assert.rejects(f.access.setFan(id, true, { running: false, speed: 75 }, limits), { code: 'CLIMATE_CONFLICT' });
+  f.speedValue(100);
+  await assert.rejects(f.access.setFan(id, true, { running: false, speed: 100 }, limits), { code: 'CLIMATE_CONFLICT' });
+  f.speedValue(50);
+  await assert.rejects(f.access.setFan(id, true, { running: false, speed: 50 }, { ...limits, guard: () => false }), /cancelled/);
+  await f.access.setFan(id, true, { running: false, speed: 50 }, limits);
+  const count = f.requests.filter((request) => request.options.method === 'PUT').length;
+  f.failWrite();
+  await assert.rejects(f.access.setFanSpeed(id, 75, { running: true, speed: 50 }, limits), /timed out/);
+  assert.equal(f.requests.filter((request) => request.options.method === 'PUT').length, count + 1);
+  f.access.close();
+  await assert.rejects(f.access.setFanSpeed(id, 25, { running: true, speed: 50 }, limits), /Invalid/);
+});
+
+test('read-only, restricted and malformed fan speed data do not enable speed control', async (t) => {
+  for (const props of [{ perms: ['pr'] }, { perms: ['pr', 'pw', 'tw'] }, { perms: ['pr', 'pw', 'aa'] }, { minStep: 0 }]) {
+    const f = await fixture(t, props);
+    const fan = (await f.access.refresh()).sources.find((source) => source.kind === 'fan');
+    assert.equal(fan.canSetSpeed, false);
+    await assert.rejects(f.access.setFanSpeed(fan.id, 25, { running: true, speed: 50 }, { minimum: 25, maximum: 75 }),
+      { code: 'CLIMATE_CONFLICT' });
+    assert.equal(f.requests.filter((request) => request.options.method === 'PUT').length, 0);
+  }
+  for (const value of ['50', NaN, -1, 101]) {
+    const f = await fixture(t, {});
+    f.speedValue(value);
+    assert.equal((await f.access.refresh()).sources.find((source) => source.kind === 'fan').speedAvailable, false);
+  }
+});
+
+test('legacy Fan services also use RotationSpeed while preserving boolean power writes', async (t) => {
+  const f = await fixture(t, { minStep: 25 });
+  const original = f.access.request;
+  f.access.request = async (...args) => {
+    const response = await original(...args);
+    if (!args[0].endsWith('/accessories')) {
+      return response;
+    }
+    const payload = await response.json();
+    const service = payload.accessories[0].services.find((entry) => entry.type === 'B7');
+    service.type = '40';
+    service.characteristics[0].type = '25';
+    return { ...response, json: async () => payload };
+  };
+  const id = 'hap:' + bridge + '/2/20';
+  await f.access.setFanSpeed(id, 25, { running: true, speed: 50 }, { minimum: 25, maximum: 75 });
+  await f.access.setFan(id, false, { running: true, speed: 25 }, { minimum: 25, maximum: 75 });
+  const last = f.requests.filter((request) => request.options.method === 'PUT').at(-1);
+  assert.equal(JSON.parse(last.options.body).characteristics[0].value, false);
 });

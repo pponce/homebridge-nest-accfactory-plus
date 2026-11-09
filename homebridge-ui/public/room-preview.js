@@ -168,7 +168,7 @@ export function mountRoomPreview({ host, homebridge, getStatus, getConfig, chang
             fan.bridgeName +
             ' · ' +
             (fan.available ? (fan.running ? 'Running' : 'Off') : 'Unavailable') +
-            (fan.canControl ? ' · On/off capable' : ' · Read only'),
+            (fan.canSetSpeed ? ' · Speed control' + (fan.speedAvailable && fan.running ? ' · ' + fan.speed + '%' : '') : fan.canControl ? ' · On/off capable' : ' · Read only'),
         ),
       );
     }
