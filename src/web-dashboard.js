@@ -548,6 +548,10 @@ export class WebDashboard {
       }
       return;
     }
+    if (request.method === 'POST' && route === '/api/temperature-target') {
+      this.send(response, 200, await this.dashboard.setTemperatureTarget(await this.body(request)));
+      return;
+    }
     if (request.method === 'POST' && route === '/api/command') {
       this.send(response, 200, await this.dashboard.control(await this.body(request)));
       return;

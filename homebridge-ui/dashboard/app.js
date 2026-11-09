@@ -53,6 +53,8 @@ let refreshPromise;
 let statusPromise;
 let statusRead = 0;
 const ecoCommands = new Map();
+const targetEdits = new Map();
+const targetCommands = new Map();
 const ecoWaitMilliseconds = 30000;
 let rulePickers = [];
 
@@ -233,6 +235,8 @@ async function api(route, { method = 'GET', body, anonymous = false, timeout = 2
 function showLogin(message = '', setup = false) {
   for (const command of ecoCommands.values()) clearTimeout(command.timer);
   ecoCommands.clear();
+  for (const command of targetCommands.values()) clearTimeout(command.timer);
+  targetCommands.clear(); targetEdits.clear();
   $('app').hidden = true; $('login-screen').hidden = false;
   $('login-error').textContent = message; $('login-error').hidden = !message;
   $('login-form').hidden = setup; $('setup-retry').hidden = !setup;
@@ -303,6 +307,7 @@ async function readStatus() {
       const status = await api('/status');
       if (state.session === session) {
         state.status = status; state.live = true; notice();
+        reconcileTargetCommands(read);
         for (const [serial, command] of ecoCommands) {
           const device = status.devices.find((entry) => entry.serial === serial);
           // Acceptance alone is not confirmation, nor is a read started before acceptance.
@@ -344,7 +349,7 @@ setInterval(refreshVisibleDashboard, 30000);
 document.addEventListener('visibilitychange', refreshVisibleDashboard);
 async function refreshPendingEco() {
   if (document.hidden || !state.session?.authenticated || $('app').hidden || state.restarting ||
-    ![...ecoCommands.values()].some((command) => command.phase === 'pending')) return;
+    ![...ecoCommands.values(), ...targetCommands.values()].some((command) => command.phase === 'pending')) return;
   await readStatus(); renderLive();
 }
 setInterval(refreshPendingEco, 2000);
@@ -429,15 +434,135 @@ $('download-sensor-diagnostics').addEventListener('click', async () => {
   } catch (error) { notice(error.message, 'warning'); }
   finally { control.disabled = !state.live || !thermostats().length; }
 });
+function reconcileTargetCommands(read) {
+  for (const [serial, command] of targetCommands) {
+    const device = state.status.devices.find((entry) => entry.serial === serial);
+    if (command.afterRead === null || read <= command.afterRead || !device || !usable(device)) continue;
+    const model = device.temperatureTarget;
+    const confirmed = command.model.source === 'room' ? model?.source === 'room' && model.ruleId === command.model.ruleId &&
+      Math.abs(model.fields[0].value - command.values.value) < 1e-7 : device.data.hvac_mode === command.model.mode &&
+      Object.entries(command.values).every(([key, value]) => Math.abs((device.data[key] ??
+        (command.model.fields.length === 1 ? device.data.target_temperature : NaN)) - value) < 0.26);
+    if (confirmed) {
+      clearTimeout(command.timer); targetCommands.delete(serial);
+      toast(command.model.source === 'room' ? 'Desired room temperature saved.' : 'Nest target confirmed.');
+    }
+  }
+}
+
+async function applyTemperature(device, edit) {
+  if (!usable(device) || targetCommands.get(device.serial)?.phase === 'pending') return;
+  const values = Object.fromEntries(edit.model.fields.map((field) => [field.key, celsiusTemperature(Number(edit.values[field.key]), edit.unit)]));
+  const command = { model: edit.model, values, phase: 'pending', afterRead: null, timer: null,
+    message: edit.model.source === 'room' ? 'Saving desired room temperature…' : 'Waiting for Nest confirmation… (up to 30 seconds)' };
+  const current = () => targetCommands.get(device.serial) === command;
+  command.timer = setTimeout(() => {
+    if (!current() || command.phase !== 'pending') return;
+    command.phase = 'unconfirmed';
+    command.message = 'The temperature change was not confirmed within 30 seconds. Showing the last reported target. The request may still take effect.';
+    renderThermostats();
+  }, 30000);
+  targetEdits.delete(device.serial); targetCommands.set(device.serial, command); renderThermostats();
+  try {
+    const response = await api('/temperature-target', { method: 'POST', body: { serial: device.serial, expected: edit.model.expected, values } });
+    if (!current()) return;
+    if (!response.accepted) throw new Error('The temperature change was not accepted.');
+    command.afterRead = statusRead;
+    if (response.source === 'room') command.message = 'Desired room temperature saved. The rule keeps its update interval.';
+    await refreshPendingEco();
+  } catch (error) {
+    if (!current()) return;
+    if (error.status || error.name === 'Error') {
+      clearTimeout(command.timer); command.phase = 'failed';
+      command.message = 'Temperature change could not be confirmed. ' + error.message + ' Showing the last reported target.';
+    } else {
+      command.afterRead = statusRead;
+      command.message = 'Connection interrupted. Checking the requested temperature for up to 30 seconds.';
+    }
+    renderThermostats();
+  }
+}
+
+function renderTargetEditor(device) {
+  const edit = targetEdits.get(device.serial); if (!edit) return null;
+  const section = el('form', undefined, 'target-editor');
+  section.setAttribute('aria-label', 'Temperature editor for ' + device.data.description);
+  const changed = !usable(device) || state.restarting || edit.unit !== temperatureUnit() || ecoCommands.get(device.serial)?.phase === 'pending' || !device.temperatureTarget?.available || device.temperatureTarget.expected !== edit.model.expected;
+  section.append(el('h4', edit.model.source === 'room' ? 'Desired room temperature' : 'Nest target temperature'));
+  section.append(el('p', changed ? 'Control or target changed while editing. Cancel and reopen to use the current setting.' : edit.model.note, 'small-note'));
+  const inputs = [];
+  for (const field of edit.model.fields) {
+    const group = el('div', undefined, 'target-field');
+    const label = el('label', field.label + ' (°' + edit.unit + ')');
+    const input = el('input'); input.type = 'number'; input.inputMode = 'decimal'; input.step = 'any';
+    input.id = 'target-' + device.serial + '-' + field.key; label.htmlFor = input.id;
+    input.min = displayTemperature(edit.model.minimum, edit.unit); input.max = displayTemperature(edit.model.maximum, edit.unit);
+    input.value = edit.values[field.key]; input.required = true; input.disabled = changed;
+    const step = edit.unit === 'F' ? 1 : 0.5;
+    const adjust = (direction) => {
+      const number = Number(input.value); if (!Number.isFinite(number) || input.value === '') return;
+      input.value = Number(Math.max(Number(input.min), Math.min(Number(input.max), number + direction * step)).toFixed(1));
+      input.dispatchEvent(new Event('input')); input.focus();
+    };
+    const minus = button('−', () => adjust(-1), 'target-step'); minus.setAttribute('aria-label', 'Decrease ' + field.label.toLowerCase());
+    const plus = button('+', () => adjust(1), 'target-step'); plus.setAttribute('aria-label', 'Increase ' + field.label.toLowerCase());
+    minus.disabled = plus.disabled = changed;
+    const row = el('div', undefined, 'target-stepper'); row.append(minus, input, plus); group.append(label, row); section.append(group);
+    inputs.push(input); input.addEventListener('input', () => { edit.values[field.key] = input.value; validate(); });
+  }
+  const limits = el('p', 'Range: ' + formatTemp(edit.model.minimum) + '–' + formatTemp(edit.model.maximum) +
+    (edit.model.minimumGap ? '. Keep at least ' + displayTemperature(edit.model.minimumGap, edit.unit, true).toFixed(1) + '°' + edit.unit + ' between heating and cooling.' : '.'), 'small-note');
+  section.append(limits);
+  const error = el('p', '', 'target-error'); error.setAttribute('role', 'status');
+  const actions = el('div', undefined, 'target-editor-actions');
+  const apply = el('button', 'Apply', 'button primary'); apply.type = 'submit';
+  const cancel = button('Cancel', () => {
+    targetEdits.delete(device.serial); renderThermostats(); $('edit-target-' + device.serial)?.focus();
+  });
+  function validate() {
+    const values = inputs.map((input) => celsiusTemperature(Number(input.value), edit.unit));
+    const gapInvalid = values.length === 2 && values[1] - values[0] < edit.model.minimumGap - 1e-8;
+    error.textContent = gapInvalid ? 'Increase the gap between heating and cooling.' : '';
+    apply.disabled = changed || gapInvalid || inputs.some((input) => input.value === '' || !input.checkValidity());
+  }
+  actions.append(apply, cancel); section.append(error, actions); validate();
+  section.addEventListener('submit', (event) => { event.preventDefault(); validate(); if (!apply.disabled) applyTemperature(device, edit); });
+  section.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); cancel.click(); } });
+  return section;
+}
+
+function renderTarget(device, target, fallback) {
+  const model = device.temperatureTarget;
+  const command = targetCommands.get(device.serial); const pending = command?.phase === 'pending';
+  const shown = pending ? command.model : model;
+  const values = shown?.available ? shown.fields.map((field) => formatTemp(pending ? command.values[field.key] : field.value)).join('–') : fallback;
+  const label = shown?.source === 'room' ? 'Desired room' : 'Nest target · ' + (device.data.hvac_mode || 'Unknown mode');
+  const available = usable(device) && model?.available && !pending && ecoCommands.get(device.serial)?.phase !== 'pending';
+  const edit = button('', () => {
+    if (targetEdits.has(device.serial)) { targetEdits.delete(device.serial); renderThermostats(); return; }
+    const unit = temperatureUnit();
+    targetEdits.set(device.serial, { model: structuredClone(model), unit,
+      values: Object.fromEntries(model.fields.map((field) => [field.key, displayTemperature(field.value, unit).toFixed(1)])) });
+    renderThermostats(); $('target-' + device.serial + '-' + model.fields[0].key)?.focus();
+  }, 'target-edit-button');
+  edit.id = 'edit-target-' + device.serial; edit.disabled = !available;
+  edit.setAttribute('aria-label', 'Edit ' + (shown?.source === 'room' ? 'desired room temperature' : 'Nest target temperature') + ' for ' + device.data.description);
+  edit.setAttribute('aria-expanded', String(targetEdits.has(device.serial))); edit.setAttribute('aria-busy', String(pending));
+  edit.append(el('strong', values), el('span', label), icon('draft')); target.append(edit);
+  if (shown?.source === 'room') target.append(el('small', 'Nest target · ' + fallback, 'adjusted-target'));
+  if (!model?.available && model?.reason) { target.title = model.reason; }
+}
+
 function renderThermostats() {
-  const devices = thermostats(); const host = $('thermostats');
-  const expanded = new Set([...host.querySelectorAll('.temperature-controller[open]')].map((node) => node.dataset.thermostat));
-  host.replaceChildren();
+  const devices = thermostats(); const list = $('thermostats');
+  const focused = list.contains(document.activeElement) ? document.activeElement.id : null;
+  const expanded = new Set([...list.querySelectorAll('.temperature-controller[open]')].map((node) => node.dataset.thermostat));
+  list.replaceChildren();
   $('download-sensor-diagnostics').disabled = !state.live || !devices.length;
   $('home-heading').textContent = state.config?.name || 'A clearer view of home.';
   const online = devices.filter(usable).length;
   $('overview-summary').textContent = devices.length ? online + ' of ' + devices.length + ' thermostats connected. A view of the rooms that matter.' : 'Your Nest thermostats appear here when the account connects.';
-  if (!devices.length) empty(host, 'Your thermostats belong here.', 'Connect your Nest account in Homebridge. Live temperatures and controls appear once devices are discovered.', 'thermometer');
+  if (!devices.length) empty(list, 'Your thermostats belong here.', 'Connect your Nest account in Homebridge. Live temperatures and controls appear once devices are discovered.', 'thermometer');
   for (const device of devices) {
     const data = device.data || {}; const available = usable(device); const scale = temperatureUnit();
     const ecoCommand = ecoCommands.get(device.serial); const ecoPending = ecoCommand?.phase === 'pending';
@@ -451,7 +576,9 @@ function renderThermostats() {
     current.setAttribute('aria-label', 'Current temperature ' + formatTemp(data.current_temperature));
     const target = el('div', undefined, 'temperature-target');
     const targetText = data.hvac_mode === 'range' || data.hvac_mode === 'heatcool' ? formatTemp(data.target_temperature_low) + '–' + formatTemp(data.target_temperature_high) : formatTemp(data.target_temperature);
-    target.append(el('strong', targetText), document.createTextNode('Nest target · ' + (data.hvac_mode || 'Unknown mode'))); row.append(current, target);
+    if (host) target.append(el('strong', targetText), document.createTextNode('Nest target · ' + (data.hvac_mode || 'Unknown mode')));
+    else renderTarget(device, target, targetText);
+    row.append(current, target);
     const facts = el('div', undefined, 'device-facts');
     if (Number.isFinite(data.current_humidity)) { const fact = el('span'); fact.append(icon('droplet'), document.createTextNode(Math.round(data.current_humidity) + '% humidity')); facts.append(fact); }
     const updated = el('span'); updated.append(icon('clock'), document.createTextNode(when(device.lastUpdate))); facts.append(updated);
@@ -463,7 +590,7 @@ function renderThermostats() {
       eco.append(icon('leaf'), document.createTextNode('Eco ' + (value ? 'on' : 'off'))); eco.setAttribute('aria-pressed', String(value));
       eco.setAttribute('aria-busy', String(ecoPending));
       eco.setAttribute('aria-label', (ecoPending ? 'Eco ' + (value ? 'on' : 'off') + ' requested' : 'Turn Eco ' + (value ? 'off' : 'on')) + ' for ' + (data.description || 'thermostat'));
-      eco.disabled = !available || ecoPending; actions.append(eco);
+      eco.disabled = !available || ecoPending || targetCommands.get(device.serial)?.phase === 'pending'; actions.append(eco);
     }
     if (data.has_fan) {
       const timer = el('div'); timer.append(el('div', 'HVAC fan' + (data.fan_state ? ' · running' : ''), 'control-caption')); const buttons = el('div', undefined, 'timer-buttons');
@@ -471,6 +598,22 @@ function renderThermostats() {
       timer.append(buttons); actions.append(timer);
     }
     controls.append(actions);
+    if (!host) {
+      const editor = renderTargetEditor(device); if (editor) controls.append(editor);
+      const command = targetCommands.get(device.serial);
+      if (command) {
+        const feedback = el('div', undefined, 'target-feedback'); feedback.setAttribute('role', 'status');
+        feedback.append(el('p', command.message));
+        const dismiss = button(command.phase === 'pending' ? 'Stop waiting' : 'Dismiss', () => {
+          clearTimeout(command.timer); targetCommands.delete(device.serial); renderThermostats();
+        });
+        feedback.append(dismiss);
+        if (command.phase === 'pending') feedback.append(el('small', 'Stop waiting dismisses this check. A request already sent may still take effect.'));
+        controls.append(feedback);
+      } else if (!device.temperatureTarget?.available && device.temperatureTarget?.reason) {
+        controls.append(el('p', device.temperatureTarget.reason, 'small-note target-unavailable'));
+      }
+    }
     if (ecoCommand) {
       const feedback = el('div', undefined, 'eco-feedback'); feedback.setAttribute('role', 'status');
       feedback.append(el('p', ecoCommand.message));
@@ -490,8 +633,9 @@ function renderThermostats() {
       controls.append(section);
     }
     if (actions.childElementCount || controls.childElementCount > 1) card.append(controls);
-    host.append(card);
+    list.append(card);
   }
+  if (focused) $(focused)?.focus({ preventScroll: true });
   const selected = $('runtime-device').value; $('runtime-device').replaceChildren();
   devices.forEach((device) => { const option = el('option', device.data.description || 'Thermostat'); option.value = device.serial; $('runtime-device').append(option); });
   if (devices.some((device) => device.serial === selected)) $('runtime-device').value = selected;

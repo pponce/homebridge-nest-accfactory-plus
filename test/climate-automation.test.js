@@ -1637,3 +1637,45 @@ test('restart status names only the feedback still missing', async (t) => {
   assert.equal(restarted.snapshot().rules[0].temperatureControl, 'active');
   await restarted.stop();
 });
+
+test('web desired-target edits work with HomeKit projection off and preserve group, interval and restart target', async (t) => {
+  const f = await fixture(t, { temperature: [{ ...temperatureRule, manualTargetBehavior: 'pause' }] });
+  await f.engine.tick();
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  const model = f.dashboard.snapshot().devices.find((device) => device.serial === 'T').temperatureTarget;
+  assert.equal(model.source, 'room');
+  assert.equal(model.fields[0].value, 21);
+  const writes = f.commands.length;
+  const result = await f.dashboard.setTemperatureTarget({ serial: 'T', expected: model.expected, values: { value: 23 } });
+  assert.equal(result.source, 'room');
+  assert.equal(f.rule('rooms').desiredTemperature, 23);
+  assert.equal(f.rule('rooms').savedDesiredTemperature, 21);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.commands.length, writes);
+  await assert.rejects(f.dashboard.setTemperatureTarget({ serial: 'T', expected: model.expected, values: { value: 24 } }), { status: 409 });
+  await f.engine.stop();
+  const restarted = await restartFixture(f);
+  t.after(() => restarted.stop());
+  assert.equal(restarted.snapshot().rules[0].desiredTemperature, 23);
+  assert.equal(restarted.snapshot().rules[0].paused, false);
+});
+
+test('web editor rejects changed controllers, waits and disk failures without falling through to native control', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  const model = f.dashboard.temperatureTarget('T');
+  await f.engine.control({ id: 'rooms', action: 'pause' });
+  assert.equal(f.dashboard.temperatureTarget('T').available, false, 'restoration must complete before direct control');
+  await f.engine.tick();
+  assert.equal(f.dashboard.temperatureTarget('T').source, 'nest');
+  await assert.rejects(f.dashboard.setTemperatureTarget({ serial: 'T', expected: model.expected, values: { value: 23 } }), { status: 409 });
+  await f.engine.control({ id: 'rooms', action: 'resume' });
+  await f.engine.tick();
+  const fresh = f.dashboard.temperatureTarget('T');
+  const persist = f.engine.persist;
+  f.engine.persist = async () => { throw new Error('Fixture disk failure'); };
+  await assert.rejects(f.dashboard.setTemperatureTarget({ serial: 'T', expected: fresh.expected, values: { value: 23 } }), /disk failure/);
+  f.engine.persist = persist;
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  assert.equal(f.dashboard.busy, false);
+});

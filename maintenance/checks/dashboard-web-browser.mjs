@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { checkSourceRefresh } from './dashboard-source-refresh.mjs';
 import { checkEcoFeedback } from './dashboard-eco-feedback.mjs';
+import { checkTemperatureEditor } from './dashboard-temperature-editor.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -153,6 +154,7 @@ try {
   const base = 'http://127.0.0.1:' + server.address().port;
   await checkSourceRefresh(browser, base);
   await checkEcoFeedback(browser, base);
+  await checkTemperatureEditor(browser, base, output);
   await page.goto(base);
   await page.getByRole('heading', { name: 'Welcome home.' }).waitFor();
   assert.equal(await page.locator('#http-login-warning').isVisible(), true);
