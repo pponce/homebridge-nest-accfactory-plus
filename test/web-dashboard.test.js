@@ -277,8 +277,10 @@ test('schedule time zone changes apply to the rule engine without requiring a br
   const state = await fixture(t);
   const store = new WebDashboardConfig(state.configPath, state.block);
   const initial = await store.snapshot();
-  const saved = await store.save({ revision: initial.revision,
-    config: { devices: [{ serialNumber: 'THERMO', scheduleTimeZone: 'America/Los_Angeles' }] } });
+  const saved = await store.save({
+    revision: initial.revision,
+    config: { devices: [{ serialNumber: 'THERMO', scheduleTimeZone: 'America/Los_Angeles' }] },
+  });
   assert.equal(saved.restartRequired, false);
   assert.equal(saved.config.devices[0].scheduleTimeZone, 'America/Los_Angeles');
 });
