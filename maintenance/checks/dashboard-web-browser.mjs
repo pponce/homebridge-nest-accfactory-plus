@@ -94,7 +94,7 @@ const server = http.createServer(async (request, response) => {
     json(404, { error: 'Not found.' }); return;
   }
   let file; let name;
-  if (route.startsWith('/shared/') && ['climate-utils.js', 'sensor-preview.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
+  if (route.startsWith('/shared/') && ['climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
   else { name = route === '/' ? 'index.html' : route.slice(1); if (!assets.has(name)) { response.writeHead(404).end(); return; } file = path.join(staticRoot, name); }
   response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html');
   response.end(await fs.readFile(file));

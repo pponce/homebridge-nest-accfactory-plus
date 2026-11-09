@@ -154,6 +154,17 @@ for (let [type, expected] of [
   });
 }
 
+test('thermostat mapper refreshes and clears time zones when its paired home changes', () => {
+  const flow = setup(thermostat);
+  const homeKey = flow.raw[flow.id].value.device_info.pairerId.resourceId;
+  flow.raw[homeKey].value.time_zone = { timezoneName: { value: 'America/Los_Angeles' } };
+  const runDelta = () => modules.thermostat.processRawData(undefined, flow.raw, flow.options, DEVICE_TYPE.THERMOSTAT,
+    new Map([[homeKey, { fields: new Set(['time_zone']) }]]));
+  assert.equal(Object.values(runDelta())[0].data.schedule_time_zone, 'America/Los_Angeles');
+  flow.raw[homeKey].value.time_zone = { timezoneName: { value: 'bad/zone' } };
+  assert.equal(Object.values(runDelta())[0].data.schedule_time_zone, null);
+});
+
 let protectGoogle = fixtures.find((fixture) => fixture.name === 'protect' && fixture.source !== DATA_SOURCE.NEST);
 let protectNest = fixtures.find((fixture) => fixture.name === 'protect' && fixture.source === DATA_SOURCE.NEST);
 for (let generation of [1, 2]) {

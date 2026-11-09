@@ -26,6 +26,8 @@ const FIELDS = [
   'linked_rcs_sensors',
   'schedules',
   'schedule_mode',
+  'schedule_time_zone',
+  'schedule_time_zone_source',
   'hot_water_boost_active',
   'current_water_temperature',
   'hot_water_temperature',

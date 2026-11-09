@@ -56,6 +56,7 @@ import { pathToFileURL } from 'node:url';
 import HomeKitDevice from '../HomeKitDevice.js';
 import { processSoftwareVersion, scaleValue, adjustTemperature, parseDurationToSeconds, buildDeviceDescription } from '../utils.js';
 import { buildMappedObject, createMappingContext } from '../translator.js';
+import { reportedScheduleTimeZone } from '../schedule-time-zone.js';
 
 // Define constants
 import {
@@ -2317,6 +2318,7 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
         // Apply thermostat-specific post-map adjustments
         if (typeof mappedResult?.data === 'object' && mappedResult.data?.constructor === Object) {
+          Object.assign(mappedResult.data, reportedScheduleTimeZone(rawData, object_key));
           mappedResult.data.physical_temperature = mappedResult.data.current_temperature;
           // If an active remote temperature sensor is selected, use its temperature as the thermostat current temperature
           if (Number.isFinite(Number(mappedResult.data.active_rcs_sensor_temperature)) === true) {

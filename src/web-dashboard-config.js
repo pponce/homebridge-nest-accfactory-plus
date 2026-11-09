@@ -352,6 +352,7 @@ export class WebDashboardConfig {
           if (key === 'scheduleTimeZone') {
             assert(text(value, 100), 'Choose a valid IANA time zone.');
             try {
+              assert(!/^[+-]/.test(value.trim()), 'Choose a named IANA time zone, not a fixed UTC offset.');
               new Intl.DateTimeFormat('en', { timeZone: value });
             } catch {
               throw new DashboardConfigError('Choose a valid IANA time zone.');

@@ -209,6 +209,11 @@
     "branches": 85,
     "functions": 95
   },
+  "src/schedule-time-zone.js": {
+    "lines": 100,
+    "branches": 90,
+    "functions": 100
+  },
   "src/heating-response.js": {
     "lines": 95,
     "branches": 90,

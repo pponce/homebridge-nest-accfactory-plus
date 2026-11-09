@@ -22,7 +22,7 @@ await fs.writeFile(configPath, JSON.stringify({ platforms: [block] }));
 const commands = [];
 const device = { id: 'T', serial: 'T', account: 'A', type: 'Thermostat', data: { description: 'Living room', online: true,
   physical_temperature: 21, current_temperature: 21, target_temperature_low: 22, hvac_state: 'off', hvac_mode: 'heat',
-  eco_mode: false, active_rcs_sensor: '', can_heat: true, schedules: {} } };
+  eco_mode: false, active_rcs_sensor: '', schedule_time_zone: 'America/Los_Angeles', schedule_time_zone_source: 'home', can_heat: true, schedules: {} } };
 const dashboard = { devices: new Map([['T', device]]), snapshot: () => ({ generatedAt: Date.now(), devices: [device],
   accounts: [{ id: 'A', authorised: true, observing: true }], automation: engine?.snapshot() }),
   control: async (payload) => { commands.push(payload); return {}; }, setAutomationTarget: async (...args) => commands.push(args) };
@@ -48,6 +48,10 @@ try {
   await page.getByRole('button', { name: /Sign in/ }).click();
   await page.getByRole('heading', { name: 'Heating response & tuning', exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Apply to this rule', exact: true }).count(), 0);
+  const timeZone = page.getByLabel('Nest schedule time zone', { exact: true });
+  assert.equal(await timeZone.inputValue(), '');
+  assert.match(await timeZone.locator('option:checked').innerText(), /America\/Los_Angeles/);
+  await timeZone.selectOption('America/Phoenix');
   await page.getByLabel('Heating type', { exact: true }).selectOption('radiantFloor');
   await page.getByRole('switch', { name: 'Observe heating response locally' }).check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -60,6 +64,19 @@ try {
   let saved = await server.config.snapshot();
   assert.equal(saved.config.rules.temperature[0].minimumIntervalMinutes, 5);
   assert.equal(saved.restartRequired, false);
+  assert.equal(saved.config.devices[0].scheduleTimeZone, 'America/Phoenix');
+  await timeZone.selectOption('');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.locator('#save-bar').waitFor({ state: 'hidden' });
+  saved = await server.config.snapshot();
+  assert.equal(saved.config.devices[0].scheduleTimeZone, undefined);
+  await timeZone.focus();
+  device.data.schedule_time_zone = 'America/New_York';
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  await page.waitForFunction(() => document.querySelector('[aria-label="Nest schedule time zone"] option:checked')?.textContent.includes('America/New_York'));
+  assert.equal(await timeZone.evaluate((element) => element === document.activeElement), true);
+  assert.equal(await timeZone.inputValue(), '');
+
   await page.getByLabel('Dashboard name', { exact: true }).fill('Unsaved name');
   assert.equal(await apply.isDisabled(), true);
   page.once('dialog', (dialog) => dialog.accept());
@@ -75,7 +92,7 @@ try {
   let clock = Date.now() - 3 * 86400000;
   observer.now = () => clock;
   const current = saved.config.rules.temperature;
-  const devices = saved.config.devices;
+  const devices = engine.heatingDeviceOptions(saved.config.devices);
   const sample = (at, room, heating) => { clock = at; observer.observe(current, devices,
     new Map([['rooms', { valid: true, room, physical: room + 1, target: 22, heating }]])); };
   const begin = clock;

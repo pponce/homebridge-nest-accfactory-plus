@@ -1,4 +1,5 @@
-import { nextSetpoint, displayTemperature, celsiusTemperature } from '/shared/climate-utils.js';
+import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone } from '/shared/climate-utils.js';
+import { mountTimeZonePicker } from '/shared/time-zone-picker.js';
 import { sensorSources, previewGroup } from '/shared/sensor-preview.js';
 
 const $ = (id) => document.getElementById(id);
@@ -315,9 +316,9 @@ $('runtime-device').addEventListener('change', renderRuntime);
 function renderSchedule(device) {
   const entries = []; for (const [day, points] of Object.entries(device?.data?.schedules || {})) for (const point of Object.values(points || {})) entries.push({ day: Number(day), ...point });
   entries.sort((a, b) => a.day - b.day || a.time - b.time);
-  const zone = deviceOptions(device?.serial).scheduleTimeZone; const next = nextSetpoint(entries, zone); const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const zone = scheduleTimeZone(deviceOptions(device?.serial), device?.data); const next = nextSetpoint(entries, zone); const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const time = (point) => String(Math.floor(point.time / 3600)).padStart(2, '0') + ':' + String(Math.floor(point.time % 3600 / 60)).padStart(2, '0');
-  $('schedule-next').textContent = next ? 'Next planned change · ' + days[next.day] + ' ' + time(next) + ' (' + zone + ')' : entries.length ? 'Your Nest weekly schedule. Set its time zone in Homebridge to calculate the next change.' : 'No schedule has been reported for this thermostat’s current mode.';
+  $('schedule-next').textContent = next ? 'Next planned change · ' + days[next.day] + ' ' + time(next) + ' (' + zone + ')' : entries.length ? 'Choose this thermostat’s Nest schedule time zone in Settings to calculate the next change.' : 'No schedule has been reported for this thermostat’s current mode.';
   $('schedule-preview').replaceChildren();
   const chosen = next ? [next, ...entries.filter((entry) => entry.day !== next.day || entry.time !== next.time)].slice(0, 3) : entries.slice(0, 3);
   for (const point of chosen) { const row = el('div', undefined, 'schedule-row'); row.append(el('span', days[point.day] + ' · ' + time(point)), el('strong', formatTemp(point['temp-min']) + ' / ' + formatTemp(point['temp-max']))); $('schedule-preview').append(row); }
@@ -370,6 +371,7 @@ function toggle(host, title, description, value, change) {
   input.addEventListener('change', () => { change(input.checked); markDirty(); renderRulePreview(); }); label.append(text, input); host.append(label);
 }
 let heatingRequest;
+const timeZonePickers = new Map();
 async function refreshHeating() {
   if (!state.session?.authenticated || !state.config) return;
   if (heatingRequest) return heatingRequest;
@@ -389,7 +391,9 @@ function renderHeatingSettings(group, device, options) {
   section.append(el('h4', 'Heating response & tuning'), el('p', 'Choose your heating system, then review guidance for each temperature rule. Suggestions only change a rule when you apply them.', 'small-note'));
   inputField(section, 'Heating type', options.heatingType || 'unknown', (value) => { deviceOptions(device.serial, true).heatingType = value; },
     { choices: [['unknown', 'Choose heating type'], ['forcedAir', 'Forced air'], ['radiators', 'Radiators'], ['radiantFloor', 'In-floor radiant']] }).setAttribute('aria-label', 'Heating type');
-  inputField(section, 'Nest schedule time zone', options.scheduleTimeZone || '', (value) => { deviceOptions(device.serial, true).scheduleTimeZone = value || null; }, { description: 'Use the thermostat’s IANA time zone, for example America/Los_Angeles. Required for automatic heating when Nest reports a schedule.' });
+  timeZonePickers.set(device.serial, mountTimeZonePicker(section, { value: options.scheduleTimeZone || '', data: device.data, changed: (value) => {
+    deviceOptions(device.serial, true).scheduleTimeZone = value || null; markDirty(); renderRuntime();
+  } }));
   toggle(section, 'Observe heating response locally', 'Collects while this dashboard is closed, including disabled rules. Keeps readings for up to 48 hours and cycle summaries for 30 days. Turning this off clears this thermostat’s response history.', options.heatingResponseEnabled,
     (value) => { deviceOptions(device.serial, true).heatingResponseEnabled = value; });
   section.append(el('p', 'Save these settings to start observation. Changing the selected sensors, desired room temperature or heating type starts a new observation period. Collection never changes rule settings.', 'small-note'));
@@ -460,6 +464,7 @@ function renderSettings() {
   $('dashboard-name').value = state.config.name || 'Nest Climate Cntrl'; $('eve-history').checked = state.config.options?.eveHistory !== false;
   $('dashboard-url').textContent = state.envelope.web?.url || location.origin;
   $('device-settings').replaceChildren();
+  timeZonePickers.clear();
   for (const device of thermostats()) {
     const options = deviceOptions(device.serial); const group = el('div', undefined, 'device-setting'); group.append(el('h3', device.data.description || 'Thermostat'));
     renderHeatingSettings(group, device, options);
@@ -579,9 +584,9 @@ function renderRuleEditor() {
   inputField(host, 'Rule name', rule.name, (value) => { rule.name = value; const active = $('rule-list').querySelector('[aria-pressed="true"] strong'); if (active) active.textContent = value; });
   toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Temperature and fan rules require Resume after a bridge restart.', rule.enabled, (value) => { rule.enabled = value; renderRules(); });
   if (rule.kind === 'temperature') {
-    const target = editorSection(host, '01', 'Choose the room target', 'Pair a thermostat with the temperature you want the selected rooms to reach.');
+    const target = editorSection(host, '01', 'Choose the room target', 'Choose the thermostat this rule will control and the temperature you want the selected rooms to reach.');
     const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); temperatureField(fields, 'Desired room temperature', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { min: rule.enabled ? 9 : 5, max: rule.enabled ? 32 : 35 }); target.append(fields);
-    const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Use the thermostat, native Nest sensors, other Homebridge sensors, or a mix. Automatic control supports Heat mode, Eco off and Nest’s built-in control sensor.');
+    const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Only selected readings count toward the room average. Include the controlled thermostat here if you want its temperature counted; you can also use only other room sensors. Automatic control requires Heat mode, Eco off and Nest’s built-in control sensor.');
     inputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
     const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from the target sent to Nest. Manual changes and Nest schedule boundaries pause the rule. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
     const tuningLink = el('a', 'Review heating response & tuning in Settings', 'small-note'); tuningLink.href = '#settings'; limits.append(tuningLink);
@@ -677,7 +682,7 @@ $('discard').addEventListener('click', async () => {
   try { const envelope = await api('/config'); state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true; notice(); renderAll(); }
   catch (error) { notice(error.message, 'danger'); }
 });
-function renderLive() { renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePickers(); renderRulePreview(); }
+function renderLive() { renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePickers(); renderRulePreview(); for (const device of thermostats()) timeZonePickers.get(device.serial)?.update(device.data); }
 function renderAll() { renderLive(); renderSettings(); renderRules(); }
 checkSession();
 

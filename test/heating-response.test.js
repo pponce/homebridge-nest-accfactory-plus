@@ -287,7 +287,7 @@ test('Apply saves only the requested rule limits with optimistic concurrency and
   };
   await fs.writeFile(file, JSON.stringify(root));
   const config = new WebDashboardConfig(file, root.platforms[0]);
-  const engine = new ClimateAutomation({ directory: f.directory, dashboard: {}, config, now: f.now });
+  const engine = new ClimateAutomation({ directory: f.directory, dashboard: { snapshot: () => ({ devices: [] }) }, config, now: f.now });
   engine.heatingResponse = f.history;
   const view = await engine.heatingRecommendations();
   const payload = { id: f.rule.id, stage: 'starting', recommendationId: view.rules[0].starting.id, revision: view.revision };
@@ -348,6 +348,7 @@ test('radiant response that begins after heating stops is measured through the s
   assert.ok(evidence.coastMinutes >= 10);
   assert.ok(evidence.coastRiseC >= 0.5);
 });
+
 
 test('a radiant room can first warm after the initial settling window without losing its cycle', async (t) => {
   const f = await fixture(t);

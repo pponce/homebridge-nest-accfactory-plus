@@ -1,3 +1,18 @@
+// Only named zones are accepted: fixed offsets cannot describe daylight-saving changes.
+export function validTimeZone(value) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 100 || /^[+-]/.test(value.trim())) return null;
+  try {
+    return new Intl.DateTimeFormat('en', { timeZone: value.trim() }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+export function scheduleTimeZone(options = {}, data = {}) {
+  // An invalid explicit choice must not silently fall back to a different zone.
+  return validTimeZone(options.scheduleTimeZone || data.schedule_time_zone);
+}
+
 export function displayTemperature(value, unit = 'C', difference = false) {
   if (!Number.isFinite(value)) return NaN;
   return unit === 'F' ? Number((value * 1.8 + (difference ? 0 : 32)).toFixed(10)) : value;

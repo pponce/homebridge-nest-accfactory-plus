@@ -237,7 +237,9 @@
               "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat’s response history."
             },
             "scheduleTimeZone": {
-              "type": "string"
+              "type": "string",
+              "title": "Nest schedule time zone",
+              "description": "Leave blank to use the time zone reported by Nest for the thermostat or its home. Choose a named IANA zone such as America/Los_Angeles to override it. The custom Settings page provides a time-zone picker."
             },
             "sensorPreview": {
               "type": "object",

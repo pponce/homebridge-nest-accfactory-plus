@@ -38,6 +38,8 @@ Choose **One selected sensor** to focus on a single room, or **Equal average of 
 
 Heating control requires **Heat mode**, **Eco off**, and the **built-in Nest sensor** as the actual control source. Native sensor selection, manual target/mode changes and Nest schedule boundaries take priority and pause an active hold. Change the desired room target in the dashboard; Apple Home continues to show and control Nest's physical target. Cooling/range compensation, weighted averages and scheduled groups are outside this heating pilot.
 
+The controlled thermostat and the selected temperature sources have separate roles: only selected sources contribute to the room average. Include the controlled Nest as a source only when you want its reading counted.
+
 For system-specific starting guidance and local observations, see [Heating response & tuning](WEB_DASHBOARD.md#heating-response--tuning). Collection leaves rule settings unchanged until you apply a recommendation.
 
 A group does not create a separate physical heating/cooling zone or turn third-party sensors into native Nest sensors. For a live native Nest option, use **Temperature controlled by** to select one associated Nest Temperature Sensor where supported. [Create your first temperature group](WEB_DASHBOARD.md#temperature-group-example).

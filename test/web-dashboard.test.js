@@ -283,6 +283,16 @@ test('schedule time zone changes apply to the rule engine without requiring a br
   });
   assert.equal(saved.restartRequired, false);
   assert.equal(saved.config.devices[0].scheduleTimeZone, 'America/Los_Angeles');
+  const automatic = await store.save({
+    revision: saved.revision,
+    config: { devices: [{ serialNumber: 'THERMO', scheduleTimeZone: null }] },
+  });
+  assert.equal(automatic.config.devices[0].scheduleTimeZone, undefined);
+  assert.equal(automatic.restartRequired, false);
+  await assert.rejects(
+    store.save({ revision: automatic.revision, config: { devices: [{ serialNumber: 'THERMO', scheduleTimeZone: '+05:00' }] } }),
+    /IANA/,
+  );
 });
 
 test('dashboard unit preference persists without changing rules, credentials or requiring restart', async (t) => {

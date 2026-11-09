@@ -8,7 +8,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const root = new URL('../../homebridge-ui/public/', import.meta.url);
 const server = http.createServer(async (request, response) => {
   const name = request.url === '/' ? 'index.html' : request.url.slice(1);
-  if (!['index.html', 'index.js', 'climate-utils.js', 'sensor-preview.js', 'room-preview.js', 'web-dashboard-setup.js', 'styles.css', 'nest-climate-cntrl-icon-512.png'].includes(name)) { response.writeHead(404).end(); return; }
+  if (!['index.html', 'index.js', 'climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js', 'room-preview.js', 'web-dashboard-setup.js', 'styles.css', 'nest-climate-cntrl-icon-512.png'].includes(name)) { response.writeHead(404).end(); return; }
   response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : 'text/html');
   response.end(await fs.readFile(new URL(name, root)));
 });
@@ -24,7 +24,7 @@ try {
     const status = { accounts: [{ id: 'A', name: 'Google', authorised: true, observing: true }], devices: [
       { serial: 'T', id: 'THERMOSTAT', type: 'Thermostat', account: 'A', lastUpdate: Date.now(),
         data: { description: 'Living room', online: true, hvac_state: 'heating', hvac_mode: 'heat', current_temperature: 21, physical_temperature: 21,
-          target_temperature: 22, temperature_scale: 'C', has_fan: true, eco_mode: false, linked_rcs_sensors: ['S'], active_rcs_sensor: '', schedules: {} }, runtime: [] },
+          target_temperature: 22, temperature_scale: 'C', has_fan: true, eco_mode: false, linked_rcs_sensors: ['S'], active_rcs_sensor: '', schedule_time_zone: 'America/Los_Angeles', schedule_time_zone_source: 'home', schedules: {} }, runtime: [] },
       { serial: 'S', id: 'S', type: 'TemperatureSensor', account: 'A', data: { description: 'Bedroom', current_temperature: 20 } },
     ] };
     window.homebridge = {
@@ -44,6 +44,13 @@ try {
   await page.goto('http://127.0.0.1:' + server.address().port);
   await page.getByText('Bridge connected', { exact: true }).waitFor();
   assert.equal(await page.getByRole('textbox', { name: 'Legacy refresh token', exact: true }).getAttribute('type'), 'password');
+  const timeZone = page.getByLabel('Nest schedule time zone', { exact: true });
+  assert.equal(await timeZone.inputValue(), '');
+  assert.match(await timeZone.locator('option:checked').innerText(), /America\/Los_Angeles/);
+  await timeZone.selectOption('America/Phoenix');
+  await page.waitForFunction(() => window.saved.at(-1)[0].devices[0].scheduleTimeZone === 'America/Phoenix');
+  await timeZone.selectOption('');
+  await page.waitForFunction(() => window.saved.at(-1)[0].devices[0].scheduleTimeZone === undefined);
   await page.getByLabel('Eco switch in Apple Home').check();
   await page.waitForFunction(() => window.saved.length > 0);
   const config = await page.evaluate(() => window.saved.at(-1)[0]);

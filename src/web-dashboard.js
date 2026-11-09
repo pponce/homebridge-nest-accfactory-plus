@@ -26,6 +26,7 @@ const assets = new Map([
   ['/icon-192.png', ['dashboard/icon-192.png', 'image/png']],
   ['/icon-512.png', ['dashboard/icon-512.png', 'image/png']],
   ['/shared/climate-utils.js', ['public/climate-utils.js', 'text/javascript; charset=utf-8']],
+  ['/shared/time-zone-picker.js', ['public/time-zone-picker.js', 'text/javascript; charset=utf-8']],
   ['/shared/sensor-preview.js', ['public/sensor-preview.js', 'text/javascript; charset=utf-8']],
 ]);
 const hostname = (value) =>

@@ -1,12 +1,14 @@
 import { mountRoomPreview } from './room-preview.js';
 import { mountWebDashboardSetup } from './web-dashboard-setup.js';
-import { nextSetpoint, editableConfig, displayTemperature } from './climate-utils.js';
+import { nextSetpoint, editableConfig, displayTemperature, scheduleTimeZone } from './climate-utils.js';
+import { mountTimeZonePicker } from './time-zone-picker.js';
 const hb = window.homebridge;
 const $ = (id) => document.getElementById(id);
 let blocks = [];
 let config;
 let status;
 let settingsKey = '';
+const timeZonePickers = new Map();
 let saveQueue = Promise.resolve();
 let refreshing = false;
 let liveAvailable = false;
@@ -226,6 +228,7 @@ function optionsFor(device) {
 }
 function settings() {
   const devices = status?.devices ?? [];
+  for (const device of devices) timeZonePickers.get(device.serial)?.update(device.data);
   const key = devices
     .map((d) => d.serial + ':' + d.type + ':' + d.data.has_fan)
     .sort()
@@ -235,6 +238,7 @@ function settings() {
   }
   settingsKey = key;
   $('device-settings').replaceChildren();
+  timeZonePickers.clear();
   if (!devices.length) {
     $('device-settings').append(el('p', 'Device options appear after discovery. Existing overrides are preserved.'));
   }
@@ -265,10 +269,13 @@ function settings() {
       ],
     );
     if (device.type === 'Thermostat') {
-      field(grid, 'Schedule time zone (IANA)', options.scheduleTimeZone ?? '', (v) => {
-        optionsFor(device).scheduleTimeZone = v;
-        schedule();
-      });
+      const timeZoneField = el('div');
+      grid.append(timeZoneField);
+      timeZonePickers.set(device.serial, mountTimeZonePicker(timeZoneField, { value: options.scheduleTimeZone || '', data: device.data, changed: (value) => {
+        if (value) optionsFor(device).scheduleTimeZone = value;
+        else delete optionsFor(device).scheduleTimeZone;
+        schedule(); changed();
+      } }));
       check(grid, 'Eco switch in Apple Home', options.ecoSwitch, (v) => {
         optionsFor(device).ecoSwitch = v;
       });
@@ -479,7 +486,7 @@ function schedule() {
     }
     $('schedule-rows').append(row);
   }
-  const zone = config.devices.find((d) => d.serialNumber === device.serial)?.scheduleTimeZone;
+  const zone = scheduleTimeZone(config.devices.find((d) => d.serialNumber === device.serial), device.data);
   const next = nextSetpoint(entries, zone);
   $('next-change').textContent = next
     ? 'Next planned setpoint: ' +
@@ -492,7 +499,7 @@ function schedule() {
       zone +
       '). This is not a confirmed override expiry.'
     : entries.length
-      ? 'Times follow the Nest schedule. Set Schedule time zone under Apple Home features to see the next planned change; no override end time is assumed.'
+      ? 'Choose this thermostat’s Nest schedule time zone in Settings to see the next planned change; no override end time is assumed.'
       : 'No schedule reported for the current mode.';
   const runtime = device.runtime ?? [];
   const maximum = Math.max(60, ...runtime.flatMap((day) => [day.heating, day.cooling]));

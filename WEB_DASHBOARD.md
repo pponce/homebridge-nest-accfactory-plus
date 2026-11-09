@@ -69,7 +69,7 @@ Discovery records when a value was read, which may differ from when the sensor m
 **Goal:** use the temperatures in the occupied rooms to guide a Nest thermostat's heating target.
 
 1. On **Overview**, confirm that the thermostat is online and that **Temperature controlled by** is **Thermostat sensor**. If needed, select it and apply the change. Use **Heat** mode and turn **Eco off** through your normal Nest controls. The engine does not change modes or native sensor selection for you.
-2. If Nest reports a weekly schedule, open **Settings** and set **Nest schedule time zone** to the thermostat's IANA time zone, for example `America/Los_Angeles`. Save this before enabling the group.
+2. Open **Settings → your thermostat → Heating response & tuning** and check **Nest schedule time zone**. **Automatic** uses the named time zone reported by the thermostat, or its paired Nest home. If Nest has not reported one, choose a zone such as **Pacific Time — Los Angeles** and save before enabling a group that uses a Nest weekly schedule.
 3. Open **Climate rules → Temperature → Create temperature group**, or use **+**. Name it **Downstairs comfort** and select the thermostat serving those rooms.
 4. Enter your target in **Desired room temperature**, using the units shown beside the field. For example, enter **21 °C** or **69.8 °F**. Live heating targets must be between **9 and 32 °C (48.2–89.6 °F)**.
 5. Choose **Equal average of selected sensors** and select two or more inputs. A Nest living-room sensor at **20 °C** plus a Homebridge dining-room sensor at **22 °C** averages **21 °C**. Nest-only, other Homebridge-only and mixed groups are supported. For a single room, choose **One selected sensor** and select exactly one input.
@@ -221,6 +221,14 @@ Keep the Homebridge host reachable while using it. The dashboard does not cache 
 
 
 
+## Nest schedule time zone
+
+Choose **Automatic** to use the named time zone reported by the Nest thermostat, with its paired home's zone as a fallback. The picker shows the detected zone and its source. Availability depends on the data Nest supplies for that device; an unavailable value is not inferred from your browser or Homebridge host.
+
+Choose a manual zone to override automatic detection. Common choices include Pacific, Mountain, Arizona, Central, Eastern, Alaska and Hawaii, followed by other supported IANA zones. **Mountain Time — Denver** follows daylight saving; **Arizona — Phoenix** does not. Named zones handle daylight-saving changes automatically. Saved manual choices are preserved.
+
+This setting controls how the plugin interprets Nest schedules and groups heating observations into days. It does not change the thermostat's own time-zone setting. If a weekly schedule exists and no usable zone is available, automatic heating control waits for a valid zone. Changing the effective zone pauses an active scheduled hold and starts a new heating observation period. Schedule-only setting changes need no bridge restart.
+
 ## Heating response & tuning
 
 Open **Settings → Thermostat settings → your thermostat → Heating response & tuning**. Choose the heating type and save. Each saved temperature rule for that thermostat has its own starting recommendation, current limits, evidence and **Apply to this rule** button.
@@ -239,7 +247,7 @@ The observer keeps bounded local history of the selected-room average, built-in 
 
 A usable cycle includes an observed heating start, measurable room warming, readings near the desired room temperature, and a settled period after heating stops. Radiant warming can begin after shutoff. Missing or stale inputs, observation gaps longer than two minutes, restarts, significant setpoint changes and unreasonably long cycles exclude the affected partial cycle. Continuous heating, very short cycles, changing schedules or rooms that never approach the desired temperature may take longer to produce enough evidence.
 
-Learned suggestions require **at least six usable cycles across three days**, with **at least 48 hours between the first and last cycle**. The schedule time zone determines day boundaries; UTC is used if no zone is configured. Evidence shows median response delay, warming rate, continued warming after shutoff, Nest-minus-room difference and room overshoot. Reordering the same sensors preserves the observation period. Changing selected sensors, thermostat, aggregation, desired room temperature, heating type or schedule time zone starts a new period; returning to an earlier sensor selection does not recover its discarded history.
+Learned suggestions require **at least six usable cycles across three days**, with **at least 48 hours between the first and last cycle**. The schedule time zone determines day boundaries; a manual choice takes priority over the Nest-reported zone, and UTC is used for observation day counts if neither is available. Evidence shows median response delay, warming rate, continued warming after shutoff, Nest-minus-room difference and room overshoot. Reordering the same sensors preserves the observation period. Changing selected sensors, thermostat, aggregation, desired room temperature, heating type or schedule time zone starts a new period; returning to an earlier sensor selection does not recover its discarded history.
 
 The suggested interval combines response delay, estimated time to warm another 0.25 °C, and observed time to the post-heating peak. Learned intervals stay between half the starting interval and the supported 60-minute maximum. The adjustment suggestion starts with the magnitude of the persistent Nest-to-room difference plus a 0.25 °C margin, subtracts observed room overshoot, and is bounded from 0.5 °C to the smaller of 1.5 °C or the starting limit plus 0.5 °C. It is rounded to quarter-degree increments. The existing Nest target-grid rounding remains in effect.
 

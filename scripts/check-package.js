@@ -26,6 +26,8 @@ try {
     'homebridge-ui/public/nest-climate-cntrl-icon-512.png',
     'homebridge-ui/public/web-dashboard-setup.js',
     'homebridge-ui/public/climate-utils.js',
+    'homebridge-ui/public/time-zone-picker.js',
+    'dist/schedule-time-zone.js',
     'homebridge-ui/dashboard/index.html',
     'homebridge-ui/dashboard/app.js',
     'homebridge-ui/dashboard/styles.css',

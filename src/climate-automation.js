@@ -5,6 +5,7 @@ import { ClimateAccess } from '../homebridge-ui/climate-access.js';
 import { HeatingResponse } from './heating-response.js';
 import { DashboardConfigError } from './web-dashboard-config.js';
 import { sensorSources } from '../homebridge-ui/public/sensor-preview.js';
+import { scheduleTimeZone } from '../homebridge-ui/public/climate-utils.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
@@ -410,7 +411,7 @@ export class ClimateAutomation {
       }),
     );
     try {
-      this.heatingResponse.observe(rules, this.deviceOptions, readings);
+      this.heatingResponse.observe(rules, this.heatingDeviceOptions(this.deviceOptions), readings);
       await this.heatingResponse.persist();
     } catch {
       this.heatingResponse.error = 'Heating observations are temporarily unavailable. Check the saved heating settings.';
@@ -423,7 +424,10 @@ export class ClimateAutomation {
       if (envelope.rulesError) {
         throw new DashboardConfigError(envelope.rulesError);
       }
-      return { revision: envelope.revision, ...this.heatingResponse.snapshot(envelope.config.rules.temperature, envelope.config.devices) };
+      return {
+        revision: envelope.revision,
+        ...this.heatingResponse.snapshot(envelope.config.rules.temperature, this.heatingDeviceOptions(envelope.config.devices)),
+      };
     });
   }
 
@@ -442,7 +446,7 @@ export class ClimateAutomation {
         throw new DashboardConfigError('Settings changed. Reload the recommendations before applying.', 409);
       }
       const recommendation = this.heatingResponse
-        .snapshot(envelope.config.rules.temperature, envelope.config.devices)
+        .snapshot(envelope.config.rules.temperature, this.heatingDeviceOptions(envelope.config.devices))
         .rules.find((rule) => rule.id === payload.id)?.[payload.stage];
       if (
         !recommendation ||
@@ -463,6 +467,18 @@ export class ClimateAutomation {
   refreshSnapshot() {
     this.live = this.dashboard.snapshot();
     this.sources = new Map(automationSources(this.live, this.external).map((source) => [source.id, source]));
+  }
+
+  heatingDeviceOptions(options) {
+    const devices = this.dashboard.snapshot().devices;
+    return options.map((entry) => ({
+      ...entry,
+      scheduleTimeZone:
+        scheduleTimeZone(
+          entry,
+          devices.find((device) => device.serial.toUpperCase() === entry.serialNumber.toUpperCase())?.data,
+        ) ?? '',
+    }));
   }
 
   device(serial) {
@@ -499,7 +515,7 @@ export class ClimateAutomation {
   }
 
   schedule(device, serial) {
-    const zone = this.deviceOptions.find((entry) => entry.serialNumber === serial)?.scheduleTimeZone;
+    const zone = scheduleTimeZone(this.deviceOptions.find((entry) => entry.serialNumber === serial), device.data);
     const entries = Object.entries(device.data.schedules ?? {}).flatMap(([day, points]) =>
       Object.values(points ?? {}).map((point) => ({ day: Number(day), ...point })),
     );
@@ -562,7 +578,7 @@ export class ClimateAutomation {
     }
     if (entries.length && !zone) {
       state.phase = 'waiting';
-      state.reason = 'Set this thermostat’s schedule time zone in Settings before enabling scheduled heating control.';
+      state.reason = 'Nest has not reported a usable schedule time zone. Choose this thermostat’s time zone in Settings.';
       return;
     }
     if (lease && (lease.owner !== rule.id || lease.restoring || !this.observe(key, lease, target(device), state))) {

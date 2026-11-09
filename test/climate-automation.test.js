@@ -515,6 +515,57 @@ test('shutdown does not restore over a Nest schedule boundary with an unchanged 
   assert.equal(f.commands.length, 1);
 });
 
+test('reported schedule zones support control and changes pause an active hold without another command', async (t) => {
+  const f = await fixture(t, {});
+  f.dashboard.update('T', 'Thermostat', {
+    schedule_time_zone: 'America/Los_Angeles', schedule_time_zone_source: 'home',
+    schedules: { 0: { a: { time: 200, 'temp-min': 22.5 } } },
+  }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  assert.equal(f.commands.length, 1);
+  f.dashboard.update('T', 'Thermostat', { schedule_time_zone: 'America/New_York' }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.commands.length, 1);
+});
+
+test('manual schedule zone wins and missing or invalid automatic zones prevent scheduled writes', async (t) => {
+  const f = await fixture(t, {});
+  f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+  f.dashboard.update('T', 'Thermostat', { schedule_time_zone: 'America/Los_Angeles', schedules: { 0: { a: { time: 200 } } } }, 'A');
+  f.engine.refreshSnapshot();
+  f.engine.deviceOptions = f.devices;
+  assert.equal(f.engine.schedule(f.engine.device('T'), 'T').zone, 'UTC');
+  delete f.devices[0].scheduleTimeZone;
+  f.dashboard.update('T', 'Thermostat', { schedule_time_zone: 'bad/zone' }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  assert.equal(f.commands.length, 0);
+  assert.match(f.rule('rooms').reason, /time zone/);
+  f.dashboard.update('T', 'Thermostat', { schedule_time_zone: null, schedule_time_zone_source: null }, 'A');
+  await f.engine.tick();
+  assert.equal(f.commands.length, 0);
+});
+
+test('a reported time-zone change starts fresh heating evidence without writing a manual override', async (t) => {
+  const f = await fixture(t, { temperature: [{ ...temperatureRule, enabled: false }] });
+  f.devices.push({ serialNumber: 'T', heatingType: 'radiators', heatingResponseEnabled: true });
+  f.dashboard.update('T', 'Thermostat', { schedule_time_zone: 'America/Los_Angeles' }, 'A');
+  await f.engine.tick();
+  const first = f.engine.heatingResponse.records.get('rooms');
+  f.advance(minute);
+  f.dashboard.update('T', 'Thermostat', { schedule_time_zone: 'America/New_York' }, 'A');
+  assert.equal((await f.engine.heatingRecommendations()).rules[0].evidence.since, null);
+  await f.engine.tick();
+  const second = f.engine.heatingResponse.records.get('rooms');
+  assert.notEqual(first.signature, second.signature);
+  assert.ok(second.since > first.since);
+  assert.equal(second.samples.length, 1);
+  assert.equal(f.devices[0].scheduleTimeZone, undefined);
+  assert.equal(f.commands.length, 0);
+});
+
 test('enabled-rule validation rejects conflicting owners and incomplete rules but preserves disabled drafts', () => {
   assert.equal(validateRuleDrafts({ temperature: [{ id: 'draft', name: 'Draft', kind: 'temperature' }] }).temperature[0].enabled, false);
   assert.throws(() => validateRuleDrafts({ temperature: [temperatureRule, { ...temperatureRule, id: 'second' }] }), /one enabled/);
