@@ -349,7 +349,6 @@ test('radiant response that begins after heating stops is measured through the s
   assert.ok(evidence.coastRiseC >= 0.5);
 });
 
-
 test('a radiant room can first warm after the initial settling window without losing its cycle', async (t) => {
   const f = await fixture(t);
   f.options.heatingType = 'radiantFloor';
