@@ -1,3 +1,21 @@
+## v0.5.0-beta.13
+
+**Assisted Nest sensor setup for mixed temperature groups.**
+
+- When a saved, enabled temperature group combines Nest room sensors with other Homebridge temperature sensors, the dashboard offers an in-page setup confirmation after saving or when resuming the rule.
+- **Prepare thermostat** selects Nest's built-in sensor and holds native sensor scheduling. The saved sensor schedule and paired sensors are preserved, and Nest room sensors remain inputs to the group's average. Weekly temperature schedules, HVAC mode and Eco settings are retained.
+- Heating control waits for fresh Nest feedback confirming the requested sensor state. Cancelling sends no sensor command. A changed rule or changed native settings requires a fresh review.
+- **Restore Nest sensor settings** pauses the group, waits for any heating target it still owns to be restored, then restores the saved native sensor selection and schedule mode. The restoration action remains available on Overview after the group is disabled or deleted.
+- Manual Nest changes take priority. Failed or unconfirmed sensor writes are not retried automatically, and restoration cannot overwrite a later change to the native sensor settings.
+- Automatic setup supports recognized classic Nest sensor controls. Unknown or unsupported native multi-sensor formats remain unavailable; this release does not claim automatic setup support for 4th-generation native averaging.
+- The npm publication helper includes a GitHub asset API fallback for release downloads and verifies the tested package before publication.
+
+After updating, refresh the dashboard and review and **Resume** enabled temperature/fan rules. For a mixed temperature group, approve sensor setup when prompted and check both the Nest app and dashboard execution status during the first trial. Physical thermostat behavior still requires confirmation on the installed system.
+
+See the [assisted sensor setup guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.13/WEB_DASHBOARD.md#assisted-nest-sensor-setup-for-mixed-groups).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.12
 
 **Independent fan triggers, shared-fan priorities, and in-page confirmations.**

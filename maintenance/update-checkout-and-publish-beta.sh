@@ -36,7 +36,7 @@ NODE
   }
   nest_publish_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.12'
+    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.13'
     local release_dir="$project/maintenance/releases/v$version"
     local asset origin branch worktree_status ignored tool attempt tag_value
     for tool in git curl node npm tar sha256sum; do
@@ -164,7 +164,7 @@ NODE
     node - "$nest_publish_report" "$nest_publish_result" "$nest_publish_head" <<'NODE'
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], JSON.stringify({
-  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.12',
+  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.13',
   result: ({ 0: 'verified', 2: 'pending_verification' })[process.argv[3]] || 'failed',
   checkoutCommit: process.argv[4], homebridgeChanged: false,
 }, null, 2) + '\n', { mode: 0o600 });
