@@ -1,7 +1,7 @@
 import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone } from '/shared/climate-utils.js';
 import { mountTimeZonePicker } from '/shared/time-zone-picker.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
-import { speedAction, fanCurveError, fanCurve, supportedSpeed } from '/shared/fan-speed.js';
+import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed } from '/shared/fan-speed.js';
 
 const $ = (id) => document.getElementById(id);
 for (const id of ['http-login-warning', 'http-session-warning']) $(id).hidden = window.location.protocol !== 'http:';
@@ -64,6 +64,20 @@ function notice(message = '', kind = '') {
 function toast(message) {
   clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false;
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, 6000);
+}
+function confirmAction(title, detail, accept, cancel = 'Keep editing') {
+  const dialog = $('confirm-dialog');
+  if (dialog.open) return Promise.resolve(false);
+  $('confirm-title').textContent = title;
+  $('confirm-detail').textContent = detail;
+  $('confirm-accept').textContent = accept;
+  $('confirm-cancel').textContent = cancel;
+  dialog.returnValue = 'cancel';
+  return new Promise((resolve) => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'confirm'), { once: true });
+    dialog.showModal();
+    $('confirm-cancel').focus();
+  });
 }
 function empty(host, title, description, symbol = 'sensors', action) {
   const content = el('div', undefined, 'empty-state');
@@ -174,7 +188,7 @@ $('login-form').addEventListener('submit', async (event) => {
 $('setup-retry').addEventListener('click', checkSession);
 async function signOut() {
   if (state.restarting) return;
-  if (state.dirty && !window.confirm('Discard unsaved changes and sign out?')) return;
+  if (state.dirty && !await confirmAction('Sign out without saving?', 'Your unsaved changes will be discarded.', 'Discard and sign out')) return;
   try { await api('/logout', { method: 'POST', body: {} }); } catch (error) { if (error.status !== 401) { notice(error.message, 'danger'); return; } }
   state.session = null; state.config = null; state.envelope = null; state.dirty = false; state.live = false;
   state.heating = null;
@@ -509,7 +523,7 @@ function newRule() {
     name: state.ruleKind === 'temperature' ? 'New temperature group' : state.ruleKind === 'presence' ? 'Home presence' : 'Room fan comfort' };
   if (state.ruleKind === 'temperature') { rule.aggregation = 'average'; rule.desiredTemperature = 21; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
   else if (state.ruleKind === 'presence') { rule.logic = 'any'; rule.holdMinutes = 10; rule.awayDelayMinutes = 20; const home = sources().find((source) => source.provider === 'nest' && source.kind === 'occupancy'); if (home) rule.sourceIds = [home.id]; }
-  else { rule.targetIds = []; rule.action = 'temperature'; rule.threshold = 24; rule.hysteresis = 1; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
+  else { rule.targetIds = []; rule.action = 'temperature'; rule.speedMode = 'last'; rule.priority = 0; rule.threshold = 24; rule.hysteresis = 1; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
   ((state.config.rules ??= {})[ruleKey[state.ruleKind]] ??= []).push(rule); state.ruleId = rule.id; markDirty(); renderRules();
   $('rule-editor').querySelector('input')?.focus();
 }
@@ -525,7 +539,7 @@ function renderRules() {
   $('rule-list-title').textContent = { temperature: 'Temperature groups', presence: 'Presence rules', fan: 'Fan rules' }[state.ruleKind];
   const items = rules(); if (!items.some((rule) => rule.id === state.ruleId)) state.ruleId = items[0]?.id || null;
   $('rule-list').replaceChildren();
-  for (const rule of items) { const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item'); item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · ' + (rule.enabled ? 'Enabled' : 'Disabled'))); item.setAttribute('aria-pressed', String(rule.id === state.ruleId)); $('rule-list').append(item); }
+  for (const rule of items) { const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item'); item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · ' + (rule.enabled ? 'Enabled' : 'Disabled') + (rule.kind === 'fan' ? ' · Priority ' + (rule.priority ?? 0) : ''))); item.setAttribute('aria-pressed', String(rule.id === state.ruleId)); $('rule-list').append(item); }
   if (!items.length) {
     $('rule-list').append(el('p', 'No rules yet. Add one to get started.', 'small-note'));
     const details = { temperature: ['Comfort starts with the right room.', 'Select Nest and Homebridge temperature sensors to plan a room-based temperature group.', 'thermometer'], presence: ['Home is more than one signal.', 'Bring motion and occupancy sensors together to explore a Home/Away rule.', 'home'], fan: ['Put room fans in the picture.', 'Choose accessible Homebridge ceiling or room fans and plan when they would run.', 'fan'] }[state.ruleKind];
@@ -600,40 +614,68 @@ function renderRuleEditor() {
     inputField(behavior, 'Consider home when', rule.logic || 'any', (value) => { rule.logic = value; }, { choices: [['any', 'Any selected source is positive'], ['all', 'All selected sources are positive']] });
     const fields = el('div', undefined, 'form-grid'); inputField(fields, 'Motion hold (minutes)', rule.holdMinutes ?? 10, (value) => { rule.holdMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); inputField(fields, 'Delay before Away (minutes)', rule.awayDelayMinutes ?? 20, (value) => { rule.awayDelayMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); behavior.append(fields);
   } else {
-    const outputs = editorSection(host, '01', 'Choose your room fans', 'These are ceiling or room fans exposed by Homebridge. Nest’s HVAC blower has its own controls on Overview.'); picker(outputs, rule, 'targetIds', ['fan']);
-    const behavior = editorSection(host, '02', 'Choose when the fans run', 'Use temperature or Nest heating/cooling activity. Manual power changes pause any fan rule; speed changes also pause temperature-based speed rules. Fans provide cooling comfort through airflow; the comfort target does not change a thermostat.');
-    inputField(behavior, 'Run condition', rule.action || 'temperature', (value) => {
-      rule.action = value;
-      if (value === speedAction) {
+    Object.assign(rule, normalizeFanRule(rule));
+    const outputs = editorSection(host, '01', 'Choose your room fans', 'Select Homebridge ceiling or room fans. A fan can belong to several rules; only its highest-priority matching rule controls it. Nest’s HVAC blower has separate controls on Overview.');
+    picker(outputs, rule, 'targetIds', ['fan']);
+    const trigger = editorSection(host, '02', 'Choose when the fans run', 'Temperature and active thermostat heating/cooling are run conditions. The speed choice below determines the airflow while this condition is met.');
+    inputField(trigger, 'Run condition', rule.action, (value) => { rule.action = value; rule.threshold ??= 24; rule.hysteresis ??= 1; renderRuleEditor(); },
+      { choices: [['temperature', 'Temperature above threshold'], ['heating', 'Thermostat is heating'], ['cooling', 'Thermostat is cooling']] });
+    if (rule.action === 'temperature') {
+      const fields = el('div', undefined, 'form-grid');
+      temperatureField(fields, rule.thresholdInclusive ? 'At or above temperature' : 'Above temperature', rule.threshold ?? 24,
+        (value) => { rule.threshold = value; }, { min: 5, max: 35 });
+      temperatureField(fields, 'Turn-off gap', rule.hysteresis ?? 1, (value) => { rule.hysteresis = value; }, { min: 0, max: 10, difference: true });
+      trigger.append(fields);
+    } else {
+      thermostatSelect(trigger, rule);
+      trigger.append(el('p', rule.action === 'cooling' ? 'Use room fans to circulate cooled air while AC is actively cooling. This rule does not switch the AC on.' : 'Use room fans to circulate warm air while the thermostat is actively heating. Fan direction remains a manual setting.', 'small-note'));
+    }
+    const behavior = editorSection(host, '03', 'Choose how fast the fans run', 'These speed choices work with every run condition. Fixed and temperature-based speeds require a fan with readable, writable speed control.');
+    inputField(behavior, 'Fan speed', rule.speedMode, (value) => {
+      rule.speedMode = value;
+      if (value === 'fixed') rule.fixedSpeed ??= 50;
+      if (value === 'curve') {
         const fahrenheit = temperatureUnit() === 'F';
         rule.desiredTemperature ??= fahrenheit ? celsiusTemperature(72, 'F') : 22;
         rule.startGap ??= fahrenheit ? 2 / 1.8 : 1;
-        rule.stopGap ??= fahrenheit ? .5 / 1.8 : .25;
         rule.fullSpeedGap ??= fahrenheit ? 6 / 1.8 : 3;
         rule.minimumSpeed ??= 25; rule.maximumSpeed ??= 75;
       }
       renderRuleEditor();
-    }, { choices: [['temperature', 'Temperature above threshold'], [speedAction, 'Temperature-based speed'], ['heating', 'Thermostat is heating'], ['cooling', 'Thermostat is cooling']] });
-    if (rule.action === 'heating' || rule.action === 'cooling') thermostatSelect(behavior, rule);
-    else if (rule.action === speedAction) {
+    }, { choices: [['last', 'Use last setting (on/off only)'], ['fixed', 'Fixed speed'], ['curve', 'Temperature-based speed']] });
+    if (rule.speedMode === 'last') {
+      behavior.append(el('p', 'Only on/off commands are sent. The fan’s Homebridge plugin restores its last speed or uses its configured startup speed.', 'small-note'));
+    } else if (rule.speedMode === 'fixed') {
+      const input = inputField(behavior, 'Fixed fan speed (%)', rule.fixedSpeed, (value) => { rule.fixedSpeed = value; }, { type: 'number', min: 1, max: 100, step: 1 }); input.required = true;
+      behavior.append(el('p', 'Uses the nearest supported speed at or below this setting. The preview shows the speed each selected fan can use.', 'small-note'));
+    } else {
       const fields = el('div', undefined, 'form-grid');
       for (const [title, key, min, max, difference] of [
-        ['Comfort target', 'desiredTemperature', 5, 35, false], ['Start above target by', 'startGap', .1, 10, true],
-        ['Stop above target by', 'stopGap', 0, 10, true], ['Reach maximum speed above target by', 'fullSpeedGap', .2, 20, true],
+        ['Comfort target', 'desiredTemperature', 5, 35, false], ['Increase speed above target by', 'startGap', 0, 10, true],
+        ['Reach maximum speed above target by', 'fullSpeedGap', .1, 20, true],
       ]) temperatureField(fields, title, rule[key], (value) => { rule[key] = value; }, { min, max, difference });
       for (const [title, key] of [['Minimum running speed (%)', 'minimumSpeed'], ['Maximum fan speed (%)', 'maximumSpeed']]) {
         const input = inputField(fields, title, rule[key], (value) => { rule[key] = value; }, { type: 'number', min: 1, max: 100, step: 1 }); input.required = true;
       }
-      behavior.append(fields, el('p', 'Selected temperature readings are averaged. The speed increases evenly between the start and maximum-speed temperatures, using steps supported by each fan. Changes are spaced at least one minute apart; small changes under 5 percentage points are ignored except at the curve limits. A lower cap takes effect immediately.', 'small-note'));
-      picker(behavior, rule, 'sourceIds', ['temperature']);
-      const curve = el('div', undefined, 'preview-box'); curve.id = 'fan-curve'; behavior.append(curve);
-      behavior.append(el('p', 'When demand ends, fans started by this rule turn off. Fans already running return to their previous speed within your cap. Pause or missing readings also release owned settings. A manual change is left in place.', 'small-note'));
+      behavior.append(fields, el('p', 'The curve chooses speed only; the run condition decides on/off. While heating or cooling is active, a cooler room uses minimum speed. Airflow increases as the room gets warmer, up to your cap. The comfort target does not change a thermostat.', 'small-note'));
     }
-    else { const fields = el('div', undefined, 'form-grid'); temperatureField(fields, 'Above temperature', rule.threshold ?? 24, (value) => { rule.threshold = value; }, { min: 5, max: 35 }); temperatureField(fields, 'Turn-off gap', rule.hysteresis ?? 1, (value) => { rule.hysteresis = value; }, { min: .1, max: 10, difference: true }); behavior.append(fields); picker(behavior, rule, 'sourceIds', ['temperature']); }
+    if (rule.action === 'temperature' || rule.speedMode === 'curve') {
+      const inputs = editorSection(host, '04', 'Choose temperature sources', 'Selected readings are averaged equally. The same average drives the temperature run condition and speed curve when both are used.');
+      picker(inputs, rule, 'sourceIds', ['temperature']);
+    }
+    if (rule.speedMode !== 'last') { const curve = el('div', undefined, 'preview-box'); curve.id = 'fan-curve'; behavior.append(curve); }
+    const priority = editorSection(host, '05', 'Set rule priority', 'Higher numbers win for each fan. Matching rules sharing a fan need different priorities. When a condition clears, the next matching rule can take over. A higher-priority rule with missing readings reserves the fan until readings return.');
+    inputField(priority, 'Priority (higher wins)', rule.priority, (value) => { rule.priority = value; }, { type: 'number', min: 0, max: 100, step: 1 }).required = true;
+    priority.append(el('p', 'Example: room too warm at priority 90 with a speed curve; active cooling at 60 with fixed speed; active heating at 30 with a quieter fixed speed. Manual fan changes suspend every rule for that fan until you Resume it.', 'small-note'));
+    priority.append(el('p', 'When no rule calls for the fan, automation restores its original state within the last controlling speed limit. A handoff between matching rules keeps the fan running. Normal changes share a one-minute interval across rules.', 'small-note'));
   }
   const runtime = el('div', undefined, 'preview-box'); runtime.id = 'rule-runtime'; runtime.setAttribute('role', 'status'); host.append(runtime);
   const preview = el('div', undefined, 'preview-box'); preview.id = 'rule-preview'; preview.setAttribute('role', 'status'); host.append(preview);
-  const footer = el('div', undefined, 'editor-footer'); footer.append(el('span', 'Save changes to apply this rule’s configuration.', 'small-note'), button('Delete rule', () => { if (!window.confirm('Delete this rule? Saving releases its equipment controls and removes a combined presence sensor.')) return; state.config.rules[ruleKey[state.ruleKind]] = rules().filter((entry) => entry.id !== rule.id); state.ruleId = null; markDirty(); renderRules(); }, 'button danger')); host.append(footer); renderRulePreview();
+  const footer = el('div', undefined, 'editor-footer'); footer.append(el('span', 'Save changes to apply this rule’s configuration.', 'small-note'), button('Delete rule', async () => {
+    if (!await confirmAction('Delete this rule?', 'Save changes to confirm the deletion. This releases any equipment controlled by the rule and removes its combined presence sensor, if any.', 'Delete rule', 'Keep rule')) return;
+    state.config.rules[ruleKey[state.ruleKind]] = rules().filter((entry) => entry.id !== rule.id); state.ruleId = null; markDirty(); renderRules();
+    ($('rule-editor').querySelector('input') || $('new-rule')).focus();
+  }, 'button danger')); host.append(footer); renderRulePreview();
 }
 async function ruleCommand(id, action) {
   try { state.status.automation = await api('/rules/command', { method: 'POST', body: { id, action, ...(['home', 'away'].includes(action) ? { minutes: 60 } : {}) } }); renderRulePreview(); }
@@ -648,7 +690,8 @@ function renderRuleRuntime(rule) {
   if (runtime.pendingRestorations) host.append(el('p', 'Some owned settings are waiting to be restored. Check equipment connectivity.'));
   host.append(el('strong', current?.phase || 'Not saved'), el('p', current?.reason || 'Save this rule to apply its settings.'));
   if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Nest target: ' + formatTemp(current.nestTarget) + ' · Room target: ' + formatTemp(current.desiredTemperature)));
-  for (const fan of current?.fanSpeeds || []) host.append(el('p', fan.name + ': current ' + (Number.isFinite(fan.currentSpeed) ? fan.currentSpeed + '%' : 'unavailable') + ' · curve ' + (Number.isFinite(fan.proposedSpeed) ? fan.proposedSpeed + '%' : 'unsupported') + ' · cap ' + fan.maximumSpeed + '%'));
+  for (const fan of current?.fanSpeeds || []) host.append(el('p', fan.name + ': current ' + (Number.isFinite(fan.currentSpeed) ? fan.currentSpeed + '%' : 'unavailable') + ' · requested ' + (Number.isFinite(fan.proposedSpeed) ? fan.proposedSpeed + '%' : 'unsupported') + ' · cap ' + fan.maximumSpeed + '%'));
+  for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Manual override · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller + ' · priority ' + fan.priority : 'No matching rule')));
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
   if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
   if (current?.lastAction) host.append(el('p', current.lastAction.message + ' ' + new Date(current.lastAction.at).toLocaleTimeString()));
@@ -657,34 +700,37 @@ function renderRuleRuntime(rule) {
     for (const [label, action] of [[current.paused ? 'Resume automatic control' : 'Pause rule', current.paused ? 'resume' : 'pause'], ...(rule.kind === 'presence' ? [['Force Home · 1 hour', 'home'], ['Force Away · 1 hour', 'away'], ['Resume automatic presence', 'resume']] : [])]) {
       const item = button(label, () => ruleCommand(rule.id, action), 'button secondary'); item.disabled = state.dirty; actions.append(item);
     }
+    if (current.fanOverrides?.length && !current.paused) { const resume = button('Resume overridden fans', () => ruleCommand(rule.id, 'resume')); resume.disabled = state.dirty; actions.append(resume); }
     host.append(actions); if (state.dirty) host.append(el('p', 'Save or discard your edits before using immediate rule controls.', 'small-note'));
   }
 }
 function renderFanCurve(rule) {
-  const host = $('fan-curve'); if (!host || rule.action !== speedAction) return;
-  host.replaceChildren(el('h4', 'Your speed curve'));
-  const error = fanCurveError(rule);
+  const host = $('fan-curve'); if (!host || rule.speedMode === 'last') return;
+  host.replaceChildren(el('h4', rule.speedMode === 'fixed' ? 'Supported fixed speeds' : 'Your speed curve'));
+  const error = fanSpeedError(rule);
   if (error) { host.append(el('p', error)); return; }
   const targets = (rule.targetIds || []).map((id) => sources().find((source) => source.id === id));
-  const table = el('table'); table.append(el('caption', 'Airflow by room temperature'));
+  const limits = fanSpeedLimits(rule);
+  const table = el('table'); table.append(el('caption', 'Airflow while the run condition is met'));
   const header = el('tr');
   for (const title of ['Room temperature', 'Requested speed', ...targets.map((source) => source?.name || 'Unavailable fan')]) { const cell = el('th', title); cell.scope = 'col'; header.append(cell); }
   const head = el('thead'); head.append(header); table.append(head);
   const body = el('tbody');
-  for (const [label, gap, requested] of [
-    ['Stop', rule.stopGap, 0], ['Start', rule.startGap, rule.minimumSpeed],
-    ['Halfway', (rule.startGap + rule.fullSpeedGap) / 2, (rule.minimumSpeed + rule.maximumSpeed) / 2],
-    ['Maximum', rule.fullSpeedGap, rule.maximumSpeed],
-  ]) {
-    const row = el('tr'); row.append(el('td', formatTemp(rule.desiredTemperature + gap) + ' · ' + label), el('td', requested + '%'));
+  const rows = rule.speedMode === 'fixed' ? [['While running', null, rule.fixedSpeed]] : [
+    ['Minimum', rule.desiredTemperature + rule.startGap, rule.minimumSpeed],
+    ['Halfway', rule.desiredTemperature + (rule.startGap + rule.fullSpeedGap) / 2, (rule.minimumSpeed + rule.maximumSpeed) / 2],
+    ['Maximum', rule.desiredTemperature + rule.fullSpeedGap, rule.maximumSpeed],
+  ];
+  for (const [label, temperature, requested] of rows) {
+    const row = el('tr'); row.append(el('td', (temperature === null ? '' : formatTemp(temperature) + ' · ') + label), el('td', requested + '%'));
     for (const source of targets) {
-      const value = supportedSpeed(source, requested || rule.minimumSpeed, rule.minimumSpeed, rule.maximumSpeed);
-      row.append(el('td', value === null ? 'Unsupported' : requested ? value + '%' : 'Release control'));
+      const value = supportedSpeed(source, requested, limits.minimum, limits.maximum);
+      row.append(el('td', value === null ? 'Unsupported' : value + '%'));
     }
     body.append(row);
   }
   table.append(body); const scroll = el('div', undefined, 'table-scroll'); scroll.append(table); host.append(scroll);
-  host.append(el('p', 'Between stop and start, an idle rule stays off and a running rule uses minimum speed. At and above the maximum temperature, speed stays capped.', 'small-note'));
+  if (rule.action === 'temperature') host.append(el('p', (rule.thresholdInclusive ? 'Run at or above ' : 'Run above ') + formatTemp(rule.threshold) + '; release at ' + formatTemp(rule.threshold - rule.hysteresis) + ' or below. The preview does not run hysteresis timers.', 'small-note'));
 }
 function renderRulePreview() {
   const host = $('rule-preview'); const rule = selectedRule(); if (!host || !rule) return;
@@ -709,20 +755,23 @@ function renderRulePreview() {
     const targets = (rule.targetIds || []).map((id) => all.find((source) => source.id === id));
     if (!targets.length) { headline = 'Choose your room fans'; detail = 'Select at least one fan exposed by Homebridge.'; }
     else if (targets.some((source) => !fresh(source) || !source.canControl)) { headline = 'A fan needs attention'; detail = 'A selected fan is unavailable or does not expose standard on/off control. No fan command is sent.'; }
-    else if (rule.action === speedAction) {
-      const error = fanCurveError(rule);
-      if (error) { headline = 'Review the speed curve'; detail = error; }
-      else if (targets.some((source) => !source.speedAvailable || supportedSpeed(source, rule.minimumSpeed, rule.minimumSpeed, rule.maximumSpeed) === null)) { headline = 'Speed control needs attention'; detail = 'Each selected fan needs readable speed control and at least one supported speed between your minimum and cap. Check the fan selection or speed limits.'; }
-      else if (chosen.length && chosen.every((source) => fresh(source) && Number.isFinite(source.temperature))) {
-        const average = chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length;
-        const curve = fanCurve(rule, average);
-        headline = curve.demand ? 'The speed curve would start the fans' : 'Below the start temperature';
-        detail = 'Room average ' + formatTemp(average) + ' · comfort target ' + formatTemp(rule.desiredTemperature) + '. ' + targets.map((source) => (source.name || 'Fan') + ': ' + (curve.demand ? supportedSpeed(source, curve.speed, rule.minimumSpeed, rule.maximumSpeed) : 0) + '%').join(' · ') + '. A rule already running continues until ' + formatTemp(rule.desiredTemperature + rule.stopGap) + '.';
-      } else { headline = 'Choose reliable temperature inputs'; detail = 'Select temperature sources with fresh readings to preview the speed.'; }
+    else {
+      const error = fanSpeedError(rule);
+      const average = chosen.length && chosen.every((source) => fresh(source) && Number.isFinite(source.temperature)) ? chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length : null;
+      const thermostat = thermostats().find((device) => device.serial === rule.thermostatId);
+      const plan = fanRulePlan(rule, { temperature: average, hvacState: thermostat && usable(thermostat) ? thermostat.data.hvac_state : undefined });
+      const limits = fanSpeedLimits(rule);
+      if (error) { headline = 'Review fan speed settings'; detail = error; }
+      else if (limits && targets.some((source) => !source.speedAvailable || supportedSpeed(source, plan.speed ?? limits.minimum, limits.minimum, limits.maximum) === null)) {
+        headline = 'Speed control needs attention'; detail = 'Each selected fan needs readable speed control and a supported speed within the selected limits.';
+      } else if (plan.demand === undefined) { headline = 'Waiting for reliable readings'; detail = 'Check the selected thermostat and temperature sources. An unknown higher-priority condition prevents a lower-priority rule from taking control.'; }
+      else {
+        headline = plan.demand ? 'Run condition met now' : 'Run condition not met';
+        detail = (rule.action === 'temperature' ? 'Selected rooms average ' + formatTemp(average) + '; threshold ' + formatTemp(rule.threshold) : (thermostat.data.description || 'Thermostat') + ' reports ' + thermostat.data.hvac_state) + '. ';
+        detail += !plan.demand ? 'This rule would release control; another matching rule may take over.' : rule.speedMode === 'last' ? 'Send on/off only, using the fan’s startup speed.' : targets.map((source) => (source.name || 'Fan') + ': ' + supportedSpeed(source, plan.speed, limits.minimum, limits.maximum) + '%').join(' · ');
+        detail += ' Priority ' + (rule.priority ?? 0) + '. See Execution status for the controlling rule and live hysteresis state.';
+      }
     }
-    else if (rule.action === 'heating' || rule.action === 'cooling') { const thermostat = thermostats().find((device) => device.serial === rule.thermostatId); if (thermostat && usable(thermostat)) { const matched = thermostat.data.hvac_state === rule.action; headline = matched ? 'Run condition met now' : 'Run condition not met'; detail = (thermostat.data.description || 'Thermostat') + ' reports ' + (thermostat.data.hvac_state || 'unknown state') + '. ' + targets.length + ' selected fan' + (targets.length === 1 ? '' : 's') + ' selected for this rule. See Execution status for live control.'; } else { headline = 'Choose an available thermostat'; detail = 'A connected thermostat is needed to preview heating or cooling activity.'; } }
-    else if (chosen.length && chosen.every((source) => fresh(source) && Number.isFinite(source.temperature))) { const average = chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length; const matches = average > (rule.threshold ?? 24); headline = matches ? 'Run condition met now' : 'Run condition not met'; detail = 'Selected rooms average ' + formatTemp(average) + '; threshold ' + formatTemp(rule.threshold ?? 24) + '. This snapshot does not simulate the turn-off gap. See Execution status for live control.'; }
-    else if (chosen.length) { headline = 'Waiting for reliable readings'; detail = 'A selected temperature source is missing or stale. Refresh the sources.'; }
   }
   host.append(el('strong', headline), el('p', detail), el('span', 'This preview sends no commands. Enabled rules execute separately; see Execution status. Sensor measurement age may be unknown.', 'preview-label'));
 }
@@ -730,7 +779,7 @@ async function save() {
   if (!state.dirty || state.saving || !state.config || !state.envelope) return;
   const invalid = [...document.querySelectorAll('#page-settings input, #rule-editor input')].find((input) => !input.checkValidity());
   if (invalid) { invalid.reportValidity(); return; }
-  const curveError = (state.config.rules.fans || []).filter((rule) => rule.enabled && rule.action === speedAction).map(fanCurveError).find(Boolean);
+  const curveError = (state.config.rules.fans || []).filter((rule) => rule.enabled).map((rule) => fanSpeedError(normalizeFanRule(rule))).find(Boolean);
   if (curveError) { notice(curveError, 'danger'); return; }
   state.saving = true; $('save').disabled = true; $('discard').disabled = true; renderRestart();
   try {
@@ -747,9 +796,11 @@ async function save() {
 }
 $('save').addEventListener('click', save);
 $('discard').addEventListener('click', async () => {
-  if (!window.confirm('Discard your unsaved changes and load the latest setup?')) return;
-  try { const envelope = await api('/config'); state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true; notice(); renderAll(); }
+  if (!state.dirty || state.saving || !await confirmAction('Discard unsaved changes?', 'Your edits will be removed and the latest saved setup will be loaded.', 'Discard changes')) return;
+  $('discard').disabled = true; $('save').disabled = true;
+  try { const envelope = await api('/config'); state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true; notice(); renderAll(); $('page-title').focus(); }
   catch (error) { notice(error.message, 'danger'); }
+  finally { $('discard').disabled = false; $('save').disabled = !state.dirty; }
 });
 function renderLive() { renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePickers(); renderRulePreview(); for (const device of thermostats()) timeZonePickers.get(device.serial)?.update(device.data); }
 function renderRestart() {

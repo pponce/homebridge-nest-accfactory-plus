@@ -1,6 +1,55 @@
 // Shared by the rule preview, execution engine and configured-bridge adapter.
 export const speedAction = 'temperature-speed';
 
+export function normalizeFanRule(rule) {
+  if (rule.action === speedAction) {
+    const threshold = rule.desiredTemperature + rule.startGap;
+    const hysteresis = rule.startGap - rule.stopGap;
+    return { ...rule, action: 'temperature', speedMode: 'curve', priority: rule.priority ?? 0,
+      ...(Number.isFinite(threshold) ? { threshold } : {}), ...(Number.isFinite(hysteresis) ? { hysteresis } : {}), thresholdInclusive: true };
+  }
+  return { ...rule, action: rule.action ?? 'temperature', speedMode: rule.speedMode ?? 'last', priority: rule.priority ?? 0 };
+}
+
+export function fanSpeedLimits(rule) {
+  return rule.speedMode === 'fixed' ? { minimum: 1, maximum: rule.fixedSpeed } :
+    rule.speedMode === 'curve' ? { minimum: rule.minimumSpeed, maximum: rule.maximumSpeed } : null;
+}
+
+export function fanSpeedError(rule) {
+  if (rule.speedMode === 'last') return null;
+  if (rule.speedMode === 'fixed') return Number.isFinite(rule.fixedSpeed) && rule.fixedSpeed >= 1 && rule.fixedSpeed <= 100 ? null :
+    'Choose a fixed fan speed between 1% and 100%.';
+  const ranges = { desiredTemperature: [5, 35], startGap: [0, 10], fullSpeedGap: [0.1, 20], minimumSpeed: [1, 100], maximumSpeed: [1, 100] };
+  if (rule.speedMode !== 'curve' || Object.entries(ranges).some(([key, [low, high]]) => !Number.isFinite(rule[key]) || rule[key] < low || rule[key] > high)) {
+    return 'Enter a comfort target, temperature gaps and fan speeds within the displayed ranges.';
+  }
+  if (rule.fullSpeedGap <= rule.startGap) return 'The maximum-speed gap must be larger than the gap where speed starts increasing.';
+  if (rule.minimumSpeed > rule.maximumSpeed) return 'Minimum running speed must not exceed the maximum speed.';
+  return null;
+}
+
+export function fanRulePlan(rule, { temperature, hvacState, previousDemand = false } = {}) {
+  rule = normalizeFanRule(rule);
+  let demand;
+  if (rule.action === 'temperature' && Number.isFinite(temperature) && Number.isFinite(rule.threshold)) {
+    const above = rule.thresholdInclusive ? temperature >= rule.threshold - 1e-8 : temperature > rule.threshold;
+    demand = above ? true : temperature <= rule.threshold - (rule.hysteresis ?? 1) + 1e-8 ? false : previousDemand;
+  } else if (['heating', 'cooling'].includes(rule.action) && ['heating', 'cooling', 'off'].includes(hvacState)) {
+    demand = hvacState === rule.action;
+  }
+  const limits = fanSpeedLimits(rule);
+  let speed = null;
+  if (demand !== false && fanSpeedError(rule)) return { demand: undefined, speed, limits };
+  if (demand && rule.speedMode === 'fixed') speed = rule.fixedSpeed;
+  if (demand && rule.speedMode === 'curve') {
+    if (!Number.isFinite(temperature)) return { demand: undefined, speed, limits };
+    const fraction = Math.max(0, Math.min(1, (temperature - rule.desiredTemperature - rule.startGap) / (rule.fullSpeedGap - rule.startGap)));
+    speed = rule.minimumSpeed + fraction * (rule.maximumSpeed - rule.minimumSpeed);
+  }
+  return { demand, speed, limits };
+}
+
 export function fanCurveError(rule) {
   const ranges = { desiredTemperature: [5, 35], startGap: [0.1, 10], stopGap: [0, 10], fullSpeedGap: [0.2, 20],
     minimumSpeed: [1, 100], maximumSpeed: [1, 100] };

@@ -621,7 +621,7 @@ test('a reported time-zone change starts fresh heating evidence without writing 
 test('enabled-rule validation rejects conflicting owners and incomplete rules but preserves disabled drafts', () => {
   assert.equal(validateRuleDrafts({ temperature: [{ id: 'draft', name: 'Draft', kind: 'temperature' }] }).temperature[0].enabled, false);
   assert.throws(() => validateRuleDrafts({ temperature: [temperatureRule, { ...temperatureRule, id: 'second' }] }), /one enabled/);
-  assert.throws(() => validateRuleDrafts({ fans: [fanRule, { ...fanRule, id: 'second' }] }), /one enabled/);
+  assert.throws(() => validateRuleDrafts({ fans: [fanRule, { ...fanRule, id: 'second' }] }), /different priorities/);
   assert.throws(() => validateRuleDrafts({ temperature: [{ ...temperatureRule, aggregation: 'single' }] }), /exactly one/);
   assert.throws(() => validateRuleDrafts({ temperature: [{ ...temperatureRule, desiredTemperature: 5 }] }), /9 and 32/);
   assert.throws(() => validateRuleDrafts({ fans: [{ ...fanRule, targetIds: [] }] }), /at least one/);
@@ -889,4 +889,213 @@ test('a speed conflict on one fan retains restoration ownership for other fans i
   assert.equal(f.engine.leases.size, 0);
   assert.equal(f.source('fan-2').running, false);
   assert.equal(f.source('fan-2').speed, 100);
+});
+
+const fixedRule = { ...fanRule, speedMode: 'fixed', fixedSpeed: 50, priority: 20 };
+const hvac = (f, state) => f.dashboard.update('T', 'Thermostat', { hvac_state: state }, 'A');
+async function settleFan(f) {
+  await f.engine.tick();
+  await f.engine.tick();
+  await f.engine.tick();
+}
+
+test('fixed speeds work for every trigger and respect supported steps below the setting', async (t) => {
+  for (const action of ['temperature', 'heating', 'cooling']) {
+    const f = await fixture(t, {});
+    f.source('fan').speedCapabilities = speedCapabilities({ perms: ['pr', 'pw'], minStep: 25 });
+    f.source('room').temperature = 26;
+    hvac(f, action);
+    f.rules({ fans: [{ ...fixedRule, action, thermostatId: 'T', fixedSpeed: 70 }] });
+    await settleFan(f);
+    assert.deepEqual(f.fanSpeedCommands, [{ id: 'fan', speed: 50 }]);
+    assert.deepEqual(f.fanCommands, [{ id: 'fan', running: true }]);
+    assert.equal(f.commands.length, 0, 'Fan triggers never send thermostat commands');
+    f.source('room').temperature = 20;
+    hvac(f, 'off');
+    await settleFan(f);
+    assert.equal(f.source('fan').running, false);
+  }
+});
+
+test('priority handoffs keep a single original baseline and avoid off/on cycling', async (t) => {
+  const f = await fixture(t, {});
+  const heat = { ...fixedRule, id: 'heat', action: 'heating', thermostatId: 'T', fixedSpeed: 25, priority: 30 };
+  const cool = { ...heat, id: 'cool', action: 'cooling', fixedSpeed: 75, priority: 60 };
+  const warm = { ...speedRule, id: 'warm', priority: 90 };
+  f.source('fan').running = true;
+  f.source('fan').speed = 60;
+  f.rules({ fans: [heat, cool, warm] });
+  fahrenheitRoom(f, 70);
+  hvac(f, 'heating');
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 25);
+  assert.equal(f.engine.leases.get('fan:fan').baseline.speed, 60);
+  f.advance(minute);
+  hvac(f, 'cooling');
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 75);
+  assert.equal(f.engine.leases.get('fan:fan').owner, 'cool');
+  fahrenheitRoom(f, 76);
+  await f.engine.tick();
+  assert.equal(f.source('fan').speed, 75, 'A handoff retains the per-fan cooldown');
+  assert.equal(f.engine.leases.get('fan:fan').owner, 'warm');
+  f.advance(minute);
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 50);
+  fahrenheitRoom(f, 70);
+  f.advance(minute);
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 75);
+  hvac(f, 'off');
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 60, 'Restore the original state within the final controller cap');
+  assert.equal(f.engine.leases.size, 0);
+  assert.equal(f.fanCommands.length, 0);
+});
+
+test('speed-mode edits transfer ownership and last-setting mode issues no speed adjustment', async (t) => {
+  const f = await fixture(t, { fans: [fanRule] });
+  f.source('room').temperature = 26;
+  await settleFan(f);
+  assert.equal(f.engine.leases.get('fan:fan').mode, undefined);
+  f.rules({ fans: [fixedRule] });
+  await settleFan(f);
+  assert.equal(f.engine.leases.get('fan:fan').mode, 'speed');
+  assert.equal(f.source('fan').speed, 50, 'Lower cap applies immediately');
+  assert.equal(f.engine.leases.get('fan:fan').baseline.running, false);
+  f.rules({ fans: [fanRule] });
+  f.advance(minute);
+  await settleFan(f);
+  assert.equal(f.fanSpeedCommands.length, 1);
+  assert.equal(f.fanCommands.length, 1);
+  f.source('room').temperature = 20;
+  await settleFan(f);
+  assert.equal(f.source('fan').running, false);
+  assert.equal(f.engine.leases.size, 0);
+});
+
+test('per-fan priority winners and manual overrides leave other fans running', async (t) => {
+  const f = await fixture(t, {});
+  f.external.push({ ...f.source('fan'), id: 'fan-2' });
+  f.source('room').temperature = 26;
+  const low = { ...fixedRule, id: 'low', targetIds: ['fan', 'fan-2'], fixedSpeed: 25 };
+  const high = { ...fixedRule, id: 'high', priority: 90, fixedSpeed: 75 };
+  f.rules({ fans: [low, high] });
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 75);
+  assert.equal(f.source('fan-2').speed, 25);
+  assert.equal(f.engine.leases.get('fan:fan-2').owner, 'low');
+  f.source('fan').speed = 60;
+  await settleFan(f);
+  assert.equal(f.rule('high').paused, true);
+  assert.equal(f.rule('low').paused, false);
+  assert.deepEqual(f.rule('low').fanOverrides, ['fan']);
+  assert.equal(f.source('fan-2').running, true);
+  assert.equal(f.engine.leases.has('fan:fan'), false);
+  assert.equal(f.source('fan').speed, 60);
+  await f.engine.control({ id: 'high', action: 'resume' });
+  f.advance(minute);
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 75);
+  assert.equal(f.engine.fanOverrides.size, 0);
+});
+
+test('unknown higher-priority inputs reserve the fan and recovery resumes the selected rule', async (t) => {
+  const f = await fixture(t, {});
+  const low = { ...fixedRule, id: 'low', action: 'cooling', thermostatId: 'T', fixedSpeed: 25 };
+  const high = { ...speedRule, id: 'high', priority: 90 };
+  f.rules({ fans: [low, high] });
+  hvac(f, 'cooling');
+  fahrenheitRoom(f, 70);
+  await settleFan(f);
+  assert.equal(f.source('fan').running, true);
+  f.source('room').available = false;
+  await settleFan(f);
+  assert.equal(f.source('fan').running, false);
+  assert.equal(f.engine.fanWinners.get('fan'), 'high');
+  assert.equal(f.rule('high').phase, 'waiting');
+  f.source('room').available = true;
+  f.advance(minute);
+  fahrenheitRoom(f, 76);
+  await settleFan(f);
+  assert.equal(f.source('fan').running, true);
+  assert.equal(f.source('fan').speed, 50);
+  assert.equal(f.engine.leases.get('fan:fan').owner, 'high');
+});
+
+test('paused, disabled or deleted winning rules yield to the next match without toggling power', async (t) => {
+  for (const action of ['pause', 'disable', 'delete']) {
+    const f = await fixture(t, {});
+    const high = { ...fixedRule, id: 'high', priority: 90, fixedSpeed: 75 };
+    f.rules({ fans: [fixedRule, high] });
+    f.source('room').temperature = 26;
+    await settleFan(f);
+    if (action === 'pause') {
+      await f.engine.control({ id: 'high', action: 'pause' });
+    } else {
+      f.rules({ fans: action === 'delete' ? [fixedRule] : [fixedRule, { ...high, enabled: false }] });
+    }
+    await settleFan(f);
+    assert.equal(f.engine.leases.get('fan:fan').owner, 'fans');
+    assert.equal(f.source('fan').speed, 50);
+    assert.deepEqual(f.fanCommands, [{ id: 'fan', running: true }]);
+  }
+});
+
+test('pending speed or power feedback delays a priority handoff without retrying writes', async (t) => {
+  for (const speedMode of ['last', 'fixed']) {
+    const f = await fixture(t, { fans: [{ ...fixedRule, speedMode }] });
+    f.noAck();
+    f.source('room').temperature = 26;
+    await f.engine.tick();
+    const high = { ...fixedRule, id: 'high', priority: 90, fixedSpeed: 75 };
+    f.rules({ fans: [{ ...fixedRule, speedMode }, high] });
+    await f.engine.tick();
+    assert.equal(f.engine.leases.get('fan:fan').owner, 'fans');
+    assert.equal(f.fanCommands.length + f.fanSpeedCommands.length, 1);
+    if (speedMode === 'fixed') {
+      f.source('fan').speed = 50;
+    } else {
+      f.source('fan').running = true;
+    }
+    await f.engine.tick();
+    assert.equal(f.engine.leases.get('fan:fan').owner, 'high');
+    assert.equal(f.engine.fanOverrides.size, 0);
+  }
+});
+
+test('unsupported higher-priority speed control cannot fall through to an on/off rule', async (t) => {
+  const f = await fixture(t, { fans: [fanRule] });
+  f.source('room').temperature = 26;
+  await settleFan(f);
+  f.source('fan').canSetSpeed = false;
+  const high = { ...fixedRule, id: 'high', priority: 90 };
+  f.rules({ fans: [fanRule, high] });
+  await settleFan(f);
+  assert.equal(f.source('fan').running, false);
+  assert.equal(f.rule('high').phase, 'waiting');
+  assert.equal(f.fanSpeedCommands.length, 0);
+  assert.deepEqual(f.fanCommands.map((command) => command.running), [true, false]);
+});
+
+test('manual speed changes in last-setting mode block all rules and survive restart', async (t) => {
+  const f = await fixture(t, { fans: [fanRule] });
+  f.source('room').temperature = 26;
+  await settleFan(f);
+  f.source('fan').speed = 45;
+  await settleFan(f);
+  assert.equal(f.engine.fanOverrides.has('fan'), true);
+  f.rules({ fans: [fanRule, { ...fixedRule, id: 'high', priority: 90 }] });
+  await settleFan(f);
+  assert.equal(f.source('fan').speed, 45);
+  const restarted = new ClimateAutomation({ directory: f.directory, dashboard: f.dashboard, config: f.config,
+    accessFactory: () => f.access, now: f.now });
+  await restarted.start({ schedule: false });
+  assert.equal(restarted.fanOverrides.has('fan'), true);
+  assert.equal(f.fanSpeedCommands.length, 0);
+  await restarted.stop();
+  f.rules({ fans: [] });
+  await settleFan(f);
+  assert.equal(f.engine.fanOverrides.size, 0);
+  assert.equal(f.engine.fanObservations.size, 0);
 });

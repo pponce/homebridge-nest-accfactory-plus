@@ -1,10 +1,121 @@
-import { fanCurve, fanState, sameFanState, supportedSpeed, validFanState } from '../homebridge-ui/public/fan-speed.js';
+import { fanRulePlan, fanSpeedLimits, fanState, sameFanState, supportedSpeed, validFanState } from '../homebridge-ui/public/fan-speed.js';
 
 const MINUTE = 60000;
 const ready = (source, now) =>
   source?.kind === 'fan' && source.available && source.canControl && source.canSetSpeed &&
   source.speedAvailable && validFanState(fanState(source)) && Number.isFinite(source.lastReadAt) &&
   source.lastReadAt <= now + 1000 && now - source.lastReadAt <= 90000;
+
+const powerReady = (source, now) => source?.kind === 'fan' && source.available && source.canControl &&
+  typeof source.running === 'boolean' && Number.isFinite(source.lastReadAt) &&
+  source.lastReadAt <= now + 1000 && now - source.lastReadAt <= 90000;
+
+export function prepareFanRules(engine) {
+  const states = [...engine.states.values()].filter((state) => state.rule.kind === 'fan');
+  const known = new Set(states.flatMap((state) => state.rule.targetIds));
+  const lastWrites = new Map();
+  for (const state of states) {
+    for (const [id, at] of Object.entries(state.fanWrites ?? {})) {
+      if (Number.isFinite(at)) {
+        lastWrites.set(id, Math.max(lastWrites.get(id) ?? 0, at));
+      }
+    }
+  }
+  for (const map of [engine.fanOverrides, engine.fanObservations]) {
+    for (const id of map.keys()) {
+      if (!known.has(id)) {
+        map.delete(id);
+      }
+    }
+  }
+  for (const id of known) {
+    const source = engine.sources.get(id);
+    if (!powerReady(source, engine.now())) {
+      continue;
+    }
+    const current = { running: source.running, speed: source.speedAvailable ? source.speed : undefined };
+    const before = engine.fanObservations.get(id);
+    const watched = states.some((state) => state.rule.enabled && !state.paused && state.rule.targetIds.includes(id));
+    if (watched && !engine.leases.has('fan:' + id) && before &&
+        (before.running !== current.running || (Number.isFinite(before.speed) && Number.isFinite(current.speed) &&
+          Math.abs(before.speed - current.speed) >= 0.001))) {
+      engine.manualFan(id, 'The fan changed outside automatic control. Resume this fan when ready.');
+    }
+    engine.fanObservations.set(id, current);
+  }
+  const winners = new Map();
+  for (const state of states.sort((a, b) => b.rule.priority - a.rule.priority)) {
+    state.fanTargets = [];
+    state.fanSpeeds = [];
+    if (!state.rule.enabled || state.paused) {
+      continue;
+    }
+    const rule = state.rule;
+    const temperature = rule.action === 'temperature' || rule.speedMode === 'curve' ? engine.temperatureInputs(rule) : null;
+    const thermostat = engine.device(rule.thermostatId);
+    const hvacState = engine.connected(thermostat) ? thermostat.data.hvac_state : undefined;
+    state.roomTemperature = temperature;
+    state.fanPlan = fanRulePlan(rule, { temperature, hvacState, previousDemand: state.demand === true });
+    if (state.fanPlan.demand !== undefined) {
+      state.demand = state.fanPlan.demand;
+    } else if (rule.speedMode === 'curve') {
+      state.demand = false;
+    }
+    for (const id of rule.targetIds) {
+      // An unknown higher-priority condition reserves the fan instead of permitting a surprising fallback.
+      if (!engine.fanOverrides.has(id) && state.fanPlan.demand !== false && !winners.has(id)) {
+        winners.set(id, state);
+      }
+    }
+  }
+  for (const state of states) {
+    state.fanAssignments = state.rule.targetIds.map((id) => {
+      const winner = winners.get(id);
+      if (winner === state && engine.fanWinners.get(id) !== state.rule.id) {
+        delete state.fanObserved?.[id];
+        delete state.fanSpeedObserved?.[id];
+      }
+      const selected = !engine.fanOverrides.has(id) && (winner === state ||
+        (!winner && !state.paused && state.rule.enabled && engine.leases.get('fan:' + id)?.owner === state.rule.id));
+      if (selected) {
+        state.fanTargets.push(id);
+        if (lastWrites.has(id)) {
+          (state.fanWrites ??= {})[id] = lastWrites.get(id);
+        }
+      }
+      return { id, name: engine.sources.get(id)?.name || 'Room fan', controller: winner?.rule.name ?? null,
+        priority: winner?.rule.priority, selected, override: engine.fanOverrides.get(id) ?? null };
+    });
+  }
+  engine.fanWinners = new Map([...winners].map(([id, state]) => [id, state.rule.id]));
+}
+
+export async function handoffFanLease(engine, key, lease, state) {
+  const source = engine.sources.get(lease.targetId);
+  if (!powerReady(source, engine.now()) || (lease.mode === 'speed' && !ready(source, engine.now()))) {
+    return false;
+  }
+  const previous = engine.states.get(lease.owner);
+  if (lease.mode === 'speed' ? !observe(engine, key, lease, source, previous) :
+    !engine.observe(key, lease, source.running, previous)) {
+    return false;
+  }
+  if (state.rule.speedMode !== 'last' && lease.mode !== 'speed') {
+    if (!ready(source, engine.now())) {
+      await engine.release(key, lease);
+      return false;
+    }
+    lease.baseline = { running: lease.baseline, speed: source.speed };
+    lease.before = fanState(source);
+    lease.expected = fanState(source);
+    lease.mode = 'speed';
+    lease.step = 'power';
+    lease.maximum = fanSpeedLimits(state.rule).maximum;
+  }
+  lease.owner = state.rule.id;
+  (state.fanWrites ??= {})[lease.targetId] = lease.sentAt;
+  return true;
+}
 
 export function validSpeedLease(lease) {
   return ['baseline', 'before', 'expected'].every((key) => validFanState(lease[key])) &&
@@ -32,9 +143,7 @@ function observe(engine, key, lease, source, state) {
     return false;
   }
   engine.leases.delete(key);
-  if (state) {
-    engine.pause(state, 'A fan speed or power setting changed, or feedback was not confirmed. Review the fan, then Resume.');
-  }
+  engine.manualFan(lease.targetId, 'A fan speed or power setting changed, or feedback was not confirmed. Review the fan, then Resume.');
   return false;
 }
 
@@ -64,9 +173,7 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
     }
   } catch (error) {
     // Keep ownership of other fans so a partial group command can still restore them.
-    if (error.code === 'CLIMATE_CONFLICT') {
-      error.fanTargetId = lease.targetId;
-    }
+    error.fanTargetId = lease.targetId;
     throw error;
   }
   if (state) {
@@ -92,7 +199,7 @@ export async function releaseFanSpeed(engine, key, lease) {
     return;
   }
   // Even a previous manual setting is restored only within the rule's speed cap.
-  const configuredMaximum = state?.rule.maximumSpeed;
+  const configuredMaximum = state && fanSpeedLimits(state.rule)?.maximum;
   if (Number.isFinite(configuredMaximum)) {
     lease.maximum = Math.min(lease.maximum, configuredMaximum);
   }
@@ -117,40 +224,38 @@ export async function releaseFanSpeed(engine, key, lease) {
   await write(engine, key, lease, source, desired, state, true);
 }
 
-export async function runFanSpeed(engine, state) {
+export async function runFanSpeed(engine, state, targetIds) {
   const rule = state.rule;
-  const temperature = engine.temperatureInputs(rule);
-  state.roomTemperature = temperature;
-  const curve = fanCurve(rule, temperature, state.demand === true);
-  state.fanSpeeds = [];
-  if (!curve) {
+  const plan = state.fanPlan;
+  if (plan.demand === undefined) {
     state.demand = false;
     state.phase = 'waiting';
     state.reason = 'Temperature readings or speed settings are unavailable. Returning owned fans to their previous state when possible.';
     for (const [key, lease] of engine.leases) {
-      if (lease.owner === rule.id) {
+      if (lease.owner === rule.id && targetIds.includes(lease.targetId)) {
         await engine.release(key, lease);
       }
     }
     return;
   }
-  state.demand = curve.demand;
   state.phase = 'active';
-  state.reason = curve.demand ? 'Airflow follows the temperature above your comfort target.' : 'The temperature does not call for cooling.';
+  state.reason = plan.demand ? 'Run condition is met.' : 'Run condition is clear.';
   state.nextChangeAt = null;
   state.fanSpeedObserved ??= {};
   state.fanWrites ??= {};
-  for (const id of rule.targetIds) {
+  for (const id of targetIds) {
     const key = 'fan:' + id;
     const source = engine.sources.get(id);
     let lease = engine.leases.get(key);
-    const speed = supportedSpeed(source, curve.speed, rule.minimumSpeed, rule.maximumSpeed);
+    const limits = plan.limits ?? { minimum: 1, maximum: lease?.maximum ?? 100 };
+    const requested = rule.speedMode === 'last' ? source?.speed : plan.speed ?? limits.minimum;
+    const speed = supportedSpeed(source, requested, limits.minimum, limits.maximum);
     state.fanSpeeds.push({
       id,
       name: source?.name || 'Room fan',
       currentSpeed: ready(source, engine.now()) ? (source.running ? source.speed : 0) : null,
-      proposedSpeed: curve.demand ? speed : 0,
-      maximumSpeed: rule.maximumSpeed,
+      proposedSpeed: plan.demand ? speed : 0,
+      maximumSpeed: limits.maximum,
     });
     if (!ready(source, engine.now()) || speed === null) {
       state.phase = 'waiting';
@@ -167,11 +272,11 @@ export async function runFanSpeed(engine, state) {
       continue;
     }
     if (!lease && state.fanSpeedObserved[id] && !sameFanState(fanState(source), state.fanSpeedObserved[id])) {
-      engine.pause(state, 'A selected fan speed or power setting changed outside this rule. Resume when ready for automatic control.');
-      return;
+      engine.manualFan(id, 'A selected fan speed or power setting changed outside this rule. Resume when ready for automatic control.');
+      continue;
     }
     state.fanSpeedObserved[id] = fanState(source);
-    if (!curve.demand) {
+    if (!plan.demand) {
       if (lease) {
         await releaseFanSpeed(engine, key, lease);
       }
@@ -182,26 +287,23 @@ export async function runFanSpeed(engine, state) {
     }
     // Complete a staged start promptly; subsequent changes are limited to once a minute.
     const stagedStart = lease?.step === 'speed' && !source.running && Math.abs(source.speed - speed) < 0.001;
-    const overCap = source.running && source.speed > rule.maximumSpeed;
+    const overCap = source.running && source.speed > limits.maximum;
     if (!stagedStart && !overCap && Number.isFinite(state.fanWrites[id]) && engine.now() - state.fanWrites[id] < MINUTE) {
       state.phase = 'waiting';
       state.reason = 'Waiting for the one-minute fan-speed update interval.';
       state.nextChangeAt = state.fanWrites[id] + MINUTE;
       continue;
     }
-    const atEnd = speed === supportedSpeed(source, rule.minimumSpeed, rule.minimumSpeed, rule.maximumSpeed) ||
-      speed === supportedSpeed(source, rule.maximumSpeed, rule.minimumSpeed, rule.maximumSpeed);
-    if (lease && source.running && !overCap && !atEnd && Math.abs(source.speed - speed) < 5) {
+    const atEnd = speed === supportedSpeed(source, limits.minimum, limits.minimum, limits.maximum) ||
+      speed === supportedSpeed(source, limits.maximum, limits.minimum, limits.maximum);
+    if (rule.speedMode === 'curve' && lease && source.running && !overCap && !atEnd && Math.abs(source.speed - speed) < 5) {
       continue;
     }
     if (!lease) {
       const baseline = fanState(source);
-      if (baseline.running) {
-        baseline.speed = supportedSpeed(source, Math.min(baseline.speed, rule.maximumSpeed), 1, rule.maximumSpeed);
-      }
-      lease = { kind: 'fan', mode: 'speed', targetId: id, owner: rule.id, baseline, maximum: rule.maximumSpeed };
+      lease = { kind: 'fan', mode: 'speed', targetId: id, owner: rule.id, baseline, maximum: limits.maximum };
     }
-    lease.maximum = rule.maximumSpeed;
+    lease.maximum = limits.maximum;
     await write(engine, key, lease, source, { running: true, speed }, state);
   }
 }

@@ -101,6 +101,16 @@
         <div id="save-bar" class="save-bar" hidden><div><strong id="save-title">You have unsaved changes</strong><span id="save-detail">Review your setup, then save.</span></div><div class="save-actions"><button id="discard" class="button secondary" type="button">Discard</button><button id="save" class="button primary" type="button">Save changes</button></div></div>
       </main>
     </div>
+    <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-detail">
+      <form method="dialog">
+        <h2 id="confirm-title"></h2>
+        <p id="confirm-detail"></p>
+        <div class="confirm-actions">
+          <button id="confirm-cancel" class="button secondary" value="cancel" autofocus>Keep editing</button>
+          <button id="confirm-accept" class="button danger" value="confirm">Discard changes</button>
+        </div>
+      </form>
+    </dialog>
     <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>

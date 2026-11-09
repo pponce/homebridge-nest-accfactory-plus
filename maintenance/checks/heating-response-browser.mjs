@@ -93,8 +93,8 @@ try {
 
   await page.getByLabel('Dashboard name', { exact: true }).fill('Unsaved name');
   assert.equal(await apply.isDisabled(), true);
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await apply.click();
   await page.getByText('Heating recommendation applied', { exact: true }).waitFor();
   saved = await server.config.snapshot();
@@ -151,8 +151,8 @@ try {
   assert.equal(await restartButton.isEnabled(), true);
   await page.getByLabel('Dashboard name', { exact: true }).fill('Pending edit');
   assert.equal(await restartButton.isEnabled(), false);
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await page.locator('#save-bar').waitFor({ state: 'hidden' });
   assert.equal(await restartButton.isEnabled(), true);
   await page.screenshot({ path: path.join(output, 'restart-required-mobile.png'), fullPage: true });

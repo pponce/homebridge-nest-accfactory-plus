@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { HEATING_PROFILES } from './heating-response.js';
 import { parseDurationToSeconds } from './utils.js';
-import { fanCurveError, speedAction } from '../homebridge-ui/public/fan-speed.js';
+import { fanCurveError, fanSpeedError, normalizeFanRule, speedAction } from '../homebridge-ui/public/fan-speed.js';
 
 const DEVICE_FIELDS = [
   'name',
@@ -109,6 +109,10 @@ export function validateRuleDrafts(value) {
         'fullSpeedGap',
         'minimumSpeed',
         'maximumSpeed',
+        'speedMode',
+        'fixedSpeed',
+        'priority',
+        'thresholdInclusive',
       ]);
       assert(
         typeof rule.id === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(rule.id) && !known.has(rule.id),
@@ -117,6 +121,12 @@ export function validateRuleDrafts(value) {
       known.add(rule.id);
       assert(text(rule.name, 80) && rule.kind === kind, 'Enter a rule name and supported rule type.');
       assert(rule.enabled === undefined || typeof rule.enabled === 'boolean', 'Choose whether this rule is enabled.');
+      assert(
+        rule.thresholdInclusive === undefined || typeof rule.thresholdInclusive === 'boolean',
+        'Choose a valid temperature threshold.',
+      );
+      assert(rule.priority === undefined || (Number.isInteger(rule.priority) && rule.priority >= 0 && rule.priority <= 100),
+        'Choose an integer priority from 0 to 100; higher numbers take priority.');
       for (const field of ['sourceIds', 'targetIds']) {
         if (rule[field] !== undefined) {
           assert(ids(rule[field]), 'Select valid rule sources.');
@@ -129,6 +139,7 @@ export function validateRuleDrafts(value) {
         ['aggregation', ['single', 'average']],
         ['logic', ['any', 'all']],
         ['action', ['heating', 'cooling', 'temperature', speedAction]],
+        ['speedMode', ['last', 'fixed', 'curve']],
       ]) {
         if (rule[field] !== undefined) {
           assert(choices.includes(rule[field]), 'Choose a supported rule option.');
@@ -136,17 +147,18 @@ export function validateRuleDrafts(value) {
       }
       for (const [field, low, high] of [
         ['threshold', -40, 80],
-        ['hysteresis', 0.1, 10],
+        ['hysteresis', 0, 10],
         ['holdMinutes', 0, 1440],
         ['awayDelayMinutes', 0, 1440],
         ['desiredTemperature', 5, 35],
         ['maximumOffset', 0, 3],
         ['minimumIntervalMinutes', 1, 60],
-        ['startGap', 0.1, 10],
+        ['startGap', 0, 10],
         ['stopGap', 0, 10],
-        ['fullSpeedGap', 0.2, 20],
+        ['fullSpeedGap', 0.1, 20],
         ['minimumSpeed', 1, 100],
         ['maximumSpeed', 1, 100],
+        ['fixedSpeed', 1, 100],
       ]) {
         if (rule[field] !== undefined) {
           assert(Number.isFinite(rule[field]) && rule[field] >= low && rule[field] <= high, 'A rule value is outside its supported range.');
@@ -154,6 +166,12 @@ export function validateRuleDrafts(value) {
       }
       const sources = [...new Set(rule.sourceIds ?? [])];
       const targets = [...new Set(rule.targetIds ?? [])];
+      if (kind === 'fan' && rule.action === speedAction && rule.enabled) {
+        assert(!fanCurveError(rule), fanCurveError(rule));
+      }
+      if (kind === 'fan') {
+        rule = normalizeFanRule(rule);
+      }
       if (rule.enabled === true) {
         if (kind === 'temperature') {
           assert(text(rule.thermostatId, 256) && sources.length > 0, 'Select a thermostat and temperature sources before enabling.');
@@ -164,15 +182,13 @@ export function validateRuleDrafts(value) {
           );
         } else if (kind === 'fan') {
           assert(targets.length > 0, 'Select at least one room fan before enabling.');
-          if (rule.action === speedAction) {
-            assert(sources.length > 0, 'Select temperature sources for temperature-based fan speed.');
-            const curveError = fanCurveError(rule);
-            assert(!curveError, curveError);
-          } else if (['heating', 'cooling'].includes(rule.action)) {
+          if (['heating', 'cooling'].includes(rule.action)) {
             assert(text(rule.thermostatId, 256), 'Select the thermostat that the fans should follow.');
           } else {
             assert(sources.length > 0 && Number.isFinite(rule.threshold), 'Select temperature sources and a fan threshold.');
           }
+          assert(rule.speedMode !== 'curve' || sources.length > 0, 'Select temperature sources for temperature-based fan speed.');
+          assert(!fanSpeedError(rule), fanSpeedError(rule));
         } else {
           assert(sources.length > 0, 'Select presence sources before enabling.');
         }
@@ -181,7 +197,7 @@ export function validateRuleDrafts(value) {
     });
   }
   const thermostatOwners = new Set();
-  const fanOwners = new Set();
+  const fanOwners = new Map();
   for (const rule of result.temperature.filter((entry) => entry.enabled)) {
     const id = rule.thermostatId.toUpperCase();
     assert(!thermostatOwners.has(id), 'Only one enabled temperature group can control each thermostat.');
@@ -189,10 +205,13 @@ export function validateRuleDrafts(value) {
   }
   for (const rule of result.fans.filter((entry) => entry.enabled)) {
     for (const id of rule.targetIds) {
-      assert(!fanOwners.has(id), 'Only one enabled rule can control each room fan.');
-      fanOwners.add(id);
+      const priorities = fanOwners.get(id) ?? new Set();
+      assert(!priorities.has(rule.priority), 'Enabled rules sharing a fan need different priorities; higher numbers take priority.');
+      priorities.add(rule.priority);
+      fanOwners.set(id, priorities);
     }
   }
+  assert(fanOwners.size <= 256, 'Select at most 256 room fans across enabled rules.');
   return result;
 }
 

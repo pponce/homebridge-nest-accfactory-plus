@@ -16,7 +16,8 @@ await fs.mkdir(output, { recursive: true });
 const storage = await fs.mkdtemp(path.join(output, 'fan-fixture-'));
 const configPath = path.join(storage, 'config.json');
 const rule = { id: 'fans', name: 'Living room comfort', kind: 'fan', enabled: false, sourceIds: ['room'], targetIds: ['fan'],
-  action: 'temperature', threshold: 24, hysteresis: 1 };
+  action: 'temperature-speed', desiredTemperature: (72 - 32) / 1.8, startGap: 2 / 1.8, stopGap: 0.5 / 1.8,
+  fullSpeedGap: 6 / 1.8, minimumSpeed: 25, maximumSpeed: 75, priority: 90 };
 const block = { platform: 'NestClimateCntrl', dashboardTemperatureUnit: 'F',
   webDashboard: { enabled: true, protocol: 'http', host: '127.0.0.1' },
   climateRuleDrafts: { temperature: [], occupancy: [], fans: [rule] } };
@@ -32,9 +33,12 @@ const access = { client: { startDiscovery() {} }, start: async () => {}, close()
   { id: 'fixed-fan', name: 'Fixed speed fan', kind: 'fan', available: true, canControl: true, running: false, lastReadAt: Date.now() },
 ] }),
 setFanSpeed: async (id, speed, expected) => { assert.deepEqual(fanState(fan), expected); commands.push({ speed }); fan.speed = speed; },
-setFan: async (id, running, expected) => { assert.deepEqual(fanState(fan), expected); commands.push({ running }); fan.running = running; } };
+setFan: async (id, running, expected) => { assert.deepEqual(typeof expected === 'boolean' ? fan.running : fanState(fan), expected); commands.push({ running }); fan.running = running; } };
 let engine;
-const dashboard = { devices: new Map(), snapshot: () => ({ generatedAt: Date.now(), devices: [], accounts: [], automation: engine?.snapshot() }) };
+const device = { serial: 'T', type: 'Thermostat', account: 'A', data: { description: 'Living room Nest', online: true,
+  hvac_state: 'cooling', hvac_mode: 'cool', physical_temperature: 25, current_temperature: 25, schedules: {} } };
+const dashboard = { devices: new Map([['T', device]]), snapshot: () => ({ generatedAt: Date.now(), devices: [device],
+  accounts: [{ id: 'A', authorised: true, observing: true }], automation: engine?.snapshot() }) };
 const server = new WebDashboard({ storage, configPath, platformConfig: block, dashboard, accessFactory: () => access });
 let browser;
 try {
@@ -50,29 +54,42 @@ try {
   await page.getByRole('button', { name: /Sign in/ }).click();
   await page.getByRole('tab', { name: /Room fans/ }).click();
   await page.locator('.pick-source').filter({ hasText: 'Living room fan' }).getByText('Speed control', { exact: false }).waitFor();
-  await page.getByLabel('Run condition').selectOption('temperature-speed');
+  assert.equal(await page.getByLabel('Run condition').inputValue(), 'temperature');
+  assert.equal(await page.getByLabel('Fan speed', { exact: true }).inputValue(), 'curve');
+  assert.equal(await page.getByLabel('Run condition').locator('option').count(), 3);
+  for (const action of ['heating', 'cooling', 'temperature']) {
+    await page.getByLabel('Run condition').selectOption(action);
+    assert.equal(await page.getByLabel('Fan speed', { exact: true }).locator('option').count(), 3);
+    await page.getByLabel('Fan speed', { exact: true }).selectOption('fixed');
+    assert.equal(Number(await page.getByLabel('Fixed fan speed (%)', { exact: true }).inputValue()), 50);
+    await page.getByLabel('Fan speed', { exact: true }).selectOption('last');
+    assert.equal(await page.locator('#fan-curve').count(), 0);
+    await page.getByLabel('Fan speed', { exact: true }).selectOption('curve');
+    await page.getByRole('heading', { name: 'Choose temperature sources', exact: false }).waitFor();
+  }
   assert.equal(Number(await page.getByLabel('Comfort target (°F)', { exact: true }).inputValue()), 72);
-  assert.equal(Number(await page.getByLabel('Start above target by (°F)', { exact: true }).inputValue()), 2);
-  assert.equal(Number(await page.getByLabel('Stop above target by (°F)', { exact: true }).inputValue()), 0.5);
+  assert.equal(Number(await page.getByLabel('Increase speed above target by (°F)', { exact: true }).inputValue()), 2);
+  assert.equal(Number(await page.getByLabel('At or above temperature (°F)', { exact: true }).inputValue()), 74);
+  assert.equal(Number(await page.getByLabel('Turn-off gap (°F)', { exact: true }).inputValue()), 1.5);
   assert.equal(Number(await page.getByLabel('Reach maximum speed above target by (°F)', { exact: true }).inputValue()), 6);
-  assert.match(await page.locator('#fan-curve').innerText(), /74.0°F.*Start/s);
+  assert.match(await page.locator('#fan-curve').innerText(), /74.0°F.*Minimum/s);
   assert.match(await page.locator('#fan-curve').innerText(), /76.0°F.*Halfway/s);
   assert.match(await page.locator('#fan-curve').innerText(), /78.0°F.*Maximum/s);
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
   assert.equal(commands.length, 0, 'Disabled drafts send no commands');
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).check();
-  await page.getByLabel('Stop above target by (°F)', { exact: true }).fill('3');
+  await page.getByLabel('Reach maximum speed above target by (°F)', { exact: true }).fill('1');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  assert.match(await page.locator('#notice').innerText(), /stop gap must be smaller/);
+  assert.match(await page.locator('#notice').innerText(), /maximum-speed gap must be larger/);
   assert.equal(commands.length, 0);
-  await page.getByLabel('Stop above target by (°F)', { exact: true }).fill('0.5');
+  await page.getByLabel('Reach maximum speed above target by (°F)', { exact: true }).fill('6');
   await page.getByLabel('Maximum fan speed (%)', { exact: true }).fill('70');
   assert.match(await page.locator('#fan-curve tbody tr').last().innerText(), /70%\s+50%/);
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
   const stored = (await server.config.snapshot()).config.rules.fans[0];
-  assert.equal(stored.action, 'temperature-speed'); assert.equal(stored.maximumSpeed, 70);
+  assert.equal(stored.action, 'temperature'); assert.equal(stored.speedMode, 'curve'); assert.equal(stored.priority, 90); assert.equal(stored.maximumSpeed, 70);
   assert.ok(Math.abs(stored.desiredTemperature - (72 - 32) / 1.8) < 1e-6);
   assert.equal(commands.length, 0, '73F must not start the fan');
   temperature = (78 - 32) / 1.8;
@@ -86,13 +103,30 @@ try {
   await page.waitForTimeout(300);
   assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'Draft name stays');
   assert.equal(await page.evaluate(() => document.activeElement.parentElement.textContent.startsWith('Rule name')), true);
-  page.on('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
   fan.speed = 25;
   await engine.tick(); assert.equal(engine.snapshot().rules[0].paused, true);
   await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
   await page.getByRole('button', { name: 'Resume automatic control', exact: true }).waitFor();
+  const manualCommands = commands.length;
+  await page.getByRole('button', { name: 'Add rule', exact: true }).click();
+  await page.getByLabel('Rule name', { exact: true }).fill('Cooling circulation');
+  await page.locator('.pick-source').filter({ hasText: 'Living room fan' }).getByRole('checkbox').check();
+  await page.getByLabel('Run condition').selectOption('cooling');
+  await page.getByLabel('Fan speed', { exact: true }).selectOption('fixed');
+  await page.getByLabel('Priority (higher wins)', { exact: true }).fill('90');
+  await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).check();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('Enabled rules sharing a fan need different priorities; higher numbers take priority.', { exact: true }).waitFor();
+  assert.equal((await server.config.snapshot()).config.rules.fans.length, 1);
+  await page.getByLabel('Priority (higher wins)', { exact: true }).fill('60');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  await engine.tick();
+  assert.equal(commands.length, manualCommands, 'A new matching rule must respect the fan manual override');
+  assert.equal((await server.config.snapshot()).config.rules.fans[1].priority, 60);
   const beforeUnits = (await server.config.snapshot()).config.rules;
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Temperature units', { exact: false }).selectOption('C');
@@ -101,6 +135,7 @@ try {
   assert.deepEqual((await server.config.snapshot()).config.rules, beforeUnits);
   await page.getByRole('link', { name: 'Climate rules', exact: true }).click();
   await page.getByRole('tab', { name: /Room fans/ }).click();
+  await page.locator('.rule-item').filter({ hasText: 'Living room comfort' }).click();
   assert.ok(Math.abs(Number(await page.getByLabel('Comfort target (°C)', { exact: true }).inputValue()) - (72 - 32) / 1.8) < 1e-6);
   await page.locator('.pick-source').filter({ hasText: 'Fixed speed fan' }).getByRole('checkbox').check();
   assert.match(await page.locator('#rule-preview').innerText(), /Speed control needs attention/);

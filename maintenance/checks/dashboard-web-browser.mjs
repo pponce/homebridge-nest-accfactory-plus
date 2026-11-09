@@ -200,10 +200,43 @@ try {
   await page.getByText('The configuration changed elsewhere.', { exact: false }).waitFor();
   assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'A concurrent edit');
   assert.equal(saves.length, 1);
-  page.on('dialog', (dialog) => dialog.accept());
   conflict = false;
+  const dialogs = [];
+  page.on('dialog', (dialog) => { dialogs.push(dialog.type()); dialog.dismiss(); });
+  const confirmation = page.getByRole('dialog', { name: 'Discard unsaved changes?', exact: true });
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  assert.equal(await confirmation.getByRole('button', { name: 'Keep editing' }).evaluate((node) => node === document.activeElement), true);
+  await page.keyboard.press('Tab');
+  assert.equal(await confirmation.getByRole('button', { name: 'Discard changes' }).evaluate((node) => node === document.activeElement), true);
+  await page.keyboard.press('Tab');
+  assert.equal(await confirmation.evaluate((node) => node.contains(document.activeElement)), true);
+  await page.keyboard.press('Escape');
+  await confirmation.waitFor({ state: 'hidden' });
+  assert.equal(await page.getByRole('button', { name: 'Discard', exact: true }).evaluate((node) => node === document.activeElement), true);
+  assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'A concurrent edit');
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Keep editing' }).click();
+  assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'A concurrent edit');
+  assert.equal(saves.length, 1);
+  await page.getByRole('button', { name: 'Delete rule', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Keep rule' }).click();
+  assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'A concurrent edit');
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Keep editing' }).click();
+  assert.equal(await page.locator('#app').isVisible(), true);
+  await page.route('**/api/config', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture read unavailable.' }) }), { times: 1 });
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await confirmation.getByRole('button', { name: 'Discard changes' }).click();
+  await page.getByText('Fixture read unavailable.', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Rule name', { exact: true }).inputValue(), 'A concurrent edit');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  assert.equal(await confirmation.evaluate((node) => node.getBoundingClientRect().right <= innerWidth && node.scrollWidth <= node.clientWidth), true);
+  await page.screenshot({ path: path.join(output, 'discard-dialog-mobile.png'), fullPage: true });
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  assert.deepEqual(dialogs, [], 'Dashboard actions use in-page confirmations');
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.getByRole('button', { name: 'Pause rule', exact: true }).waitFor();
@@ -259,6 +292,7 @@ try {
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await page.getByLabel('Temperature units', { exact: false }).selectOption('C');
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
   assert.equal(await page.getByLabel('Temperature units', { exact: false }).inputValue(), 'F');
   await page.getByLabel('Temperature units', { exact: false }).selectOption('C');
@@ -312,6 +346,7 @@ try {
     await capture(pageName + '-mobile.png');
     if (pageName === 'rules') {
       await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
       await page.waitForFunction(() => document.getElementById('save-bar').hidden);
     }
   }

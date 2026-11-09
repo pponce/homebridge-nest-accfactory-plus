@@ -475,6 +475,12 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
 }
 
 .heating-settings { margin: 1.25rem 0 2rem; padding: 1.25rem; border: 1px solid var(--line); border-radius: 14px; }
+.confirm-dialog { width: min(460px, calc(100% - 32px)); max-height: calc(100% - 32px); padding: 28px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--text); box-shadow: 0 24px 80px #0003; }
+.confirm-dialog::backdrop { background: #17121d66; }
+.confirm-dialog h2 { margin: 0 0 12px; font-size: 1.35rem; }
+.confirm-dialog p { margin: 0 0 24px; color: var(--muted); line-height: 1.6; }
+.confirm-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 480px) { .confirm-dialog { padding: 22px; } .confirm-actions .button { flex: 1 1 100%; } }
 .heating-settings h4 { margin-top: 0; }
 .heating-rule { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .heating-rule h5 { font-size: 1rem; margin: 0 0 .5rem; }

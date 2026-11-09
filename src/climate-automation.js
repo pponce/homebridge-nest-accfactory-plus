@@ -6,8 +6,8 @@ import { HeatingResponse } from './heating-response.js';
 import { DashboardConfigError } from './web-dashboard-config.js';
 import { sensorSources, presenceSources } from '../homebridge-ui/public/sensor-preview.js';
 import { scheduleTimeZone } from '../homebridge-ui/public/climate-utils.js';
-import { speedAction } from '../homebridge-ui/public/fan-speed.js';
-import { runFanSpeed, releaseFanSpeed, validSpeedLease } from './fan-speed-control.js';
+import { normalizeFanRule } from '../homebridge-ui/public/fan-speed.js';
+import { runFanSpeed, releaseFanSpeed, validSpeedLease, prepareFanRules, handoffFanLease } from './fan-speed-control.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
@@ -102,6 +102,9 @@ export class ClimateAutomation {
     this.log = log;
     this.states = new Map();
     this.leases = new Map();
+    this.fanOverrides = new Map();
+    this.fanObservations = new Map();
+    this.fanWinners = new Map();
     this.queue = Promise.resolve();
     this.saving = Promise.resolve();
     this.external = { sources: [], bridges: [] };
@@ -130,6 +133,9 @@ export class ClimateAutomation {
           throw new Error('Invalid saved rule');
         }
         state.awaySince = null;
+        if (state.rule.kind === 'fan') {
+          state.rule = normalizeFanRule(state.rule);
+        }
         if (state.rule.kind !== 'presence' && state.rule.enabled) {
           state.paused = true;
           state.reason = 'Bridge restarted. Review the equipment, then Resume automatic control.';
@@ -153,10 +159,19 @@ export class ClimateAutomation {
         }
         this.leases.set(key, lease);
       }
+      if (data.fanOverrides !== undefined) {
+        if (!Array.isArray(data.fanOverrides) || data.fanOverrides.length > 256 || data.fanOverrides.some((entry) =>
+          !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || entry[0].length > 256 ||
+          typeof entry[1] !== 'string' || entry[1].length > 300)) {
+          throw new Error('Invalid saved fan overrides');
+        }
+        this.fanOverrides = new Map(data.fanOverrides);
+      }
     } catch (error) {
       if (error.code !== 'ENOENT') {
         this.states.clear();
         this.leases.clear();
+        this.fanOverrides.clear();
         this.recoveryRequired = true;
         this.error = 'Saved automation state could not be read. Review equipment and Resume each rule.';
       }
@@ -179,7 +194,7 @@ export class ClimateAutomation {
   }
 
   async persist() {
-    const bytes = JSON.stringify({ version: 1, states: [...this.states], leases: [...this.leases] });
+    const bytes = JSON.stringify({ version: 1, states: [...this.states], leases: [...this.leases], fanOverrides: [...this.fanOverrides] });
     const operation = this.saving.then(async () => {
       const temporary = path.join(this.directory, 'automation-' + crypto.randomUUID() + '.tmp');
       let file;
@@ -211,9 +226,13 @@ export class ClimateAutomation {
         name: state.rule.name,
         phase: state.phase ?? 'waiting',
         reason: state.reason,
-        paused: state.paused === true,
+        paused: state.paused === true || (state.rule.kind === 'fan' && state.rule.targetIds.length > 0 &&
+          state.rule.targetIds.every((id) => this.fanOverrides.has(id))),
         roomTemperature: state.roomTemperature,
         fanSpeeds: state.fanSpeeds,
+        fanAssignments: state.fanAssignments,
+        fanOverrides: state.rule.kind === 'fan' ? state.rule.targetIds.filter((id) => this.fanOverrides.has(id)) : undefined,
+        priority: state.rule.priority,
         desiredTemperature: state.rule.desiredTemperature,
         nestTarget: state.nestTarget,
         proposedTarget: state.proposedTarget,
@@ -286,8 +305,10 @@ export class ClimateAutomation {
         state.awaySince = null;
         state.demand = false;
       }
-      if (old && old.rule.action !== rule.action) {
-        state.demand = false;
+      if (old && (old.rule.action !== rule.action || old.rule.speedMode !== rule.speedMode)) {
+        if (old.rule.action !== rule.action) {
+          state.demand = false;
+        }
         state.fanObserved = {};
         state.fanSpeedObserved = {};
         state.fanSpeeds = [];
@@ -323,13 +344,25 @@ export class ClimateAutomation {
     this.presence?.sync(this.rules.filter((rule) => rule.kind === 'presence' && rule.enabled));
     // Persist configuration intent before permitting any side effects.
     await this.persist();
+    prepareFanRules(this);
     for (const [key, lease] of this.leases) {
+      if (lease.kind === 'fan') {
+        const winner = this.states.get(this.fanWinners.get(lease.targetId));
+        if (winner && winner.fanPlan?.demand === true && !lease.restoring &&
+            (winner.rule.id !== lease.owner || (winner.rule.speedMode !== 'last' && lease.mode !== 'speed'))) {
+          const handedOff = await handoffFanLease(this, key, lease, winner);
+          if (!this.leases.has(key) || (!handedOff && !lease.restoring && !this.fanOverrides.has(lease.targetId))) {
+            continue;
+          }
+        }
+      }
       const owner = this.states.get(lease.owner);
+      const fanWinner = this.fanWinners.get(lease.targetId);
       const assigned =
         owner?.rule.enabled &&
         owner.rule.kind === lease.kind &&
         !owner.paused &&
-        (lease.kind !== 'fan' || (lease.mode === 'speed') === (owner.rule.action === speedAction)) &&
+        (lease.kind !== 'fan' || (!this.fanOverrides.has(lease.targetId) && (!fanWinner || fanWinner === lease.owner))) &&
         (lease.kind === 'temperature' ? owner.rule.thermostatId === lease.targetId : owner.rule.targetIds.includes(lease.targetId));
       if (!assigned || lease.restoring) {
         await this.release(key, lease);
@@ -362,6 +395,11 @@ export class ClimateAutomation {
           this.presence?.update(state.rule, state);
         }
       } catch (error) {
+        if (state.rule.kind === 'fan') {
+          for (const id of error.fanTargetId ? [error.fanTargetId] : state.fanTargets) {
+            this.manualFan(id, 'A fan command could not be confirmed. Review the fan before resuming automatic control.');
+          }
+        }
         if (error.code === 'CLIMATE_CONFLICT') {
           for (const [key, lease] of this.leases) {
             if (lease.owner === state.rule.id && (!error.fanTargetId || lease.targetId === error.fanTargetId)) {
@@ -511,6 +549,16 @@ export class ClimateAutomation {
     state.reason = reason;
   }
 
+  manualFan(id, reason) {
+    this.fanOverrides.set(id, reason);
+    for (const state of this.states.values()) {
+      if (state.rule.kind === 'fan' && state.rule.targetIds.includes(id)) {
+        state.phase = 'paused';
+        state.reason = reason;
+      }
+    }
+  }
+
   schedule(device, serial) {
     const zone = scheduleTimeZone(this.deviceOptions.find((entry) => entry.serialNumber === serial), device.data);
     const entries = Object.entries(device.data.schedules ?? {}).flatMap(([day, points]) =>
@@ -526,6 +574,16 @@ export class ClimateAutomation {
 
   observe(key, lease, value, state) {
     if (equal(value, lease.expected)) {
+      const fan = lease.kind === 'fan' ? this.sources.get(lease.targetId) : undefined;
+      if (fan?.speedAvailable && !lease.pending && Number.isFinite(lease.speedExpected) &&
+          Math.abs(fan.speed - lease.speedExpected) >= 0.001) {
+        this.leases.delete(key);
+        this.manualFan(lease.targetId, 'A fan speed changed manually. Resume this fan when ready for automatic control.');
+        return false;
+      }
+      if (fan?.speedAvailable) {
+        lease.speedExpected = fan.speed;
+      }
       lease.pending = false;
       return true;
     }
@@ -535,7 +593,11 @@ export class ClimateAutomation {
       return false;
     }
     this.leases.delete(key);
-    this.pause(state, 'The device target/state changed or did not confirm a command. Review it, then Resume automatic control.');
+    if (lease.kind === 'fan') {
+      this.manualFan(lease.targetId, 'The fan changed or did not confirm a command. Review it, then Resume automatic control.');
+    } else {
+      this.pause(state, 'The device target/state changed or did not confirm a command. Review it, then Resume automatic control.');
+    }
     return false;
   }
 
@@ -648,33 +710,28 @@ export class ClimateAutomation {
 
   async fan(state) {
     const rule = state.rule;
-    if (rule.action === speedAction) {
-      await runFanSpeed(this, state);
+    const targets = state.fanTargets.filter((id) => !this.fanOverrides.has(id));
+    if (!targets.length) {
+      state.phase = state.rule.targetIds.every((id) => this.fanOverrides.has(id)) ? 'paused' :
+        state.fanPlan.demand === false ? 'active' : 'standby';
+      state.reason = state.phase === 'paused' ? 'Fan automation is suspended after a manual change. Resume when ready.' :
+        state.phase === 'standby' ? 'A higher-priority rule controls the selected fans.' : 'Run condition is clear.';
       return;
     }
-    let demand;
-    if (['heating', 'cooling'].includes(rule.action)) {
-      const device = this.device(rule.thermostatId);
-      if (this.connected(device) && ['heating', 'cooling', 'off'].includes(device.data.hvac_state)) {
-        demand = device.data.hvac_state === rule.action;
-      }
-    } else {
-      state.roomTemperature = this.temperatureInputs(rule);
-      if (state.roomTemperature !== null) {
-        if (state.roomTemperature > rule.threshold) {
-          demand = true;
-        } else if (state.roomTemperature <= rule.threshold - (rule.hysteresis ?? 1)) {
-          demand = false;
-        } else {
-          demand = state.demand ?? false;
-        }
-      }
+    const managed = targets.filter((id) => rule.speedMode !== 'last' || this.leases.get('fan:' + id)?.mode === 'speed');
+    if (managed.length) {
+      await runFanSpeed(this, state, managed);
     }
+    const powerTargets = targets.filter((id) => !managed.includes(id));
+    if (!powerTargets.length) {
+      return;
+    }
+    const demand = state.fanPlan.demand;
     if (demand === undefined) {
       state.phase = 'waiting';
       state.reason = 'Run-condition readings are unavailable. Returning owned fans to their previous state when possible.';
       for (const [key, lease] of this.leases) {
-        if (lease.owner === rule.id) {
+        if (lease.owner === rule.id && powerTargets.includes(lease.targetId)) {
           await this.release(key, lease);
         }
       }
@@ -685,7 +742,7 @@ export class ClimateAutomation {
     state.fanWrites ??= {};
     state.phase = 'active';
     state.reason = demand ? 'Run condition is met.' : 'Run condition is clear.';
-    for (const id of rule.targetIds) {
+    for (const id of powerTargets) {
       const source = this.sources.get(id);
       const key = 'fan:' + id;
       let lease = this.leases.get(key);
@@ -701,8 +758,8 @@ export class ClimateAutomation {
         continue;
       }
       if (!lease && typeof state.fanObserved[id] === 'boolean' && state.fanObserved[id] !== source.running) {
-        this.pause(state, 'A selected fan changed outside this rule. Resume when ready for automatic fan control.');
-        return;
+        this.manualFan(id, 'A selected fan changed outside this rule. Resume when ready for automatic fan control.');
+        continue;
       }
       state.fanObserved[id] = source.running;
       // Never switch off a fan that the rule did not turn on.
@@ -727,7 +784,12 @@ export class ClimateAutomation {
       if (state.paused || this.stopping) {
         return;
       }
-      await this.access.setFan(id, desired, lease.before);
+      try {
+        await this.access.setFan(id, desired, lease.before);
+      } catch (error) {
+        error.fanTargetId = id;
+        throw error;
+      }
       state.lastAction = { at: this.now(), value: desired, message: 'Room-fan command accepted; awaiting device feedback.' };
     }
   }
@@ -909,6 +971,16 @@ export class ClimateAutomation {
           state.fanObserved = {};
           state.fanSpeedObserved = {};
           state.demand = false;
+          if (state.rule.kind === 'fan') {
+            for (const id of state.rule.targetIds) {
+              this.fanOverrides.delete(id);
+              this.fanObservations.delete(id);
+              for (const candidate of this.states.values()) {
+                delete candidate.fanObserved?.[id];
+                delete candidate.fanSpeedObserved?.[id];
+              }
+            }
+          }
         }
       }
       await this.persist();

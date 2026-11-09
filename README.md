@@ -16,7 +16,7 @@ Use temperatures from the rooms that matter, coordinate Homebridge room fans, an
 | --- | --- |
 | **Visual setup and admin dashboard** | Configure accounts and accessories in Homebridge. Open a separate web dashboard with sign-in, thermostat status, sensor search, settings and guided rule editors. |
 | **Temperature groups with Nest and other sensors** | Use one sensor or average associated Nest sensors, other Homebridge temperature sensors, or both. Enable bounded Nest target adjustments to follow the group's desired temperature in **Heat mode**. |
-| **Homebridge ceiling and room fans** | Run fans above a room-temperature threshold or during Nest heating/cooling activity. For fans with speed control, increase airflow with the temperature above a comfort target, bounded by your speed cap. Manual changes pause the rule. |
+| **Homebridge ceiling and room fans** | Run fans above a room-temperature threshold or during Nest heating/cooling activity. For fans with speed control, increase airflow with the temperature above a comfort target, bounded by your speed cap. Give overlapping rules different priorities; manual changes suspend automation for that fan. |
 | **Heating response & tuning** | Choose the heating type, observe local heating cycles, and review evidence and confidence for each rule’s interval and adjustment recommendations. Apply each suggestion explicitly in Settings. |
 | **Home/Away from multiple signals** | Combine Nest Home/Away, motion and occupancy using any/all logic, motion holds and an Away delay. Publish a separate read-only Apple Home occupancy sensor, with timed dashboard overrides. |
 | **Live Nest controls** | Use supported Eco controls, select a native Nest temperature source, and run the thermostat's HVAC blower with timed actions. |
@@ -48,9 +48,11 @@ A group does not create a separate physical heating/cooling zone or turn third-p
 
 For a ceiling fan exposed by another Homebridge plugin, create a rule to run when the selected rooms average above **24 °C**, with a **1 °C turn-off gap**. A fan started by this rule returns to its previous state when the average reaches **23 °C** or below. Alternatively, select **Thermostat is heating** or **Thermostat is cooling** as the run condition.
 
-For fans with writable speed control, choose **Temperature-based speed**. A 72 °F comfort target can start the fan at 74 °F/25%, increase to 76 °F/50%, and cap it at 78 °F/75%. Set your own start/stop gaps and speed limits; the dashboard previews the supported speeds for each selected fan. [Configure a speed curve](WEB_DASHBOARD.md#temperature-based-fan-speed).
+Every run condition offers three **Fan speed** choices: **Use last setting (on/off only)**, **Fixed speed**, or **Temperature-based speed**. A speed curve can use a 72 °F comfort target, increasing from 25% near 74 °F to 50% at 76 °F and a 75% cap at 78 °F. The run condition decides when the fan starts and stops; the speed choice determines airflow while it runs. [Configure a speed curve](WEB_DASHBOARD.md#temperature-based-fan-speed).
 
-Normal speed changes are separated by at least a minute. Manual changes pause control. When demand ends, a fan started by the rule turns off; a previously running fan returns to its earlier speed within the cap. These room fans are separate from the **Nest HVAC blower**, which has its own timer controls. [Create and test an on/off fan rule](WEB_DASHBOARD.md#room-fan-example).
+Several rules can share a fan. Give each a different **Priority**; higher numbers win. For example, use priority 90 for a warm-room speed curve, 60 for fixed-speed circulation during cooling, and 30 for quiet circulation during heating. The dashboard identifies the controlling rule for each fan. [Combine fan rules](WEB_DASHBOARD.md#multiple-rules-for-one-fan).
+
+Normal speed changes are separated by at least a minute across rules. Manual changes suspend all automation for the affected fan until Resume. When no rule calls for it, a fan started by automation turns off; a previously running fan returns to its original speed within the final controlling cap. These room fans are separate from the **Nest HVAC blower**, which has its own timer controls. [Create and test an on/off fan rule](WEB_DASHBOARD.md#room-fan-example).
 
 ### Home/Away: bring several presence signals together
 

@@ -122,8 +122,8 @@ export async function checkSourceRefresh(browser, base) {
     await idle();
 
     assert.deepEqual(writes, [], 'refreshing never saves drafts or sends equipment commands');
-    page.on('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Discard and sign out', exact: true }).click();
     await page.locator('#login-screen').waitFor({ state: 'visible' });
     const signedOutReads = [sourceReads, statusReads];
     await advance(60000);
