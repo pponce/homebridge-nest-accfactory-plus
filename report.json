@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "a70f9d7b630ac5e2481b50e93c5ca6b31f731b95",
+  "sourceBranch": "feature/dashboard-temperature-control",
+  "fixtureDataOnly": true,
+  "checks": [
+    "room and native temperature commands",
+    "confirmation and timeout",
+    "stale edits",
+    "C/F and range targets",
+    "mobile and dark layouts",
+    "hidden in embedded configuration"
+  ],
+  "screenshots": [
+    "temperature-room-desktop.png",
+    "temperature-room-mobile.png",
+    "temperature-room-dark.png"
+  ]
+}
