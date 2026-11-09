@@ -24,6 +24,61 @@ export function celsiusTemperature(value, unit = 'C', difference = false) {
   return unit === 'F' ? Number(((value - (difference ? 0 : 32)) / 1.8).toFixed(10)) : value;
 }
 
+export function selectedNestSensor(data = {}) {
+  const selection = data.native_sensor_control?.selection;
+  if (selection) return selection.source === 'thermostat' ? '' : selection.source === 'remote' ? selection.sensorId : null;
+  return typeof data.active_rcs_sensor === 'string' ? data.active_rcs_sensor : null;
+}
+
+// Use running-engine feedback, never unsaved rule settings, to describe the controller.
+export function temperatureControlView(device, snapshot, live = true) {
+  const data = device.data || {};
+  const selected = selectedNestSensor(data);
+  const name = (id) => id === '' ? 'Thermostat sensor' : id === null ? 'Current sensor not reported' :
+    snapshot.devices.find((entry) => entry.type === 'TemperatureSensor' && entry.id === id)?.data?.description ||
+      'Nest room sensor (name unavailable)';
+  const labels = {
+    active: 'Active', interval: 'Active · between updates', updating: 'Confirming target', restoring: 'Restoring Nest control',
+    waiting: 'Waiting', paused: 'Paused', disabled: 'Disabled', unavailable: 'Status unavailable',
+  };
+  const automation = snapshot.automation;
+  const engineAvailable = automation?.available !== false && !automation?.error;
+  const rules = (automation?.rules || []).filter((rule) => rule.kind === 'temperature' && rule.thermostatId === device.serial)
+    .map((rule) => {
+      const status = !live || !engineAvailable ? 'unavailable' : rule.temperatureControl === 'restoring' ? 'restoring' :
+        !rule.enabled ? 'disabled' : rule.paused ? 'paused' : Object.hasOwn(labels, rule.temperatureControl) ? rule.temperatureControl : 'unavailable';
+      return { id: rule.id, name: rule.name, status, label: labels[status], reason: rule.reason,
+        tone: ['active', 'interval'].includes(status) ? 'good' : ['paused', 'disabled'].includes(status) ? 'neutral' : 'warn' };
+    });
+  const applied = rules.filter((rule) => ['active', 'interval', 'updating', 'restoring'].includes(rule.status));
+  const uncertain = !live || !engineAvailable || applied.length > 1 || rules.some((rule) => rule.status === 'unavailable');
+  const controller = applied.length === 1 && !uncertain ? applied[0] : null;
+  const nativeIds = [...new Set(['', ...(Array.isArray(data.linked_rcs_sensors) ? data.linked_rcs_sensors : []),
+    ...(typeof selected === 'string' ? [selected] : [])])];
+  const sensors = nativeIds.map((id) => ({
+    id, name: name(id),
+    label: id !== selected ? 'Not selected' : !live ? 'Last reported' : controller ? 'Nest sensor in use' : 'Selected by Nest',
+    tone: id === selected && live ? 'good' : 'neutral',
+  }));
+  let title = name(selected);
+  let label = selected === null ? 'Unknown' : 'Native Nest control';
+  let tone = selected === null ? 'warn' : 'good';
+  let detail = 'Nest uses its selected sensor. Manage native sensor selection in the Nest app.';
+  if (uncertain) {
+    title = 'Control status unavailable'; label = 'Unknown'; tone = 'warn';
+    detail = !live ? 'Reconnect to confirm what is controlling the temperature.' :
+      'The running engine has not confirmed the current controller. Check Climate rules for details.';
+  } else if (controller) {
+    title = 'Climate rule · ' + controller.name; label = controller.label; tone = controller.tone;
+    detail = controller.status === 'restoring' ? 'The rule is returning its previous heating target to Nest.' :
+      controller.status === 'updating' ? 'Waiting for Nest to confirm the rule’s requested heating target.' :
+        'This rule adjusts the heating target using its selected temperatures. Nest uses ' + name(selected) + '.';
+  } else if (selected === null) {
+    detail = 'Nest has not reported a recognized temperature-sensor selection.';
+  }
+  return { title, label, tone, detail, sensors, rules };
+}
+
 // Normalize supported legacy containers without discarding credentials or unknown options.
 export function editableConfig(input) {
   const config = structuredClone(input);

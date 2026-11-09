@@ -1,4 +1,4 @@
-import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone } from '/shared/climate-utils.js';
+import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
 import { mountTimeZonePicker } from '/shared/time-zone-picker.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
 import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed } from '/shared/fan-speed.js';
@@ -328,12 +328,6 @@ function renderConnection() {
   $('connection-state').title = label;
   $('last-updated').textContent = state.live ? 'Updated ' + when(state.status.generatedAt) : 'Live updates unavailable';
 }
-function selectedNestSensor(data) {
-  const selection = data.native_sensor_control?.selection;
-  if (selection) return selection.source === 'thermostat' ? '' : selection.source === 'remote' ? selection.sensorId : null;
-  // Older status snapshots may provide a selection without automatic-setup metadata.
-  return typeof data.active_rcs_sensor === 'string' ? data.active_rcs_sensor : null;
-}
 function nestSensorName(id) {
   if (id === null) return 'Current sensor not reported';
   if (id === '') return 'Thermostat sensor';
@@ -366,7 +360,9 @@ $('download-sensor-diagnostics').addEventListener('click', async () => {
   finally { control.disabled = !state.live || !thermostats().length; }
 });
 function renderThermostats() {
-  const devices = thermostats(); const host = $('thermostats'); host.replaceChildren();
+  const devices = thermostats(); const host = $('thermostats');
+  const expanded = new Set([...host.querySelectorAll('.temperature-controller[open]')].map((node) => node.dataset.thermostat));
+  host.replaceChildren();
   $('download-sensor-diagnostics').disabled = !state.live || !devices.length;
   $('home-heading').textContent = state.config?.name || 'A clearer view of home.';
   const online = devices.filter(usable).length;
@@ -401,26 +397,7 @@ function renderThermostats() {
       timer.append(buttons); actions.append(timer);
     }
     controls.append(actions);
-    if (Array.isArray(data.linked_rcs_sensors) || data.native_sensor_control) {
-      const nativeControl = data.native_sensor_control;
-      const currentSensor = selectedNestSensor(data);
-      const selectionAvailable = available && currentSensor !== null && (!nativeControl || nativeControl.supported === true);
-      const selection = el('div', undefined, 'source-control'); const label = el('label', 'Temperature controlled by'); const select = el('select');
-      select.setAttribute('aria-label', 'Temperature controlled by for ' + (data.description || 'thermostat'));
-      const builtin = el('option', 'Thermostat sensor'); builtin.value = ''; select.append(builtin);
-      const linked = data.linked_rcs_sensors || [];
-      for (const id of linked) { const option = el('option', nestSensorName(id)); option.value = id; select.append(option); }
-      if (currentSensor === null || (currentSensor !== '' && !linked.includes(currentSensor))) {
-        const current = el('option', nestSensorName(currentSensor)); current.value = currentSensor ?? 'unavailable'; current.disabled = true; select.append(current);
-      }
-      select.value = currentSensor ?? 'unavailable'; select.disabled = !selectionAvailable; label.append(select);
-      const apply = button('Apply', () => sendCommand(device, 'sensor', select.value, apply), 'button secondary'); apply.disabled = !selectionAvailable;
-      apply.setAttribute('aria-label', 'Apply temperature source for ' + (data.description || 'thermostat')); selection.append(label, apply); controls.append(selection);
-      controls.append(el('p', nativeControl && !nativeControl.supported ?
-        'Automatic sensor setup unavailable. ' + (nativeControl.reason || 'Nest has not reported all required sensor settings.') +
-          ' Use the Nest app to change the selected sensor. Mixed temperature groups wait for confirmed built-in sensor and hold settings.' :
-        'Native Nest selection · its sensor schedule may replace this choice.', 'small-note'));
-    }
+    controls.append(renderTemperatureController(device, expanded.has(device.serial)));
     for (const setup of state.status.automation?.sensorSetups || []) {
       if (setup.thermostatId !== device.serial) continue;
       const section = el('div', undefined, 'preview-box');
@@ -438,6 +415,33 @@ function renderThermostats() {
   for (const device of (state.status.devices || []).filter((entry) => entry.type === 'Heatlink')) {
     const card = el('article', undefined, 'panel'); card.append(el('h3', device.data.description || 'Heat Link'), el('p', 'Hot-water boost ' + (device.data.hot_water_boost_active ? 'active' : 'inactive')), el('span', 'Updated ' + when(device.lastUpdate), 'subtle')); $('heat-links').append(card);
   }
+}
+
+function renderTemperatureController(device, expanded) {
+  const view = temperatureControlView(device, state.status, Boolean(usable(device)));
+  const section = el('details', undefined, 'temperature-controller'); section.open = expanded;
+  section.dataset.thermostat = device.serial;
+  const summary = el('summary');
+  summary.setAttribute('aria-label', 'Temperature controlled by for ' + (device.data.description || 'thermostat'));
+  summary.setAttribute('aria-description', view.title + ' · ' + view.label);
+  const heading = el('span', undefined, 'controller-heading');
+  heading.append(el('span', 'Temperature controlled by', 'control-caption'), el('strong', view.title, 'controller-name'));
+  summary.append(heading, pill(view.label, view.tone), icon('down'));
+  const body = el('div', undefined, 'controller-details'); body.append(el('p', view.detail, 'small-note'));
+  const group = (title, entries) => {
+    body.append(el('h4', title)); const list = el('ul', undefined, 'controller-list');
+    for (const entry of entries) {
+      const row = el('li'); const description = el('div'); description.append(el('span', entry.name));
+      if (entry.reason) description.append(el('small', entry.reason));
+      row.append(description, pill(entry.label, entry.tone)); list.append(row);
+    }
+    body.append(list);
+  };
+  group('Nest temperature sensors', view.sensors);
+  group('Climate temperature rules', view.rules);
+  if (!view.rules.length) body.append(el('p', 'No temperature rules are assigned to this thermostat.', 'small-note'));
+  body.append(el('p', 'Use Climate rules to manage temperature rules, including rules that use other Homebridge sensors.', 'small-note'));
+  section.append(summary, body); return section;
 }
 function renderRuntime() {
   const device = thermostats().find((entry) => entry.serial === $('runtime-device').value);
@@ -1203,5 +1207,3 @@ async function restartChildBridge() {
 $('restart-child').addEventListener('click', restartChildBridge);
 function renderAll() { renderLive(); renderSettings(); renderRules(); renderRestart(); }
 checkSession();
-
-

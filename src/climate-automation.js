@@ -229,6 +229,8 @@ export class ClimateAutomation {
         enabled: state.rule.enabled,
         kind: state.rule.kind,
         name: state.rule.name,
+        thermostatId: state.rule.thermostatId,
+        temperatureControl: state.rule.kind === 'temperature' ? this.temperatureControlStatus(state) : undefined,
         phase: state.phase ?? 'waiting',
         reason: state.reason,
         paused: state.paused === true || (state.rule.kind === 'fan' && state.rule.targetIds.length > 0 &&
@@ -266,6 +268,23 @@ export class ClimateAutomation {
     }
     this.external = await this.access.refresh();
     return this.external;
+  }
+
+  temperatureControlStatus(state) {
+    if (this.stopping || this.error) {
+      return 'unavailable';
+    }
+    const lease = this.leases.get('temperature:' + state.rule.thermostatId);
+    if (lease?.owner === state.rule.id && lease.restoring) {
+      return 'restoring';
+    }
+    if (!state.rule.enabled) {
+      return 'disabled';
+    }
+    if (state.paused) {
+      return 'paused';
+    }
+    return state.temperatureControl ?? 'waiting';
   }
 
   tick() {
@@ -612,6 +631,8 @@ export class ClimateAutomation {
   }
 
   async temperature(state) {
+    // Reporting only: distinguish an applied rule's interval/feedback wait from a rule that cannot run.
+    state.temperatureControl = 'waiting';
     const rule = state.rule;
     const device = this.device(rule.thermostatId);
     const key = 'temperature:' + rule.thermostatId;
@@ -659,8 +680,16 @@ export class ClimateAutomation {
       state.reason = 'Nest has not reported a usable schedule time zone. Choose this thermostat’s time zone in Settings.';
       return;
     }
-    if (lease && (lease.owner !== rule.id || lease.restoring || !this.observe(key, lease, target(device), state))) {
-      return;
+    if (lease) {
+      if (lease.owner !== rule.id || lease.restoring) {
+        return;
+      }
+      if (!this.observe(key, lease, target(device), state)) {
+        if (lease.pending && !state.paused) {
+          state.temperatureControl = 'updating';
+        }
+        return;
+      }
     }
     if (!lease && state.controlStarted && !equal(state.referenceTarget, target(device))) {
       this.pause(state, 'The Nest target changed. Resume to start a new room-temperature hold.');
@@ -701,6 +730,7 @@ export class ClimateAutomation {
       state.referenceTarget = target(device);
     }
     state.phase = 'active';
+    state.temperatureControl = 'active';
     state.reason = 'Heating follows the selected room temperature within the configured adjustment limit.';
     state.nextChangeAt = Number.isFinite(state.lastWriteAt) ? state.lastWriteAt + (rule.minimumIntervalMinutes ?? 5) * MINUTE : null;
     if (equal(target(device), proposed)) {
@@ -708,6 +738,7 @@ export class ClimateAutomation {
     }
     if (state.nextChangeAt && this.now() < state.nextChangeAt) {
       state.phase = 'waiting';
+      state.temperatureControl = 'interval';
       state.reason = 'Waiting for the minimum heating-target update interval.';
       return;
     }
@@ -726,6 +757,7 @@ export class ClimateAutomation {
       () => !state.paused && !this.stopping && this.sensorSetup.permits(rule));
     state.lastAction = { at: this.now(), value: proposed, message: 'Heating target accepted; awaiting device feedback.' };
     state.phase = 'waiting';
+    state.temperatureControl = 'updating';
   }
 
   async fan(state) {
