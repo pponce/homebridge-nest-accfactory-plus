@@ -2,6 +2,8 @@
 
 Repository: `pponce/homebridge-nest-climate-cntrl`; integration branch: `main`.
 Implementation base: `408262fa6ad3af116fa39370ffc8d9ae74e1ce61`.
+Feature commit: `5ace341b278f26c4190028c388af1cf26b1326cc`.
+Validated code and browser-fixture commit: `1acdcf4c2efb076f7cf754cc7e2b052096fc0634`.
 Latest published package remains `0.5.0-beta.12`; this feature has not been released.
 
 ## Objective and completed changes
@@ -31,33 +33,40 @@ Tests: `test/nest-sensor-control.test.js`, `test/temperature-sensor-setup.test.j
 
 ## Validation
 
-92 focused protocol, lifecycle, automation and dashboard tests pass locally. The 13 new lifecycle scenarios cover consent, fresh feedback, timeout/failure, manual precedence, deletion during preparation, target restoration feedback, native restoration failure and restart recovery. Another 16 source tests pass, including the new absent-trait/unknown-state preview checks.
+108 focused protocol, lifecycle, automation, dashboard and source tests pass locally. The 13 new lifecycle scenarios cover consent, fresh feedback, timeout/failure, manual precedence, deletion during preparation, target restoration feedback, native restoration failure and restart recovery. The source checks include the absent-trait and reported-unknown preview regressions.
 
 Measured focused coverage: native protocol module 100% lines/branches/functions; setup lifecycle 100% lines, 94.93% branches and 100% functions; dashboard 100% lines, 98.11% branches and 94.87% functions. New floors were added without reducing existing floors.
 
-The dedicated browser suite is included in the regular browser runner. Local Chromium could not launch because `socket()` returned EPERM before assertions. Full compatibility, lint, build, coverage and browser checks must run in GitHub before reporting integrated validation. Full local web-server tests also require the complete repository/dependencies; the current partial snapshot lacks some unchanged dependencies.
+GitHub Test run **42570256155** passed on `1acdcf4c2efb076f7cf754cc7e2b052096fc0634`: all six Node/Homebridge configurations, lint, full tests, coverage floors, build, cache-migration checks, and all browser suites. Browser coverage includes the new mixed-sensor consent, cancellation, exact-state confirmation, pending feedback, unsupported states, restoration after deletion, unsaved-edit controls, stale confirmation, and mobile layout.
+
+Workflow: https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42570256155
 
 No live thermostat or Homebridge installation was changed. No npm publication or release was performed for this feature. Physical device behavior remains unverified.
 
 ## Exact next steps
 
-1. Integrate only the reviewed changed-file manifest on current `main`, preserving the independently completed npm-download helper correction.
-2. Run all compatibility/browser checks and resolve any failures; record the resulting commit and workflow IDs here.
+1. When requested, prepare the next GitHub beta with the source feature, matching package/lock versions, release notes and release marker; run release validation.
+2. Publish that new tested package through the maintainer-run npm helper, then update the installed plugin separately. The beta.12 retry script publishes the existing beta.12 release and does not include the sensor-setup feature.
 3. On a supported thermostat, create a mixed-sensor temperature rule, save enabled, cancel setup and verify no sensor change or heating command.
 4. Approve setup; verify the Nest app reports thermostat sensor control with native sensor scheduling held and paired sensors retained. Confirm group heating starts only after the dashboard reports confirmation.
 5. Pause/disable the group and use Restore. Verify the original target is restored before the native sensor selection/schedule mode returns.
 6. Change native settings manually during a trial and verify the plugin pauses instead of overriding the new choice. Verify retained restoration visibility after deleting a prepared group.
-7. Request the next GitHub beta when ready; npm publication remains a separate maintainer-run action.
+7. Record physical results before claiming thermostat-model support beyond the recognized classic sensor-control format.
 
 ## Copyable handoff
 
 ```text
 Objective: consent-based native Nest sensor setup for mixed Nest/non-Nest temperature groups.
-Repository/branch: pponce/homebridge-nest-climate-cntrl, main; source base 408262fa6ad3af116fa39370ffc8d9ae74e1ce61.
+Repository/branch: pponce/homebridge-nest-climate-cntrl, main; validated code 1acdcf4c2efb076f7cf754cc7e2b052096fc0634.
 Implemented: native HOLD + backplate selection, in-page consent, exact fresh readback gate, persisted recovery, guarded explicit restoration, unknown/multi-sensor fail-closed handling.
 Decision: retain saved sensor schedule and paired sensors; manual changes win; never retry native writes automatically; restore heating target before native sensor mode.
-Local validation: 92 focused tests plus 16 source tests passed; new module coverage floors added without reducing existing floors.
-Pending: GitHub compatibility/browser validation and physical thermostat trial; current latest release remains beta.12.
+Local validation: 108 focused tests passed; new module coverage floors added without reducing existing floors.
+GitHub validation: Test run 42570256155 passed all six compatibility configurations and all browser suites.
+Pending: next feature beta release on request and physical thermostat trial; current latest release remains beta.12.
 No live installation changes, npm publication or feature release performed.
-Next: integrate reviewed files, pass CI, then run the supported-thermostat consent/readback/restoration trial.
+Next: prepare the next beta when requested, then run the supported-thermostat consent/readback/restoration trial.
 ```
+
+## npm publication retry
+
+The release publisher has a documented GitHub asset API fallback in `408262fa6ad3af116fa39370ffc8d9ae74e1ce61`. Its 16 focused scenarios and all GitHub compatibility/browser checks passed in run 42568849145. The complete beta.12 retry block is `maintenance/publish-beta12-retry.sh`; it fetches the helper from the source host, falls back to pinned Git content if needed, and verifies SHA-256 `401d3ec1bc93fc6051cd9f491b7402756ebd1c5a2f9abc997b631fb49a47f659` before execution. This does not modify the published beta.12 assets.
