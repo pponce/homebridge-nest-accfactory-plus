@@ -19,6 +19,7 @@ export async function checkEcoFeedback(browser, base) {
     let status = 200;
     let body = {};
     if (endpoint === '/api/session') body = { authenticated: true, username: 'fixture', csrfToken: 'fixture' };
+    else if (endpoint === '/api/heating-response') body = { revision: '1', rules: [] };
     else if (endpoint === '/api/config') body = { revision: '1', config: { options: {}, devices: [], rules: { temperature: [], fans: [], occupancy: [] } }, accounts: [], web: {} };
     else if (endpoint === '/api/sources') body = { bridges: [], sources: [] };
     else if (endpoint === '/api/status') {
