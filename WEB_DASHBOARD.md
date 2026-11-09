@@ -60,6 +60,8 @@ The engine checks rules approximately every **15 seconds**, including when no br
 
 Third-party devices must expose a compatible temperature, motion, occupancy or fan service through Homebridge. Devices available only in Apple Home are not discoverable here. Room fans need standard writable on/off control; a generic switch is not automatically treated as a fan. Combined Climate presence outputs are excluded from discovery to prevent feedback loops.
 
+The visible dashboard refreshes Nest and external Homebridge readings every **30 seconds** and refreshes immediately when you return to its browser tab. **Refresh status** also updates external readings. Temperature sources, fan states and presence signals update in place while you edit a rule, preserving selections, search text and keyboard focus.
+
 Discovery records when a value was read, which may differ from when the sensor measured it. Enabled rules refresh their inputs automatically. A missing or stale selected source is not silently dropped from a temperature average or treated as evidence that nobody is home.
 
 ### Temperature group example
@@ -216,3 +218,4 @@ Each child bridge has its own web account and, when using direct HTTPS, its own 
 On iPhone or iPad, open the dashboard in Safari, select **Share → Add to Home Screen**, and choose **Add**. The plum climate icon and app name are supplied automatically. The dashboard opens in a compact app layout and adapts to narrow screens.
 
 Keep the Homebridge host reachable while using it. The dashboard does not cache account data or provide offline climate control.
+

@@ -1,3 +1,16 @@
+## v0.5.0-beta.8
+
+**Live Homebridge sensor readings throughout the climate dashboard.**
+
+- External temperature sensors, room fans and presence sources refresh automatically every 30 seconds while the dashboard is visible.
+- Returning to the browser tab or using **Refresh status** refreshes Nest and external readings together.
+- Rule readings and previews update in place, preserving unsaved values, selected sensors, search text and keyboard focus.
+- Unreachable or stale sources remain unavailable until a successful fresh read. Background and signed-out dashboards do not poll.
+
+Existing Climate installations update normally. Refresh the dashboard after installing, and review and Resume enabled temperature/fan rules after the bridge restart. See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.8/WEB_DASHBOARD.md#find-your-sources).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.7
 
 **Choose Celsius or Fahrenheit for your climate dashboard.**
@@ -828,5 +841,6 @@ Due to the volume of changes in this release, versioning has been reverted to al
 
 - Main changes are around the video/audio pipelines in `webrtc.js` and `streamer.js` to improve stability and recovery from packet loss, especially for video streams
 - Added logging and cleanup around talkback stream handling
+
 
 

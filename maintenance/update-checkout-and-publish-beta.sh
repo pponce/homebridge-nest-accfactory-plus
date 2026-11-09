@@ -6,7 +6,7 @@
   umask 077
   nest_publish_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.7'
+    local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.8'
     local release_url="https://github.com/pponce/$package/releases/download/v$version"
     local release_dir="$project/maintenance/releases/v$version"
     local asset origin branch worktree_status ignored tool attempt tag_value
@@ -135,13 +135,16 @@ NODE
     node - "$nest_publish_report" "$nest_publish_result" "$nest_publish_head" <<'NODE'
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], JSON.stringify({
-  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.7',
+  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.8',
   result: ({ 0: 'verified', 2: 'pending_verification' })[process.argv[3]] || 'failed',
   checkoutCommit: process.argv[4], homebridgeChanged: false,
 }, null, 2) + '\n', { mode: 0o600 });
 NODE
     if [ "$?" -eq 0 ]; then
-      printf 'Copy the result to your Mac:\nrsync -P pedro@192.168.84.2:%s ~/Downloads/\n' "$nest_publish_report"
+      nest_publish_copy_host=$(printf '%s' "${SSH_CONNECTION:-}" | awk '{print $3}')
+      if [ -z "$nest_publish_copy_host" ]; then nest_publish_copy_host=$(hostname); fi
+      case "$nest_publish_copy_host" in *:*) nest_publish_copy_host="[$nest_publish_copy_host]" ;; esac
+      printf 'Copy the result to your Mac:\nrsync -P %s@%s:%s ~/Downloads/\n' "$(id -un)" "$nest_publish_copy_host" "$nest_publish_report"
     else
       printf '%s\n' 'Could not write the publication report.'
       nest_publish_result=1
@@ -154,5 +157,6 @@ NODE
   esac
   umask "$nest_publish_umask"
   unset -f nest_publish_beta
-  unset nest_publish_report nest_publish_head nest_publish_result nest_publish_umask
+  unset nest_publish_report nest_publish_head nest_publish_result nest_publish_umask nest_publish_copy_host
 }
+

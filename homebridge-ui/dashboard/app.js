@@ -43,6 +43,7 @@ const pageDetails = {
 };
 let toastTimer;
 let refreshPromise;
+let rulePickers = [];
 
 function el(tag, text, className) {
   const node = document.createElement(tag);
@@ -195,14 +196,26 @@ async function refreshStatus() {
   if (refreshPromise) return refreshPromise;
   $('refresh-status').disabled = true;
   refreshPromise = (async () => {
-    try { state.status = await api('/status'); state.live = true; notice(); }
-    catch (error) { state.live = false; notice(error.message || 'Live status unavailable.', 'warning'); }
+    const session = state.session;
+    try {
+      await Promise.all([
+        (async () => {
+          try { const status = await api('/status'); if (state.session === session) { state.status = status; state.live = true; notice(); } }
+          catch (error) { if (state.session === session) { state.live = false; notice(error.message || 'Live status unavailable.', 'warning'); } }
+        })(),
+        discoverSources(false),
+      ]);
+    }
     finally { $('refresh-status').disabled = false; refreshPromise = null; renderLive(); }
   })();
   return refreshPromise;
 }
 $('refresh-status').addEventListener('click', refreshStatus);
-setInterval(() => { if (!document.hidden && state.session?.authenticated && !$('app').hidden) refreshStatus(); }, 30000);
+function refreshVisibleDashboard() {
+  if (!document.hidden && state.session?.authenticated && !$('app').hidden) refreshStatus();
+}
+setInterval(refreshVisibleDashboard, 30000);
+document.addEventListener('visibilitychange', refreshVisibleDashboard);
 async function sendCommand(device, action, value, control) {
   if (!usable(device)) return;
   control.disabled = true;
@@ -307,10 +320,11 @@ function renderSchedule(device) {
 }
 async function discoverSources(explicit = true) {
   if (state.discovering || !state.session?.authenticated) return;
+  const session = state.session;
   state.discovering = true; $('refresh-sources').disabled = true; $('source-summary').textContent = 'Discovering configured Homebridge sources…';
-  try { state.external = await api('/sources'); if (explicit) toast('Sources refreshed.'); }
-  catch (error) { state.external.sources = (state.external.sources || []).map((entry) => ({ ...entry, available: false })); state.external.error = error.message; }
-  finally { state.discovering = false; $('refresh-sources').disabled = false; renderSources(); if (state.page === 'rules') renderRules(); }
+  try { const external = await api('/sources'); if (state.session === session) { state.external = external; if (explicit) toast('Sources refreshed.'); } }
+  catch (error) { if (state.session === session) { state.external.sources = (state.external.sources || []).map((entry) => ({ ...entry, available: false })); state.external.error = error.message; } }
+  finally { state.discovering = false; $('refresh-sources').disabled = false; renderSources(); renderRulePickers(); renderRulePreview(); }
 }
 $('refresh-sources').addEventListener('click', () => discoverSources());
 $('source-search').addEventListener('input', renderSources);
@@ -326,7 +340,7 @@ function reading(source) {
 function renderSources() {
   const all = sources(); const query = $('source-search').value.trim().toLowerCase();
   const filtered = all.filter((source) => (state.sourceFilter === 'all' || state.sourceFilter === source.kind || state.sourceFilter === 'presence' && ['occupancy', 'motion'].includes(source.kind)) && (!query || ((source.name || '') + ' ' + (source.bridgeName || '')).toLowerCase().includes(query)));
-  $('source-summary').textContent = state.external.error || all.length + ' sources · ' + all.filter((source) => source.available).length + ' available. Refresh to check current readings.';
+  $('source-summary').textContent = state.external.error || all.length + ' sources · ' + all.filter((source) => source.available).length + ' available. Readings refresh every 30 seconds while this dashboard is visible.';
   const host = $('source-list'); host.replaceChildren();
   if (!filtered.length) empty(host, query ? 'No matching sources.' : 'Connect more of your home.', query ? 'Try another name or source type.' : 'Use Discover sources to find accessible Homebridge room sensors and fans.', 'sensors');
   for (const source of filtered) {
@@ -433,23 +447,42 @@ function thermostatSelect(host, rule) {
 function picker(host, rule, key, kinds) {
   const search = el('input'); search.type = 'search'; search.placeholder = 'Find a room or source'; search.setAttribute('aria-label', key === 'targetIds' ? 'Find room fans' : 'Find rule inputs'); host.append(search);
   const list = el('div', undefined, 'source-picker'); host.append(list);
+  const rows = new Map();
+  const hint = el('div', undefined, 'empty-state compact'); const hintText = el('p'); hint.append(hintText, button('Discover sources', () => discoverSources(), 'button secondary'));
   const render = () => {
     const selected = rule[key] || []; const candidates = sources().filter((source) => kinds.includes(source.kind));
     for (const id of selected) if (!candidates.some((source) => source.id === id)) candidates.push({ id, name: 'Unavailable selected source', available: false, kind: kinds[0] });
     const query = search.value.trim().toLowerCase(); const matches = candidates.filter((source) => !query || ((source.name || '') + ' ' + (source.bridgeName || '')).toLowerCase().includes(query));
-    list.replaceChildren();
-    for (const source of matches) {
-      const label = el('label', undefined, 'pick-source'); const checkbox = el('input'); checkbox.type = 'checkbox'; checkbox.checked = selected.includes(source.id);
-      checkbox.addEventListener('change', () => { const next = new Set(rule[key] || []); if (checkbox.checked) next.add(source.id); else next.delete(source.id); rule[key] = [...next]; markDirty(); renderRulePreview(); });
-      const text = el('div'); text.append(el('strong', source.name || 'Source'), el('small', (source.bridgeName || 'Missing source') + ' · ' + source.kind));
-      label.append(checkbox, text, el('span', reading(source), 'pick-reading')); list.append(label);
+    const visible = new Set(matches.map((source) => source.id));
+    for (const [id, row] of rows) if (!visible.has(id)) { row.label.remove(); rows.delete(id); }
+    if (matches.length) hint.remove();
+    for (const [index, source] of matches.entries()) {
+      let row = rows.get(source.id);
+      if (!row) {
+        const label = el('label', undefined, 'pick-source'); const checkbox = el('input'); checkbox.type = 'checkbox';
+        checkbox.addEventListener('change', () => { const next = new Set(rule[key] || []); if (checkbox.checked) next.add(source.id); else next.delete(source.id); rule[key] = [...next]; markDirty(); renderRulePreview(); });
+        const text = el('div'); const name = el('strong'); const origin = el('small'); text.append(name, origin);
+        const sample = el('span', undefined, 'pick-reading'); label.append(checkbox, text, sample);
+        row = { label, checkbox, name, origin, sample }; rows.set(source.id, row);
+      }
+      row.checkbox.checked = selected.includes(source.id);
+      row.name.textContent = source.name || 'Source'; row.origin.textContent = (source.bridgeName || 'Missing source') + ' · ' + source.kind;
+      row.sample.textContent = reading(source);
+      // Keep existing controls in place so polling preserves keyboard focus and edits.
+      if (list.children[index] !== row.label) list.insertBefore(row.label, list.children[index] || null);
     }
-    if (!matches.length) { const hint = el('div', undefined, 'empty-state compact'); hint.append(el('p', query ? 'No matching sources.' : 'No sources found. Discover connected Homebridge bridges, then return to this rule.'), button('Discover sources', () => discoverSources(), 'button secondary')); list.append(hint); }
+    if (!matches.length) { hintText.textContent = query ? 'No matching sources.' : 'No sources found. Discover connected Homebridge bridges, then return to this rule.'; if (!hint.isConnected) list.append(hint); }
   };
+  rulePickers.push({ list, render });
   search.addEventListener('input', render); render();
+}
+function renderRulePickers() {
+  rulePickers = rulePickers.filter(({ list }) => list.isConnected);
+  for (const { render } of rulePickers) render();
 }
 function renderRuleEditor() {
   const rule = selectedRule(); if (!rule) return;
+  rulePickers = [];
   const host = $('rule-editor'); host.replaceChildren();
   const head = el('div', undefined, 'editor-header'); head.append(el('h3', { temperature: 'A temperature group', presence: 'A sense of home', fan: 'Air, when you want it' }[rule.kind]), el('span', rule.enabled ? 'Execution enabled' : 'Disabled draft', 'draft-chip')); host.append(head);
   inputField(host, 'Rule name', rule.name, (value) => { rule.name = value; const active = $('rule-list').querySelector('[aria-pressed="true"] strong'); if (active) active.textContent = value; });
@@ -552,6 +585,7 @@ $('discard').addEventListener('click', async () => {
   try { const envelope = await api('/config'); state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true; notice(); renderAll(); }
   catch (error) { notice(error.message, 'danger'); }
 });
-function renderLive() { renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePreview(); }
+function renderLive() { renderConnection(); renderThermostats(); renderRuntime(); renderSources(); renderAccounts(); renderRulePickers(); renderRulePreview(); }
 function renderAll() { renderLive(); renderSettings(); renderRules(); }
 checkSession();
+

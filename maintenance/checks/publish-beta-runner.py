@@ -98,7 +98,7 @@ def run_case(scenario):
             script.write_text(MOCK)
             script.chmod(0o755)
         env = dict(os.environ, HOME=str(home), PATH=str(bin_dir) + ':' + os.environ['PATH'],
-                   PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario, PUBLISH_VERSION=VERSION, REAL_GIT=shutil.which('git'))
+                   SSH_CONNECTION='198.51.100.10 12345 192.0.2.20 22', PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario, PUBLISH_VERSION=VERSION, REAL_GIT=shutil.which('git'))
         release = checkout / f'maintenance/releases/v{VERSION}'
         if scenario == 'pending':
             release.mkdir(parents=True)
@@ -117,7 +117,7 @@ def run_case(scenario):
         if scenario not in ['dirty', 'diverged']:
             assert reports and json.loads(reports[0].read_text())['homebridgeChanged'] is False
             assert json.loads(reports[0].read_text())['version'] == VERSION
-            assert 'rsync -P pedro@192.168.84.2:' in result.stdout
+            assert f'rsync -P {subprocess.check_output(["id", "-un"], text=True).strip()}@192.0.2.20:' in result.stdout
         if scenario == 'success':
             assert (release / 'npm-upload-accepted').exists()
             assert '--tag' in publishes[0] and publishes[0][publishes[0].index('--tag') + 1] == 'beta'
@@ -155,3 +155,4 @@ with tempfile.TemporaryDirectory(prefix='publish-ignore-fixture-') as temp:
     result = git('merge', '--ff-only', '--no-overwrite-ignore', 'incoming', check=False)
     assert result.returncode != 0 and target.read_text() == 'retained local content'
     print('ignored artifact collision: passed')
+

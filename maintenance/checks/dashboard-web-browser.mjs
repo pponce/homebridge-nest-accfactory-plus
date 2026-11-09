@@ -5,6 +5,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+import { checkSourceRefresh } from './dashboard-source-refresh.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -142,6 +143,7 @@ try {
     for (const result of results) assert.ok(result.ratio >= 4.5, result.name + ' text contrast must reach 4.5:1; received ' + result.ratio.toFixed(2));
   };
   const base = 'http://127.0.0.1:' + server.address().port;
+  await checkSourceRefresh(browser, base);
   await page.goto(base);
   await page.getByRole('heading', { name: 'Welcome home.' }).waitFor();
   assert.equal(await page.locator('#http-login-warning').isVisible(), true);
@@ -328,3 +330,4 @@ try {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));
 }
+
