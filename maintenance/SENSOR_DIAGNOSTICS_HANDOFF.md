@@ -48,3 +48,11 @@ Published: v0.5.0-beta.15 at c90160f191db37421d890d9ec2fef710b06fdde2.
 Pending: installation, physical sensor comparison and the diagnostic report.
 Next: install beta.15, refresh Overview, download sensor diagnostics, inspect the two thermostats' issue codes. No npm publication or live settings changes performed by the assistant.
 ```
+
+## Installer download recovery
+
+The beta.15 release installer stopped on a GitHub package download HTTP 504 before any Homebridge service command. Commit `a0edf649623d3e77894395e570112e1aba51a14c` adds retries and the documented GitHub release-asset API fallback already used by the publication helper. Both package and checksum downloads use the fallback, with release tag/asset identity validation and package checksum verification before installation.
+
+Fourteen isolated installer checks pass, covering primary/fallback paths, failed downloads, missing/duplicate/wrong assets, JSON instead of package bytes, invalid/mismatched checksums, stop/add/start failures and keeping the caller shell open. Published beta.15 assets and package contents are unchanged.
+
+`maintenance/install-beta15.sh` now pins the corrected helper at that commit with SHA-256 `c2da9622c5cce8ccd601751d83504cf8754d3739b1561cf6844447ab37961c7e`. Run the complete block, refresh the dashboard, then download the two-thermostat sensor diagnostics report. No live installation or npm publication was performed by the assistant.

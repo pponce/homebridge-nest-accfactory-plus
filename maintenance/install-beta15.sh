@@ -10,9 +10,9 @@
     fi
     mkdir -p "$directory" || return 1
     curl -fL --retry 3 --connect-timeout 15 --max-time 60 \
-      'https://raw.githubusercontent.com/pponce/homebridge-nest-climate-cntrl/c90160f191db37421d890d9ec2fef710b06fdde2/maintenance/install-execution-beta.sh' \
+      'https://raw.githubusercontent.com/pponce/homebridge-nest-climate-cntrl/a0edf649623d3e77894395e570112e1aba51a14c/maintenance/install-execution-beta.sh' \
       -o "$helper.download" || return 1
-    printf '%s  %s\n' '1b12d3095231241e7a9fcc85a40599741abd36ea0442379428f6e0291e194ffb' "$helper.download" | sha256sum --check - || return 1
+    printf '%s  %s\n' 'c2da9622c5cce8ccd601751d83504cf8754d3739b1561cf6844447ab37961c7e' "$helper.download" | sha256sum --check - || return 1
     mv "$helper.download" "$helper" || return 1
     bash "$helper"
   }
