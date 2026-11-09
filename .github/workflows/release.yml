@@ -76,6 +76,7 @@ jobs:
           name: release-dashboard-review
           path: ${{ runner.temp }}/climate-dashboard-review
   release:
+    # Publish only after every matrix combination and browser check passes on this commit.
     needs: [test, dashboard-browser]
     runs-on: ubuntu-latest
     permissions:
@@ -129,4 +130,3 @@ jobs:
               --target "$GITHUB_SHA" --title "Nest Climate Cntrl v$VERSION" \
               --notes-file RELEASE_NOTES.md "${flags[@]}"
           fi
-
