@@ -103,6 +103,9 @@ const server = http.createServer(async (request, response) => {
   if (route.startsWith('/embedded/')) {
     const name = route.slice('/embedded/'.length) || 'index.html';
     if (name.includes('..') || !/^[a-zA-Z0-9_./-]+$/.test(name)) { response.writeHead(404).end(); return; }
+    // Homebridge Config UI X serves only its root HTML entrypoint. Its custom-UI
+    // asset controller rejects additional HTML documents, including nested index.html.
+    if (name !== 'index.html' && /\.(?:html?|xhtml)$/i.test(name)) { response.writeHead(404).end(); return; }
     try {
       response.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.png') ? 'image/png' : 'text/html');
       response.end(await fs.readFile(path.join(publicRoot, name)));
@@ -147,8 +150,15 @@ try {
       },
     };
   });
-  await page.goto('http://127.0.0.1:' + server.address().port + '/embedded/');
+  const embeddedUrl = 'http://127.0.0.1:' + server.address().port + '/embedded/';
+  assert.equal((await page.request.get(embeddedUrl + 'climate/index.html')).status(), 404);
+  const nestedHtmlRequests = [];
+  page.on('request', (request) => {
+    if (/\/embedded\/.+\/.+\.(?:html?|xhtml)(?:[?#]|$)/i.test(request.url())) nestedHtmlRequests.push(request.url());
+  });
+  await page.goto(embeddedUrl);
   await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor();
+  assert.deepEqual(nestedHtmlRequests, []);
   assert.equal(await page.locator('#sign-out').isVisible(), false);
   assert.equal(await page.evaluate(() => window.outerSave), false);
   assert.equal(await page.locator('#connection-setup').isVisible(), true);
@@ -186,6 +196,15 @@ try {
   await page.getByText('Newer configuration found', { exact: true }).waitFor();
   assert.equal(config.name, 'A little more comfort.');
   conflict = false;
+  // An asset failure must keep connection setup available without claiming the package is missing.
+  await page.route('**/climate/markup.js', (route) => route.fulfill({ status: 503, body: 'Fixture asset unavailable.' }));
+  await page.reload();
+  await page.getByText('Climate controls could not load.', { exact: false }).waitFor();
+  assert.equal(await page.locator('#host-notice').textContent().then((message) => /missing|reinstall/i.test(message)), false);
+  await page.locator('#connection-setup').click();
+  await page.locator('#connection-panel').waitFor();
+  assert.equal(await page.evaluate(() => window.schemaShown && window.outerSave), true);
+  await page.unroute('**/climate/markup.js');
   // A fresh opening while the child bridge is unavailable still permits account/network setup.
   statusAvailable = false;
   await page.evaluate(() => sessionStorage.setItem('runtime-inactive', 'true'));
@@ -195,7 +214,7 @@ try {
   await page.getByText('Standalone web access is optional and off by default.', { exact: false }).waitFor();
   assert.equal(await page.locator('#open-climate-web').isVisible(), false);
   assert.deepEqual(errors, []);
-  console.log('Homebridge shared climate UI: settings, rules, persistence, conflicts, setup and offline access passed.');
+  console.log('Homebridge shared climate UI: restricted assets, load failure, settings, rules, persistence, conflicts, setup and offline access passed.');
 } finally {
   await browser?.close(); await new Promise((resolve) => server.close(resolve));
 }

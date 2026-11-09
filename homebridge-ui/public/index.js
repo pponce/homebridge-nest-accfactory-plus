@@ -86,9 +86,8 @@ setInterval(async () => {
 }, 4000);
 
 try {
-  const source = await fetch(new URL('./climate/index.html', import.meta.url));
-  if (!source.ok) throw new Error('The packaged climate interface is missing. Reinstall the plugin package.');
-  const documentSource = new DOMParser().parseFromString(await source.text(), 'text/html');
+  const { default: markup } = await import('./climate/markup.js');
+  const documentSource = new DOMParser().parseFromString(markup, 'text/html');
   for (const image of documentSource.body.querySelectorAll('img[src]')) {
     image.src = new URL('./climate/' + image.getAttribute('src').replace(/^\//, ''), import.meta.url).href;
   }
@@ -96,8 +95,9 @@ try {
   document.head.append(css);
   $('climate-mount').replaceChildren(...documentSource.body.childNodes);
   await import('./climate/app.js');
-} catch (error) {
-  $('climate-mount').replaceChildren(); notice(error.message || 'Climate controls could not load. Connection setup remains available.');
+} catch {
+  $('climate-mount').replaceChildren();
+  notice('Climate controls could not load. Close and reopen plugin Settings, or refresh Homebridge. Connection setup remains available.');
 }
 
 try {
