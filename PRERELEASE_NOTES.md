@@ -1,3 +1,19 @@
+## v0.5.0-beta.19
+
+**Keep room groups active through target changes, with optional room temperatures in Apple Home.**
+
+- A manual Nest target adjustment changes the desired room temperature by the same increase or decrease while retaining the selected sensors. **Pause after a manual Nest target change** is a per-rule option and defaults off.
+- **Show climate rule temperature in Apple Home** is a separate per-thermostat setting, off by default. An active rule shows its selected-sensor temperature and desired room target in the existing thermostat tile. HomeKit target changes then set the desired room temperature directly, even if physical target changes are configured to pause.
+- Paused, disabled or unavailable groups return the Apple Home tile to native Nest readings and controls. Equipment activity and humidity continue to reflect the thermostat. No accessory re-pairing is required.
+- The dashboard distinguishes the saved desired target, temporary desired target and adjusted Nest target. **Use saved room target** ends a temporary adjustment. The next confirmed Nest schedule target becomes the desired room temperature while retaining the group.
+- Known native target requests wait for command acceptance and device feedback. Own compensation acknowledgements are kept separate from user changes. Automatic adjustments retain their configured interval and offset limits; ambiguous feedback pauses for review.
+
+After updating, reload the dashboard and review and **Resume** enabled temperature/fan rules after the bridge restart. Find the pause option in **Climate rules → Temperature groups**. Enable room display separately under **Settings → your thermostat → Apple Home temperature display**; saving this setting does not require another restart. Physical Nest and Google app targets remain the actual adjusted thermostat targets.
+
+See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.19/WEB_DASHBOARD.md#manual-targets-and-nest-schedules).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.18
 
 **Confirmed Eco feedback and temperature groups using Nest’s built-in sensor.**
