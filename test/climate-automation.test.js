@@ -178,6 +178,42 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
   };
 }
 
+test('an idle thermostat without a paired-sensor list can run a built-in and Homebridge temperature group', async (t) => {
+  const rule = { ...temperatureRule, sourceIds: ['nest:thermostat', 'room'], enabled: false };
+  const f = await fixture(t, { temperature: [rule] });
+  f.dashboard.update('T', 'Thermostat', { native_sensor_control: sensorControlState({
+    rcsControlMode: 'RCS_CONTROL_MODE_HOLD', activeRcsSelection: { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' },
+  }) }, 'A');
+  f.rules({ temperature: [{ ...rule, enabled: true }] });
+  await f.engine.evaluate();
+  assert.deepEqual(f.commands, [{ id: 'thermostat', target_temperature_low: 22 }]);
+  await f.engine.evaluate();
+  assert.equal(f.rule('rooms').temperatureControl, 'active');
+  assert.equal(f.rule('rooms').roomTemperature, 21);
+  assert.equal(f.dashboard.devices.get('T').data.hvac_state, 'off', 'Heat mode does not require active heating');
+  assert.equal(f.engine.sensorSetup.leases.size, 0, 'no native sensor hold or schedule changes are needed');
+});
+
+test('waiting temperature rules identify the actual unmet requirements', async (t) => {
+  for (const [change, expected] of [
+    [{ hvac_mode: 'off' }, 'Select Heat mode on Nest.'],
+    [{ eco_mode: true }, 'Turn Eco off on Nest.'],
+    [{ temperature_lock: true }, 'Turn off the Nest temperature lock.'],
+    [{ can_heat: false }, 'This thermostat does not report support for heating.'],
+    [{ active_rcs_sensor: 'other' }, 'Select the built-in Nest temperature sensor.'],
+    [{ native_sensor_control: sensorControlState({}) }, 'Nest sensor feedback:'],
+  ]) {
+    const rule = { ...temperatureRule, sourceIds: ['room'], enabled: false };
+    const f = await fixture(t, { temperature: [rule] });
+    f.dashboard.update('T', 'Thermostat', change, 'A');
+    f.rules({ temperature: [{ ...rule, enabled: true }] });
+    await f.engine.evaluate();
+    assert.equal(f.commands.length, 0);
+    assert.equal(f.rule('rooms').temperatureControl, 'waiting');
+    assert.ok(f.rule('rooms').reason.startsWith(expected), f.rule('rooms').reason);
+  }
+});
+
 test('mixed sensor heating writes a bounded target, waits for feedback and rate limits later adjustments', async (t) => {
   const f = await fixture(t);
   assert.deepEqual(f.commands, [{ id: 'thermostat', target_temperature_low: 22.5 }]);

@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { checkSourceRefresh } from './dashboard-source-refresh.mjs';
+import { checkEcoFeedback } from './dashboard-eco-feedback.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -17,6 +18,7 @@ const csrf = 'fixture-csrf';
 let authenticated = false;
 let statusAvailable = true;
 let conflict = false;
+let ecoEnabled = false;
 const commands = [];
 const saves = [];
 const ruleActions = [];
@@ -34,7 +36,7 @@ const snapshot = () => ({
     { serial: 'T1', id: 'thermostat-living', type: 'Thermostat', account: 'A', lastUpdate: Date.now(), data: {
       description: 'Living room', model: 'Nest Learning Thermostat', online: true, temperature_scale: 'C', current_temperature: 21.5,
       physical_temperature: 21.5, current_humidity: 43, target_temperature: 22, hvac_mode: 'heat', hvac_state: 'heating',
-      eco_mode: false, has_fan: true, fan_state: false, linked_rcs_sensors: ['sensor-bedroom'], active_rcs_sensor: '',
+      eco_mode: ecoEnabled, has_fan: true, fan_state: false, linked_rcs_sensors: ['sensor-bedroom'], active_rcs_sensor: '',
       schedules: { 0: { first: { time: 25200, 'temp-min': 21, 'temp-max': 25 }, second: { time: 79200, 'temp-min': 18, 'temp-max': 25 } }, 1: { first: { time: 25200, 'temp-min': 21, 'temp-max': 25 } } },
     }, runtime },
     { serial: 'T2', id: 'thermostat-upstairs', type: 'Thermostat', account: 'A', lastUpdate: Date.now(), data: {
@@ -91,7 +93,7 @@ const server = http.createServer(async (request, response) => {
       if (conflict || body.revision !== String(revision)) { json(409, { error: 'Configuration changed.' }); return; }
       saves.push(structuredClone(body)); config = structuredClone(body.config); revision++; json(200, envelope()); return;
     }
-    if (route === '/api/command') { commands.push(structuredClone(body)); json(200, { accepted: true, message: 'Command accepted.' }); return; }
+    if (route === '/api/command') { commands.push(structuredClone(body)); if (body.action === 'eco' && body.serial === 'T1') ecoEnabled = body.value; json(200, { accepted: true, message: 'Command accepted.' }); return; }
     if (route === '/api/rules/command') { ruleActions.push(body); if (body.action === 'pause') pausedRules.add(body.id); else pausedRules.delete(body.id); json(200, automation()); return; }
     json(404, { error: 'Not found.' }); return;
   }
@@ -147,6 +149,7 @@ try {
   };
   const base = 'http://127.0.0.1:' + server.address().port;
   await checkSourceRefresh(browser, base);
+  await checkEcoFeedback(browser, base);
   await page.goto(base);
   await page.getByRole('heading', { name: 'Welcome home.' }).waitFor();
   assert.equal(await page.locator('#http-login-warning').isVisible(), true);
@@ -348,8 +351,11 @@ try {
   assert.equal(commands.length, 0, 'Dashboard unit preferences must never send Nest commands');
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await Promise.all([page.waitForResponse((response) => response.url().endsWith('/api/command')), page.getByLabel('Turn Eco on for Living room').click()]);
-  await page.waitForFunction(() => !document.querySelector('[aria-label="Turn Eco on for Living room"]').disabled);
+  await page.getByLabel('Turn Eco off for Living room', { exact: true }).waitFor();
   assert.deepEqual(commands[0], { serial: 'T1', action: 'eco', value: true });
+  ecoEnabled = false;
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await page.getByLabel('Turn Eco on for Living room', { exact: true }).waitFor();
   await page.getByLabel('Temperature controlled by for Living room', { exact: true }).click();
   assert.match(await page.locator('.temperature-controller').first().innerText(), /Bedroom sensor/);
   assert.equal(await page.locator('.temperature-controller select, .temperature-controller button').count(), 0);

@@ -136,6 +136,10 @@ svg { display: block; }
 .eco-button { padding: 6px 10px; min-height: 34px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; color: var(--muted); display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 600; }
 .eco-button .icon { width: 14px; height: 14px; }
 .eco-button[aria-pressed="true"] { color: var(--green); border-color: var(--green); background: var(--green-wash); }
+.eco-button[aria-busy="true"] { opacity: 1; border-style: dashed; }
+.eco-feedback { margin-top: 12px; color: var(--orange); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.eco-feedback p { margin: 0; }
+.eco-feedback .button { margin-top: 8px; }
 .timer-buttons { display: flex; gap: 4px; }
 .timer-buttons button { background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; font-size: 10px; min-height: 32px; }
 .timer-buttons button:hover { border-color: var(--accent); }

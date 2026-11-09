@@ -48,6 +48,10 @@ const pageDetails = {
 };
 let toastTimer;
 let refreshPromise;
+let statusPromise;
+let statusRead = 0;
+const ecoCommands = new Map();
+const ecoWaitMilliseconds = 30000;
 let rulePickers = [];
 
 function el(tag, text, className) {
@@ -224,6 +228,8 @@ async function api(route, { method = 'GET', body, anonymous = false, timeout = 2
   return data;
 }
 function showLogin(message = '', setup = false) {
+  for (const command of ecoCommands.values()) clearTimeout(command.timer);
+  ecoCommands.clear();
   $('app').hidden = true; $('login-screen').hidden = false;
   $('login-error').textContent = message; $('login-error').hidden = !message;
   $('login-form').hidden = setup; $('setup-retry').hidden = !setup;
@@ -285,18 +291,40 @@ function route(focus = true) {
 window.addEventListener('hashchange', () => route());
 window.addEventListener('beforeunload', (event) => { if (state.dirty) { event.preventDefault(); event.returnValue = ''; } });
 
+async function readStatus() {
+  if (statusPromise) return statusPromise;
+  const session = state.session;
+  const read = ++statusRead;
+  const request = (async () => {
+    try {
+      const status = await api('/status');
+      if (state.session === session) {
+        state.status = status; state.live = true; notice();
+        for (const [serial, command] of ecoCommands) {
+          const device = status.devices.find((entry) => entry.serial === serial);
+          // Acceptance alone is not confirmation, nor is a read started before acceptance.
+          if (command.afterRead !== null && read > command.afterRead && device && usable(device) && device.data.eco_mode === command.value) {
+            clearTimeout(command.timer); ecoCommands.delete(serial);
+            toast((device.data.description || 'Thermostat') + ': Eco ' + (command.value ? 'on' : 'off') + ' confirmed.');
+          }
+        }
+      }
+    } catch (error) {
+      if (state.session === session) { state.live = false; notice(error.message || 'Live status unavailable.', 'warning'); }
+    }
+  })();
+  statusPromise = request;
+  try { await request; }
+  finally { if (statusPromise === request) statusPromise = null; }
+}
 async function refreshStatus() {
   if (state.restarting) return;
   if (refreshPromise) return refreshPromise;
   $('refresh-status').disabled = true;
   refreshPromise = (async () => {
-    const session = state.session;
     try {
       await Promise.all([
-        (async () => {
-          try { const status = await api('/status'); if (state.session === session) { state.status = status; state.live = true; notice(); } }
-          catch (error) { if (state.session === session) { state.live = false; notice(error.message || 'Live status unavailable.', 'warning'); } }
-        })(),
+        readStatus(),
         discoverSources(false),
         state.page === 'settings' ? refreshHeating() : Promise.resolve(),
       ]);
@@ -311,6 +339,45 @@ function refreshVisibleDashboard() {
 }
 setInterval(refreshVisibleDashboard, 30000);
 document.addEventListener('visibilitychange', refreshVisibleDashboard);
+async function refreshPendingEco() {
+  if (document.hidden || !state.session?.authenticated || $('app').hidden || state.restarting ||
+    ![...ecoCommands.values()].some((command) => command.phase === 'pending')) return;
+  await readStatus(); renderLive();
+}
+setInterval(refreshPendingEco, 2000);
+async function sendEcoCommand(device, value) {
+  if (!usable(device) || ecoCommands.get(device.serial)?.phase === 'pending') return;
+  const requested = 'Eco ' + (value ? 'on' : 'off');
+  const command = { value, phase: 'pending', afterRead: null, deadline: Date.now() + ecoWaitMilliseconds,
+    message: requested + ' requested. Waiting for Nest to confirm (up to 30 seconds).', timer: null };
+  const current = () => ecoCommands.get(device.serial) === command;
+  command.timer = setTimeout(() => {
+    if (!current() || command.phase !== 'pending') return;
+    command.phase = 'unconfirmed';
+    command.message = 'Nest did not confirm ' + requested + ' within 30 seconds. Showing the last reported setting. The command may still take effect.';
+    renderThermostats();
+  }, ecoWaitMilliseconds);
+  ecoCommands.set(device.serial, command);
+  renderThermostats();
+  try {
+    const response = await api('/command', { method: 'POST', body: { serial: device.serial, action: 'eco', value } });
+    if (!current()) return;
+    if (response.accepted !== true) throw new Error(response.message || 'Nest did not accept the Eco request.');
+    command.afterRead = statusRead;
+    await refreshPendingEco();
+  } catch (error) {
+    if (!current()) return;
+    if (error.status || error.name === 'Error') {
+      clearTimeout(command.timer); command.phase = 'failed';
+      command.message = requested + ' could not be confirmed. ' + error.message + ' Showing the last reported setting.';
+    } else {
+      // A lost HTTP response cannot recall a command already sent to Nest. Keep checking, without resending.
+      command.afterRead = statusRead;
+      command.message = 'Connection interrupted. Waiting for Nest to confirm ' + requested + ' (up to 30 seconds).';
+    }
+    renderThermostats();
+  }
+}
 async function sendCommand(device, action, value, control) {
   if (!usable(device)) return;
   control.disabled = true;
@@ -370,10 +437,11 @@ function renderThermostats() {
   if (!devices.length) empty(host, 'Your thermostats belong here.', 'Connect your Nest account in Homebridge. Live temperatures and controls appear once devices are discovered.', 'thermometer');
   for (const device of devices) {
     const data = device.data || {}; const available = usable(device); const scale = temperatureUnit();
+    const ecoCommand = ecoCommands.get(device.serial); const ecoPending = ecoCommand?.phase === 'pending';
     const card = el('article', undefined, 'thermostat-card'); const main = el('div', undefined, 'thermostat-main');
     const top = el('div', undefined, 'card-top'); const title = el('div', undefined, 'card-title'); const symbol = el('span', undefined, 'device-symbol'); symbol.append(icon('thermometer'));
     const text = el('div'); text.append(el('h3', data.description || 'Thermostat'), el('small', data.model || 'Nest thermostat'));
-    title.append(symbol, text); top.append(title, pill(available ? (data.eco_mode ? 'Eco' : data.hvac_state === 'heating' ? 'Heating' : data.hvac_state === 'cooling' ? 'Cooling' : 'Idle') : 'Unavailable', available ? data.eco_mode ? 'good' : ['heating', 'cooling'].includes(data.hvac_state) ? data.hvac_state : 'neutral' : 'warn'));
+    title.append(symbol, text); top.append(title, pill(ecoPending ? 'Eco ' + (ecoCommand.value ? 'on' : 'off') + ' · pending' : available ? (data.eco_mode ? 'Eco' : data.hvac_state === 'heating' ? 'Heating' : data.hvac_state === 'cooling' ? 'Cooling' : 'Idle') : 'Unavailable', ecoPending ? 'warn' : available ? data.eco_mode ? 'good' : ['heating', 'cooling'].includes(data.hvac_state) ? data.hvac_state : 'neutral' : 'warn'));
     const row = el('div', undefined, 'temperature-row'); const current = el('div', undefined, 'current-temperature');
     const actual = Number.isFinite(data.current_temperature) ? displayTemperature(data.current_temperature, scale).toFixed(1) : '—';
     current.append(document.createTextNode(actual), el('span', '°' + scale));
@@ -387,9 +455,12 @@ function renderThermostats() {
     main.append(top, row, facts); card.append(main);
     const controls = el('div', undefined, 'thermostat-controls'); const actions = el('div', undefined, 'control-row');
     if (typeof data.eco_mode === 'boolean') {
-      const eco = button('', () => sendCommand(device, 'eco', !data.eco_mode, eco), 'eco-button');
-      eco.append(icon('leaf'), document.createTextNode('Eco ' + (data.eco_mode ? 'on' : 'off'))); eco.setAttribute('aria-pressed', String(data.eco_mode));
-      eco.setAttribute('aria-label', 'Turn Eco ' + (data.eco_mode ? 'off' : 'on') + ' for ' + (data.description || 'thermostat')); eco.disabled = !available; actions.append(eco);
+      const value = ecoPending ? ecoCommand.value : data.eco_mode;
+      const eco = button('', () => sendEcoCommand(device, !data.eco_mode), 'eco-button');
+      eco.append(icon('leaf'), document.createTextNode('Eco ' + (value ? 'on' : 'off'))); eco.setAttribute('aria-pressed', String(value));
+      eco.setAttribute('aria-busy', String(ecoPending));
+      eco.setAttribute('aria-label', (ecoPending ? 'Eco ' + (value ? 'on' : 'off') + ' requested' : 'Turn Eco ' + (value ? 'off' : 'on')) + ' for ' + (data.description || 'thermostat'));
+      eco.disabled = !available || ecoPending; actions.append(eco);
     }
     if (data.has_fan) {
       const timer = el('div'); timer.append(el('div', 'HVAC fan' + (data.fan_state ? ' · running' : ''), 'control-caption')); const buttons = el('div', undefined, 'timer-buttons');
@@ -397,6 +468,16 @@ function renderThermostats() {
       timer.append(buttons); actions.append(timer);
     }
     controls.append(actions);
+    if (ecoCommand) {
+      const feedback = el('div', undefined, 'eco-feedback'); feedback.setAttribute('role', 'status');
+      feedback.append(el('p', ecoCommand.message));
+      if (!ecoPending) {
+        const dismiss = button('Dismiss', () => { ecoCommands.delete(device.serial); renderThermostats(); }, 'button secondary');
+        dismiss.setAttribute('aria-label', 'Dismiss Eco update notice for ' + (data.description || 'thermostat'));
+        feedback.append(dismiss);
+      }
+      controls.append(feedback);
+    }
     controls.append(renderTemperatureController(device, expanded.has(device.serial)));
     for (const setup of state.status.automation?.sensorSetups || []) {
       if (setup.thermostatId !== device.serial) continue;

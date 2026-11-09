@@ -93,6 +93,12 @@ Only one enabled group can control a thermostat. A group does not create an inde
 
 Change the **desired room temperature in Climate rules**. Apple Home continues to show Nest's physical target; changing it directly pauses the software group. Manual target/mode changes, Eco, a native sensor change, a lock or a Nest schedule boundary take priority. Select **Resume automatic control** when you want a new room-temperature hold.
 
+### Change Eco from the overview
+
+Click a thermostat’s **Eco on/off** button to request a change. The button immediately shows the requested setting with a **pending** badge and a message while Nest confirms it. The dashboard checks reported state every two seconds for up to 30 seconds; it never repeats the command automatically.
+
+If the command fails or remains unconfirmed, the button returns to the last reported setting and a notice explains what happened. A timeout does not cancel a command already sent to Nest, so a later reported change still appears. You can dismiss the notice or make another request when the thermostat is connected.
+
 ### See what controls each thermostat
 
 On **Overview → Your thermostats**, **Temperature controlled by** shows the current controller. Expand it to inspect the thermostat’s built-in sensor, associated official Nest room sensors and climate temperature rules assigned to that thermostat. This is read-only information; opening it or clicking a listed item does not change settings.
@@ -103,7 +109,9 @@ When Nest controls directly, the heading shows its selected built-in or official
 
 ### Assisted Nest sensor setup for mixed groups
 
-Displaying a known native sensor is separate from automatic sensor setup: missing or unsupported sensor-control settings can prevent automatic setup even while the selected sensor is displayed.
+Displaying a known native sensor is separate from automatic sensor setup: missing or unsupported sensor-control settings can prevent automatic setup even while the selected sensor is displayed. A positively reported built-in sensor in a recognized native mode can guide a temperature rule when Nest omits its paired-sensor list. This does not authorize native sensor-setting changes. Missing, conflicting or unsupported sensor feedback still blocks heating control.
+
+**Heat mode** is required; the heating equipment does not need to be running. An idle thermostat can follow a temperature rule. A waiting rule names the specific requirement that prevents it from running.
 
 To investigate unavailable setup, open **Overview → Diagnose Nest sensor selection → Download sensor diagnostics**. The dashboard refreshes status and downloads one JSON report covering all thermostats. It includes thermostat names and models, connection and update status, selected sensor names, scheduling mode, and specific validation reasons such as missing scheduling mode, missing paired-sensor list, unknown selection, or an unsupported multi-sensor format. It excludes credentials, device IDs, signatures, temperatures and saved schedules. The download only reads status and does not change sensor selections, schedules or heating targets. Review the report before sharing it for support.
 
