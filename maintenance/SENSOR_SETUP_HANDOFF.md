@@ -4,7 +4,8 @@ Repository: `pponce/homebridge-nest-climate-cntrl`; integration branch: `main`.
 Implementation base: `408262fa6ad3af116fa39370ffc8d9ae74e1ce61`.
 Feature commit: `5ace341b278f26c4190028c388af1cf26b1326cc`.
 Validated code and browser-fixture commit: `1acdcf4c2efb076f7cf754cc7e2b052096fc0634`.
-Latest published package remains `0.5.0-beta.12`; this feature has not been released.
+Latest GitHub prerelease: `0.5.0-beta.13`, published from `7e47a9854044f5a1015591c2fe1e4167578b1026`. The sensor setup feature is included.
+Release: https://github.com/pponce/homebridge-nest-climate-cntrl/releases/tag/v0.5.0-beta.13
 
 ## Objective and completed changes
 
@@ -41,12 +42,14 @@ GitHub Test run **42570256155** passed on `1acdcf4c2efb076f7cf754cc7e2b052096fc0
 
 Workflow: https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42570256155
 
-No live thermostat or Homebridge installation was changed. No npm publication or release was performed for this feature. Physical device behavior remains unverified.
+Release run **42573852651** and Test run **42573852533** passed for beta.13, including all six compatibility configurations, browser suites, production-package installation/registration and publication/installer helpers.
+
+No live thermostat or Homebridge installation was changed. npm publication remains maintainer-run. Physical device behavior remains unverified.
 
 ## Exact next steps
 
-1. When requested, prepare the next GitHub beta with the source feature, matching package/lock versions, release notes and release marker; run release validation.
-2. Publish that new tested package through the maintainer-run npm helper, then update the installed plugin separately. The beta.12 retry script publishes the existing beta.12 release and does not include the sensor-setup feature.
+1. Run `maintenance/publish-beta13.sh` from the existing project environment, complete npm login/2FA if prompted, and verify the publication report and beta tag.
+2. Update the installed Homebridge plugin separately. Refresh the dashboard and review/Resume enabled temperature and fan rules.
 3. On a supported thermostat, create a mixed-sensor temperature rule, save enabled, cancel setup and verify no sensor change or heating command.
 4. Approve setup; verify the Nest app reports thermostat sensor control with native sensor scheduling held and paired sensors retained. Confirm group heating starts only after the dashboard reports confirmation.
 5. Pause/disable the group and use Restore. Verify the original target is restored before the native sensor selection/schedule mode returns.
@@ -62,11 +65,20 @@ Implemented: native HOLD + backplate selection, in-page consent, exact fresh rea
 Decision: retain saved sensor schedule and paired sensors; manual changes win; never retry native writes automatically; restore heating target before native sensor mode.
 Local validation: 108 focused tests passed; new module coverage floors added without reducing existing floors.
 GitHub validation: Test run 42570256155 passed all six compatibility configurations and all browser suites.
-Pending: next feature beta release on request and physical thermostat trial; current latest release remains beta.12.
-No live installation changes, npm publication or feature release performed.
-Next: prepare the next beta when requested, then run the supported-thermostat consent/readback/restoration trial.
+Released: v0.5.0-beta.13 at 7e47a9854044f5a1015591c2fe1e4167578b1026; release run 42573852651 and Test run 42573852533 passed.
+Pending: maintainer-run npm publication, installed update and physical thermostat trial.
+No live installation changes or assistant-run npm publication performed.
+Next: run the beta.13 npm publisher, update the installed plugin, then run the supported-thermostat consent/readback/restoration trial.
 ```
 
 ## npm publication retry
 
 The release publisher has a documented GitHub asset API fallback in `408262fa6ad3af116fa39370ffc8d9ae74e1ce61`. Its 16 focused scenarios and all GitHub compatibility/browser checks passed in run 42568849145. The complete beta.12 retry block is `maintenance/publish-beta12-retry.sh`; it fetches the helper from the source host, falls back to pinned Git content if needed, and verifies SHA-256 `401d3ec1bc93fc6051cd9f491b7402756ebd1c5a2f9abc997b631fb49a47f659` before execution. This does not modify the published beta.12 assets.
+
+## beta.13 publication pins
+
+Complete pasteable block: `maintenance/publish-beta13.sh`. It fetches the release helper from source commit `7e47a9854044f5a1015591c2fe1e4167578b1026`, with pinned Git-content fallback.
+
+- Publisher SHA-256: `f6bade192ad059cf2416941c35ac08ad9df1c26b88feeb9f924592c04e9dd9d0`.
+- Tested package SHA-256: `e61fe231be1459a91eea0042bfdc9bfc6cdd4de8314cba2eabae2ce2b432de93`.
+- npm channel: `beta`; keep `latest` unchanged.
