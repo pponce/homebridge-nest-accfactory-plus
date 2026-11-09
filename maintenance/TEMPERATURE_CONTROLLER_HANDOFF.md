@@ -21,8 +21,8 @@ Review: [PR #14](https://github.com/pponce/homebridge-nest-climate-cntrl/pull/14
 
 ## Next steps
 
-1. Complete beta.17 release validation and confirm GitHub package/helper assets.
-2. Provide the pinned beta.17 npm publication block.
+1. GitHub beta.17 is published and validated. Use `maintenance/publish-beta17.sh` to publish its tested package to npm with the beta tag.
+2. Open npm’s printed authorization URL on the desktop computer while leaving the SSH session waiting.
 3. After installation, verify both thermostat cards, compare native sensor reporting with Nest, and check applied/paused temperature rules. No npm publication or live thermostat settings changes are part of this work.
 
 ## Copyable handoff
@@ -35,6 +35,19 @@ Decisions: non-native sensors require a climate temperature rule. Only confirmed
 Local validation: 128 focused tests passed; syntax/diff checks passed. Chromium is blocked locally by socket restrictions.
 GitHub validation: Test 42650106631 and dashboard 42650106460 passed for 07b904e71e6e4519f1cd54776f41e743cf5aa672, including all six runtime combinations and browser suites.
 Merged: PR #14 in d4518ce3c3d286f013545bea704421cc5e269d73 after explicit approval.
-Pending: beta.17 GitHub release validation, pinned npm publication script and hardware verification.
-Next: wait for validated GitHub assets, then provide the npm publication block; no assistant-run npm publication or live settings changes.
+Released: v0.5.0-beta.17 at e827950c6c43cc698a0967dcfbe1e33c82f073d6. Test 42651718599 and Release 42651718743 passed.
+Publisher: maintenance/publish-beta17.sh. It pins the validated helper and prints npm authorization links for use from SSH.
+Pending: maintainer-run npm publication and hardware verification. Native-like manual target handling is a separate design goal in maintenance/FEATURE_PLAN.md.
+Next: run the publisher, install the update, then verify controller information. No assistant-run npm publication or live settings changes.
 ```
+
+## Published release
+
+GitHub prerelease: https://github.com/pponce/homebridge-nest-climate-cntrl/releases/tag/v0.5.0-beta.17
+
+- Release commit: `e827950c6c43cc698a0967dcfbe1e33c82f073d6`.
+- Test run `42651718599` and Release run `42651718743` passed all six Node/Homebridge configurations, browser suites, lint, full tests, coverage, builds, production-package installation and the publication/installer helper scenarios.
+- Package SHA-256: `c8149ffffd27e68f75d5ed1e47a7b278e4bcbc1b737d2f319744d1bdd03a3237`.
+- Publisher SHA-256: `832d3c2e10fcdb06636bbcc7c2e166cdcaa53d02d58551a7c620cbcf4e007b3e`.
+- `maintenance/publish-beta17.sh` is the pinned SSH block. It publishes the tested release tarball to npm’s beta tag, verifies registry integrity and prints the report-copy command. It does not install Homebridge or control devices.
+- The native-like external sensor goal is recorded in `maintenance/FEATURE_PLAN.md`. Beta.17 still pauses temperature rules on manual Nest target changes; discussion of following those changes did not change this release’s control policy.

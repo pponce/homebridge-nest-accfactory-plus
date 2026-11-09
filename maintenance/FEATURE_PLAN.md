@@ -154,7 +154,7 @@ Configure these options per thermostat through the settings dashboard. Keep the 
 
 ### Coordination with Nest
 
-Use one software controller per thermostat. Keep native sensor selection and software-managed groups as explicit modes within “Temperature controlled by.”
+Use one software controller per thermostat. “Temperature controlled by” is read-only information about the applied rule or reported native sensor. Manage groups in Climate rules and native selection through Nest.
 
 The initial design uses Nest's built-in sensor as the thermostat's internal control source while the plugin reads the selected room sensors. Genuine Nest room sensors remain input candidates even when they are not selected for native control; verify this behavior on supported hardware.
 
@@ -178,7 +178,7 @@ Do not overwrite measured temperatures to make the physical thermostat appear to
 ### Manual changes, failures and recovery
 
 - Respect Off, Eco/away behavior, user-defined schedules, manual changes and equipment limits. Final precedence must be explicit before implementation.
-- Recognize acknowledgments of the plugin's own writes so they are not mistaken for manual overrides. A direct manual change should pause software compensation under the selected override policy.
+- Recognize acknowledgments of the plugin's own writes so they are not mistaken for manual overrides. The current beta pauses software compensation on direct manual target changes; the native-like behavior goal below calls for a separately designed group-preserving target policy.
 - For failed/invalid inputs, apply a visible, configured policy: use the remaining eligible sensors only when allowed, or suspend the group and return to normal Nest control.
 - Restore settings only when they are still owned by this controller; never overwrite a newer manual change using an old snapshot.
 - Persist enough controller intent to reconcile restart state without immediately replaying an obsolete adjustment.
@@ -214,3 +214,17 @@ Use deterministic control tests and a read-only preview before a hardware trial.
 - **Existing implementation/testing:** see `maintenance/CLIMATE_HANDOFF.md`. Alias, weather discovery removal, configured main/child-bridge temperature/fan/presence discovery, mixed temperature preview and cache-aware identity selection are implemented. Automatic sensor, room-fan and combined-presence control remain pending.
 - **Open decisions:** source-control commands and hardware verification; source health/measurement-age policy; manual override/schedule precedence; climate action defaults; Apple Home target/presence representation.
 - **Next steps:** validate real read-only sensor discovery and native physical-source semantics; develop the presence-rule preview and fan behavior design; guide the fresh cutover and verify normal live thermostat behavior. Enable thermostat compensation only after its source, manual-override and recovery behavior are verified.
+
+## Native-like temperature control — product goal
+
+The goal is to reproduce native Nest sensor behavior as closely as possible while allowing genuine Nest sensors and other Homebridge temperature sensors as group inputs. This is a discussion/design target, not functionality added in beta.17.
+
+- Keep the chosen temperature source/group active when the user changes the desired room temperature. Changing a target from 70 °F to 72 °F should normally make the same group aim for a 72 °F room temperature/average.
+- Separate the selected sensor/group from the desired temperature, schedule and temporary temperature override. A manual target change should not silently rewrite the saved weekly schedule or the group’s sensor membership.
+- Present the effective group temperature and desired room target consistently in the dashboard and, after capability/lifecycle design, through the appropriate HomeKit thermostat controls.
+- Distinguish the plugin’s own acknowledged compensation writes from user changes; never create a loop that reinterprets each compensation write as a new comfort target.
+- Respect explicit mode changes, Off, Eco and native schedule transitions. Define the schedule/hold policy before changing execution behavior.
+- Account for the physical limitation: non-Nest readings are not injected as native Nest sensors. The physical thermostat and Google app continue to show the actual compensated Nest target. Decide how absolute/delta changes from those controls map to the comfort target before implementing follow-target behavior.
+- Current beta temperature rules pause on manual Nest target changes and require explicit Resume after restart. Temperature compensation is heating-only. These limits must be disclosed while planning native-like manual control, recovery and cooling support.
+
+Next design step: define manual-target semantics for dashboard/Apple Home versus physical Nest/Google controls, then implement and test group-preserving target updates as a separate change. No live-control behavior was changed by this discussion.
