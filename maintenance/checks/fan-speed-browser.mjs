@@ -80,6 +80,7 @@ try {
   await page.getByRole('button', { name: 'Help for Reach maximum speed above target by (°F)', exact: true }).click();
   assert.match(await page.getByRole('tooltip').innerText(), /at 78.0°F/);
   await page.getByLabel('Comfort target (°F)', { exact: true }).fill('73');
+  await page.getByRole('tooltip').waitFor({ state: 'hidden' });
   await page.getByRole('button', { name: 'Help for Reach maximum speed above target by (°F)', exact: true }).click();
   assert.match(await page.getByRole('tooltip').innerText(), /at 79.0°F/, 'Help uses the current draft');
   await page.getByLabel('Comfort target (°F)', { exact: true }).fill('72');

@@ -114,6 +114,9 @@ document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && 
 document.addEventListener('pointerdown', (event) => {
   if (activeHelp && !activeHelp.trigger.contains(event.target) && !activeHelp.popup.contains(event.target)) hideFieldHelp();
 });
+document.addEventListener('focusin', (event) => {
+  if (activeHelp && !activeHelp.trigger.contains(event.target) && !activeHelp.popup.contains(event.target)) hideFieldHelp();
+});
 document.addEventListener('scroll', (event) => {
   if (!activeHelp || activeHelp.popup.contains(event.target)) return;
   const anchor = activeHelp.trigger.getBoundingClientRect();
@@ -811,7 +814,11 @@ function ruleFieldHelp(title, rule) {
     case 'Run condition': return 'Decides when this rule calls for the fans: above a temperature threshold, during active heating, or during active cooling. Fan speed is chosen separately. When no rule calls for a fan, automation restores its original state within the last controlling speed limit.';
     case 'Above temperature': return 'Start calling for the fans when the selected temperature average rises above ' + formatTemp(rule.threshold ?? 24) + '. The turn-off gap determines how far it must fall before this rule stops calling for them.';
     case 'At or above temperature': return 'Start calling for the fans when the selected temperature average reaches ' + formatTemp(rule.threshold ?? 24) + ' or higher. The turn-off gap determines when this rule stops calling for them.';
-    case 'Turn-off gap': return 'Keeps the rule active as the room cools, to avoid switching near the start threshold. With this draft, it stops calling for the fans at ' + formatTemp((rule.threshold ?? 24) - (rule.hysteresis ?? 1)) + ' or below. This is a temperature difference, not a time delay.';
+    case 'Turn-off gap': {
+      const temperature = formatTemp((rule.threshold ?? 24) - (rule.hysteresis ?? 1));
+      const boundary = rule.thresholdInclusive && rule.hysteresis === 0 ? 'below ' + temperature : 'at ' + temperature + ' or below';
+      return 'Keeps the rule active as the room cools, to avoid switching near the start threshold. With this draft, it stops calling for the fans ' + boundary + '. This is a temperature difference, not a time delay.';
+    }
     case 'Fan speed': return 'Use last setting sends on/off commands only; the fan plugin chooses its startup speed. Fixed speed requests one speed. Temperature-based speed increases airflow as the selected temperature average rises. All three use the run condition above.';
     case 'Fixed fan speed (%)': return 'The requested speed while this rule is active. Each fan uses the nearest supported speed at or below this setting. The preview shows the resulting speed for each selected fan.';
     case 'Comfort target': return 'The reference temperature for the fan speed curve. It does not change the thermostat target or decide whether the fan runs. The two temperature differences below set where speed starts increasing and reaches the maximum.';
