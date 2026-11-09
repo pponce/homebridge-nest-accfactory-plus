@@ -1,0 +1,17 @@
+{
+  "sourceCommit": "1e05ff87b6706cbb10f88a6cc25fefd3ab5d8ffe",
+  "sourceBranch": "feature/heating-response",
+  "fixtureDataOnly": true,
+  "checks": [
+    "real dashboard API",
+    "explicit per-rule Apply",
+    "Fahrenheit differences",
+    "input focus",
+    "desktop and 390px layout",
+    "no equipment commands"
+  ],
+  "screenshots": [
+    "heating-response-desktop.png",
+    "heating-response-mobile.png"
+  ]
+}
