@@ -116,6 +116,7 @@ def run_case(scenario):
         reports = list(release.glob('publish-result-*.json'))
         if scenario not in ['dirty', 'diverged']:
             assert reports and json.loads(reports[0].read_text())['homebridgeChanged'] is False
+            assert json.loads(reports[0].read_text())['version'] == VERSION
             assert 'rsync -P pedro@192.168.84.2:' in result.stdout
         if scenario == 'success':
             assert (release / 'npm-upload-accepted').exists()

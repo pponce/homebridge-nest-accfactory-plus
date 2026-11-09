@@ -135,7 +135,7 @@ NODE
     node - "$nest_publish_report" "$nest_publish_result" "$nest_publish_head" <<'NODE'
 const fs = require('node:fs');
 fs.writeFileSync(process.argv[2], JSON.stringify({
-  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.5',
+  generatedAt: new Date().toISOString(), package: 'homebridge-nest-climate-cntrl', version: '0.5.0-beta.6',
   result: ({ 0: 'verified', 2: 'pending_verification' })[process.argv[3]] || 'failed',
   checkoutCommit: process.argv[4], homebridgeChanged: false,
 }, null, 2) + '\n', { mode: 0o600 });
