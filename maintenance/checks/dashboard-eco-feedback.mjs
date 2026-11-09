@@ -126,6 +126,7 @@ export async function checkEcoFeedback(browser, base) {
     assert.equal(await dining.locator('.eco-feedback').count(), 0, 'a lost HTTP response can still be confirmed by Nest state');
 
     stage = 'logout';
+    await page.setViewportSize({ width: 1440, height: 1100 });
     let release;
     commandHold = new Promise((resolve) => { release = resolve; });
     await toggle('Dining room', true).click();
