@@ -8,9 +8,10 @@ export async function navigate(page, name, exact = true) {
 }
 
 export async function checkCompactNavigation(page, output, label) {
+  await page.waitForFunction(() => document.body.classList.contains('compact-navigation'));
   const toggle = page.getByRole('button', { name: 'Menu', exact: true });
   const panel = page.locator('#climate-menu-panel');
-  assert.equal(await toggle.isVisible(), true);
+  assert.equal(await toggle.isVisible(), true, label + ': compact Menu button must be visible');
   assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('#climate-sidebar').isVisible(), false);
   assert.equal(await panel.isVisible(), false);

@@ -395,10 +395,12 @@ try {
   await page.locator('#climate-menu-toggle').click();
   assert.equal(await page.locator('#sign-out').isVisible(), true, 'Mobile menu retains sign out');
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.waitForFunction(() => !document.body.classList.contains('compact-navigation'));
   assert.equal(await page.locator('#climate-sidebar').isVisible(), true);
   assert.equal(await page.locator('#climate-menu-toggle').isVisible(), false);
   assert.equal(await page.locator('#navigation a').count(), 4);
   await page.setViewportSize({ width: 360, height: 800 });
+  await page.waitForFunction(() => document.body.classList.contains('compact-navigation'));
   assert.equal(await page.locator('#climate-menu-panel').isVisible(), false);
   for (const [name, pageName] of [['Overview', 'overview'], ['Sensors & fans', 'sources'], ['Climate rules', 'rules'], ['Settings', 'settings']]) {
     await navigate(page, name, pageName !== 'rules');
