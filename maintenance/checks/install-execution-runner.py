@@ -31,19 +31,36 @@ with tempfile.TemporaryDirectory(prefix="climate-install-test-") as temporary:
     wrong = base / "WRONGSUMS"
     wrong.write_text(f"{'0' * 64}  homebridge-nest-climate-cntrl-{version}.tgz\n")
     mocks = {
-        "curl": '''#!/bin/bash
-while [ "$#" -gt 0 ]; do
-  case "$1" in
-    -o) destination="$2"; shift ;;
-    https:*) url="$1" ;;
-  esac
-  shift
-done
-if [[ "$url" == */SHA256SUMS ]]; then
-  cp "$CLIMATE_TEST_SUMS" "$destination"
-else
-  cp "$CLIMATE_TEST_ARCHIVE" "$destination"
-fi
+        "curl": '''#!/usr/bin/env python3
+import json, os, pathlib, shutil, sys
+args = sys.argv[1:]
+destination = pathlib.Path(args[args.index('-o') + 1])
+url = next(arg for arg in args if arg.startswith('https:'))
+scenario = os.environ['CLIMATE_TEST_DOWNLOAD']
+if url.startswith('https://github.com/') and scenario != 'normal':
+    if scenario != 'fallback-checksum' or url.endswith('/SHA256SUMS'):
+        destination.write_text('partial failed download')
+        sys.exit(22)
+if '/releases/tags/' in url:
+    version = os.environ['CLIMATE_TEST_VERSION']
+    tag = 'v' + version if scenario != 'wrong-release' else 'v0.0.0'
+    assets = [{'id': 101, 'name': 'homebridge-nest-climate-cntrl-' + version + '.tgz', 'state': 'uploaded'},
+              {'id': 102, 'name': 'SHA256SUMS', 'state': 'uploaded'}]
+    if scenario == 'duplicate-asset': assets.append(assets[0])
+    if scenario == 'missing-asset': assets = []
+    destination.write_text(json.dumps({'tag_name': tag, 'draft': False, 'assets': assets}))
+    sys.exit(0)
+if '/releases/assets/' in url:
+    assert 'Accept: application/octet-stream' in args
+    if scenario == 'all-downloads-fail': sys.exit(22)
+    if scenario == 'api-returns-json':
+        destination.write_text('{"message":"metadata instead of archive"}')
+        sys.exit(0)
+    if scenario == 'malformed-checksum' and url.endswith('/102'):
+        destination.write_text('not a checksum')
+        sys.exit(0)
+is_checksums = url.endswith('/SHA256SUMS') or url.endswith('/102')
+shutil.copyfile(os.environ['CLIMATE_TEST_SUMS' if is_checksums else 'CLIMATE_TEST_ARCHIVE'], destination)
 ''',
         "sudo": '#!/bin/bash\n"$@"\n',
         "hb-service": '''#!/bin/bash
@@ -59,19 +76,29 @@ fi
         command = tools / name
         command.write_text(text)
         command.chmod(0o755)
-    for scenario, failure, bad_sum, expected_calls, success in [
-        ("success", "", False, ["stop", "add", "start"], True),
-        ("install fails but Homebridge is started", "add", False, ["stop", "add", "start"], False),
-        ("start failure reported", "start", False, ["stop", "add", "start"], False),
-        ("stop failure prevents install", "stop", False, ["stop"], False),
-        ("checksum failure leaves Homebridge running", "", True, [], False),
+    for scenario, failure, bad_sum, download, expected_calls, success in [
+        ("success", "", False, "normal", ["stop", "add", "start"], True),
+        ("install fails but Homebridge is started", "add", False, "normal", ["stop", "add", "start"], False),
+        ("start failure reported", "start", False, "normal", ["stop", "add", "start"], False),
+        ("stop failure prevents install", "stop", False, "normal", ["stop"], False),
+        ("checksum failure leaves Homebridge running", "", True, "normal", [], False),
+        ("both assets use API fallback", "", False, "fallback-both", ["stop", "add", "start"], True),
+        ("checksum uses API fallback", "", False, "fallback-checksum", ["stop", "add", "start"], True),
+        ("both download paths fail", "", False, "all-downloads-fail", [], False),
+        ("wrong release rejected", "", False, "wrong-release", [], False),
+        ("duplicate asset rejected", "", False, "duplicate-asset", [], False),
+        ("missing asset rejected", "", False, "missing-asset", [], False),
+        ("API metadata instead of package rejected", "", False, "api-returns-json", [], False),
+        ("malformed fallback checksum rejected", "", False, "malformed-checksum", [], False),
+        ("fallback checksum mismatch rejected", "", True, "fallback-both", [], False),
     ]:
         home = base / scenario.replace(" ", "-")
         (home / "devProjects/homebridge-nest-climate-cntrl/.git").mkdir(parents=True)
         calls = home / "calls"
         env = dict(os.environ, HOME=str(home), PATH=f"{tools}:{os.environ['PATH']}",
                    CLIMATE_TEST_ARCHIVE=str(archive), CLIMATE_TEST_SUMS=str(wrong if bad_sum else checksums),
-                   CLIMATE_TEST_CALLS=str(calls), CLIMATE_TEST_FAIL=failure)
+                   CLIMATE_TEST_CALLS=str(calls), CLIMATE_TEST_FAIL=failure,
+                   CLIMATE_TEST_DOWNLOAD=download, CLIMATE_TEST_VERSION=version)
         result = subprocess.run(["bash", "-c", script.read_text() + "\nprintf 'SHELL STILL OPEN\\n'\n"],
                                 env=env, text=True, capture_output=True, check=True)
         actual = calls.read_text().splitlines() if calls.exists() else []
