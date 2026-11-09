@@ -161,7 +161,7 @@ try {
   await page.getByText('Fixture restart request failed.', { exact: true }).waitFor();
   assert.equal(await restartButton.isEnabled(), true);
   await restartButton.click();
-  await page.getByText('Child bridge restarted. Sign in again, then Resume your temperature and fan rules.', { exact: true }).waitFor();
+  await page.getByText('Child bridge restarted. Sign in again to check rule status.', { exact: true }).waitFor();
   assert.equal(restartRequests, 2);
   await page.getByLabel('Password', { exact: true }).fill('fixture-password');
   await page.getByRole('button', { name: /Sign in/ }).click();

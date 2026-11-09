@@ -87,7 +87,9 @@ export function sensorControlState(settings) {
   }
   if (result.mode === 'unknown') {
     issue(settings.rcsControlMode === undefined ? 'mode_missing' : 'mode_unknown',
-      settings.rcsControlMode === undefined ? 'Nest has not reported its sensor scheduling mode.' :
+      settings.rcsControlMode === undefined ?
+        'Nest has not reported whether room-sensor selection follows a schedule or is held. ' +
+          'This does not identify the thermostat model as unsupported.' :
         'Nest reported a sensor scheduling mode that automatic setup does not recognize.');
   }
   const associationsValid = Array.isArray(settings.associatedRcsSensors) &&
@@ -103,9 +105,11 @@ export function sensorControlState(settings) {
     issue('sensor_not_associated', 'The selected Nest sensor is not in the reported paired-sensor list.');
   }
   // Protobuf can omit an empty repeated paired-sensor list. A positively reported
-  // backplate in a recognized mode can guide heating without authorizing sensor writes.
+  // backplate can guide heating even when schedule mode is omitted. This does not
+  // authorize sensor-setting writes or infer a native schedule/hold mode.
   result.builtInConfirmed = result.selection.source === 'thermostat' && result.diagnostics.issues.every((entry) =>
-    entry.code === 'associations_unavailable' && settings.associatedRcsSensors === undefined,
+    (entry.code === 'associations_unavailable' && settings.associatedRcsSensors === undefined) ||
+    (entry.code === 'mode_missing' && settings.rcsControlMode === undefined),
   );
   if (result.diagnostics.issues.length) {
     return result;

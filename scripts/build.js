@@ -1,3 +1,4 @@
+import './build-dashboard-ui.js';
 // Copy the distributable, including nested camera modules, preserving resource paths
 // and flattening the shared HomeKit modules.
 import { copyFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';

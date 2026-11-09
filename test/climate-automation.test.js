@@ -139,7 +139,8 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
   };
   let rules = validateRuleDrafts(initial);
   const devices = [];
-  const config = { snapshot: async () => ({ config: { rules: structuredClone(rules), devices } }) };
+  const options = {};
+  const config = { snapshot: async () => ({ config: { rules: structuredClone(rules), devices, options } }) };
   const originalSnapshot = dashboard.snapshot.bind(dashboard);
   dashboard.snapshot = () => ({ ...originalSnapshot(), generatedAt: clock });
   const engine = new ClimateAutomation({ directory, dashboard, config, accessFactory: () => access, now: () => clock });
@@ -160,6 +161,7 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
     accounts,
     external,
     devices,
+    options,
     rule: (id) => engine.snapshot().rules.find((rule) => rule.id === id),
     advance: (ms) => {
       clock += ms;
@@ -724,7 +726,7 @@ test('Nest occupancy has one source while saved Homebridge aliases still resolve
   assert.equal(f.commands.length, 0);
 });
 
-test('restart retains presence overrides, faults unknown initial readings and pauses equipment rules', async (t) => {
+test('restart retains presence overrides and continues equipment rules after checks', async (t) => {
   const f = await fixture(t, { temperature: [temperatureRule], occupancy: [presenceRule] });
   await f.engine.control({ id: 'presence', action: 'home', minutes: 60 });
   await f.engine.stop();
@@ -736,7 +738,7 @@ test('restart retains presence overrides, faults unknown initial readings and pa
     now: f.now,
   });
   await replacement.start({ schedule: false });
-  assert.equal(replacement.snapshot().rules.find((rule) => rule.id === 'rooms').paused, true);
+  assert.equal(replacement.snapshot().rules.find((rule) => rule.id === 'rooms').paused, false);
   assert.equal(replacement.snapshot().rules.find((rule) => rule.id === 'presence').home, true);
   assert.equal(f.commands.at(-1).target_temperature_low, 19);
   await replacement.stop();
@@ -1097,7 +1099,7 @@ test('a failed speed command pauses, and a manual change before ownership is res
   assert.equal(g.fanSpeedCommands.length, 0);
 });
 
-test('disconnected owned speed fans restore on reconnection, and restarted rules require Resume', async (t) => {
+test('disconnected owned speed fans restore on reconnection and active rules survive restart', async (t) => {
   const f = await fixture(t, { fans: [speedRule] });
   await startSpeedFan(f);
   f.source('fan').available = false;
@@ -1114,7 +1116,7 @@ test('disconnected owned speed fans restore on reconnection, and restarted rules
   const restarted = new ClimateAutomation({ directory: f.directory, dashboard: f.dashboard, config: f.config,
     accessFactory: () => f.access, now: f.now });
   await restarted.start({ schedule: false });
-  assert.equal(restarted.snapshot().rules[0].paused, true);
+  assert.equal(restarted.snapshot().rules[0].paused, false);
   assert.equal(restarted.recoveryRequired, undefined);
   await restarted.stop();
 });
@@ -1491,4 +1493,133 @@ test('failed storage of a HomeKit desired target rejects the edit and pauses wit
   assert.equal(f.rule('rooms').paused, true);
   assert.equal(f.engine.homeKitRoom('T'), null);
   assert.equal(f.commands.length, 1);
+});
+
+async function restartFixture(f) {
+  const engine = new ClimateAutomation({ directory: f.directory, dashboard: f.dashboard, config: f.config,
+    accessFactory: () => f.access, now: f.now });
+  await engine.start({ schedule: false });
+  return engine;
+}
+
+test('restart keeps desired room target across shutdown restoration and respects update interval', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  f.engine.applyRoomTarget(f.engine.states.get('rooms'), 22, 'manual', 22.5);
+  await f.engine.tick();
+  await f.engine.stop();
+  const count = f.commands.length;
+  const restarted = await restartFixture(f);
+  const rule = restarted.snapshot().rules[0];
+  assert.equal(rule.paused, false);
+  assert.equal(rule.desiredTemperature, 22);
+  assert.equal(f.commands.length, count);
+  assert.equal(rule.temperatureControl, 'interval');
+  f.advance(5 * minute);
+  await restarted.tick();
+  assert.equal(restarted.snapshot().rules[0].desiredTemperature, 22);
+  assert.equal(f.commands.length, count + 1);
+  await restarted.stop();
+});
+
+test('restart preserves intentional pauses and offers an opt-in restart pause policy', async (t) => {
+  for (const explicit of [true, false]) {
+    const f = await fixture(t);
+    if (explicit) {
+      await f.engine.control({ id: 'rooms', action: 'pause' });
+    } else {
+      f.options.pauseOnRestart = true;
+    }
+    await f.engine.stop();
+    const restarted = await restartFixture(f);
+    assert.equal(restarted.snapshot().rules[0].paused, true);
+    assert.match(restarted.snapshot().rules[0].reason, explicit ? /Paused by you/ : /Pause after bridge restart/);
+    await restarted.stop();
+  }
+});
+
+test('restart waits for sources and connection before continuing without a Resume command', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  await f.engine.persist();
+  f.source('room').available = false;
+  f.dashboard.invalidate('A');
+  const count = f.commands.length;
+  const restarted = await restartFixture(f);
+  assert.equal(restarted.snapshot().rules[0].paused, false);
+  assert.equal(restarted.snapshot().rules[0].temperatureControl, 'waiting');
+  assert.equal(f.commands.length, count);
+  f.dashboard.update('T', 'Thermostat', { online: true, hvac_state: 'off' }, 'A');
+  await restarted.tick();
+  assert.equal(f.commands.length, count);
+  f.source('room').available = true;
+  f.dashboard.update('S', 'TemperatureSensor', { online: true, current_temperature: 20 }, 'A');
+  await restarted.tick();
+  assert.equal(restarted.snapshot().rules[0].temperatureControl, 'active', JSON.stringify(restarted.snapshot().rules[0]));
+  await restarted.stop();
+});
+
+test('manual Nest changes during downtime keep the configured follow or pause policy', async (t) => {
+  for (const behavior of ['follow', 'pause']) {
+    const f = await fixture(t, { temperature: [{ ...temperatureRule, manualTargetBehavior: behavior }] });
+    await f.engine.tick();
+    await f.engine.persist();
+    f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+    const restarted = await restartFixture(f);
+    assert.equal(restarted.snapshot().rules[0].paused, behavior === 'pause');
+    assert.equal(restarted.snapshot().rules[0].desiredTemperature, behavior === 'pause' ? 21 : 22);
+    await restarted.stop();
+  }
+});
+
+test('restart does not hide a manual fan change made while the bridge was stopped', async (t) => {
+  const f = await fixture(t, { fans: [fanRule] });
+  await f.engine.persist();
+  f.source('fan').running = true;
+  const restarted = await restartFixture(f);
+  assert.equal(restarted.snapshot().rules[0].paused, true);
+  assert.equal(f.fanCommands.length, 0);
+  await restarted.stop();
+});
+
+test('a thermostat plus non-Nest room sensors runs when backplate is confirmed but scheduling metadata is omitted', async (t) => {
+  const f = await fixture(t, {});
+  f.dashboard.update('T', 'Thermostat', { native_sensor_control: sensorControlState({
+    activeRcsSelection: { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' },
+  }) }, 'A');
+  f.rules({ temperature: [{ ...temperatureRule, sourceIds: ['nest:thermostat', 'room'] }] });
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').temperatureControl, 'updating');
+  assert.equal(f.commands.length, 1);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'active');
+  f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: 'S' }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+});
+
+test('unconfirmed commands across restart never trigger a blind retry', async (t) => {
+  const f = await fixture(t, {});
+  f.noAck();
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  const count = f.commands.length;
+  f.advance(3 * minute);
+  const restarted = await restartFixture(f);
+  assert.equal(restarted.snapshot().rules[0].paused, true);
+  assert.equal(f.commands.length, count);
+  await restarted.stop();
+});
+
+test('changed native modes during downtime remain a reason to pause', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  await f.engine.persist();
+  f.dashboard.update('T', 'Thermostat', { eco_mode: true }, 'A');
+  const count = f.commands.length;
+  const restarted = await restartFixture(f);
+  assert.equal(restarted.snapshot().rules[0].paused, true);
+  assert.equal(f.commands.length, count);
+  await restarted.stop();
 });

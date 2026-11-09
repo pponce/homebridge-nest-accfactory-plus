@@ -76,7 +76,8 @@ function runtimeSignature(block) {
   }
   runtime.name ??= 'Nest Climate Cntrl';
   runtime.options = { ...(object(runtime.options) ? runtime.options : {}), eveHistory: runtime.options?.eveHistory !== false };
-  return JSON.stringify(runtime);
+  delete runtime.options.pauseOnRestart;
+  return runtime;
 }
 
 export function validateRuleDrafts(value) {
@@ -283,7 +284,7 @@ export class WebDashboardConfig {
       config: {
         name: typeof block.name === 'string' ? block.name : 'Nest Climate Cntrl',
         temperatureUnit: block.dashboardTemperatureUnit === 'F' ? 'F' : 'C',
-        options: { eveHistory: block.options?.eveHistory !== false },
+        options: { eveHistory: block.options?.eveHistory !== false, pauseOnRestart: block.options?.pauseOnRestart === true },
         devices,
         rules,
       },
@@ -333,7 +334,13 @@ export class WebDashboardConfig {
       state.block.name = patch.name;
     }
     if (patch.options !== undefined) {
-      keys(patch.options, ['eveHistory']);
+      keys(patch.options, ['eveHistory', 'pauseOnRestart']);
+      if (patch.options.pauseOnRestart !== undefined) {
+        assert(typeof patch.options.pauseOnRestart === 'boolean', 'Restart pause must be enabled or disabled.');
+        state.block.options = {
+          ...(object(state.block.options) ? state.block.options : {}), pauseOnRestart: patch.options.pauseOnRestart,
+        };
+      }
       if (patch.options.eveHistory !== undefined) {
         assert(typeof patch.options.eveHistory === 'boolean', 'History must be enabled or disabled.');
         state.block.options = { ...(object(state.block.options) ? state.block.options : {}), eveHistory: patch.options.eveHistory };
@@ -430,7 +437,7 @@ export class WebDashboardConfig {
       await handle?.close();
       await fs.rm(temporary, { force: true });
     }
-    this.restartRequired ||= runtimeBefore !== runtimeSignature(state.block);
+    this.restartRequired ||= !isDeepStrictEqual(runtimeBefore, runtimeSignature(state.block));
     return this.snapshot();
   }
 }

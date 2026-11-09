@@ -23,7 +23,7 @@ Both interfaces use visual controls rather than requiring hand-edited JSON. The 
 
 ## Enable web access
 
-1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Web dashboard**. The Nest bridge must be running.
+1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup → Web dashboard**. The Nest bridge must be running.
 2. Create a **web username and password**. Use at least 8 characters for the password. This account is separate from your Google and Homebridge accounts.
 3. Select **Enable standalone dashboard**. Save with Homebridge's **Save** button and restart the Nest child bridge.
 4. Select **Refresh web access**, then **Open climate dashboard**. The default HTTPS port is **9444**.
@@ -233,7 +233,7 @@ Unavailable inputs cannot establish Away. The last confirmed state is retained w
 
 - **Pause rule** immediately requests a stop to automatic control. Settings still owned by that rule return to their previous values when the equipment is reachable. A newer manual setting is preserved.
 - Turning off **Enable automatic execution** or deleting a rule takes effect after **Save changes**. Disabling a presence rule removes its combined occupancy accessory.
-- Temperature and room-fan rules require **Resume automatic control after a Nest bridge restart**. Review equipment state first. Presence rules reconcile saved holds/overrides with current readings automatically.
+- Previously active temperature and room-fan rules continue after restart once current readings and equipment checks pass. Explicit pauses, manual fan overrides and uncertain commands remain paused. Enable **Pause after bridge restart** in Settings to require Resume after every restart. Presence rules reconcile saved holds/overrides with current readings automatically.
 - If the Homebridge host stops abruptly, or Nest/the source bridge cannot be reached, it is impossible to send a fallback command. **The thermostat or room fan may retain its last commanded state.** A graceful shutdown attempts to restore owned settings. Restoring an owned setting after pause or invalid inputs can happen immediately; the minimum interval still applies before the next normal adjustment.
 - Failed or unconfirmed commands pause the rule. Check the actual equipment and its connection before resuming. A successful API response is not proof that the equipment reached the requested state.
 
@@ -313,7 +313,7 @@ Runtime totals reflect periods observed by the plugin. Gaps are unknown, and run
 
 ## Saving settings
 
-Review your changes and select **Save**. **Discard** opens an in-page confirmation: **Keep editing** or Escape preserves your draft; **Discard changes** loads the latest saved setup. Deleting a rule and signing out with unsaved edits also use in-page confirmations. Configuration changes are written to the existing Nest Climate Cntrl entry; account credentials, child-bridge identity, and unrelated plugin settings are retained. The dashboard identifies settings that need a child-bridge restart. Enabled rule changes apply without a restart. Disabled rules remain drafts. After a bridge restart, resume temperature and fan rules explicitly.
+Review your changes and select **Save**. **Discard** opens an in-page confirmation: **Keep editing** or Escape preserves your draft; **Discard changes** loads the latest saved setup. Deleting a rule and signing out with unsaved edits also use in-page confirmations. Configuration changes are written to the existing Nest Climate Cntrl entry; account credentials, child-bridge identity, and unrelated plugin settings are retained. The dashboard identifies settings that need a child-bridge restart. Enabled rule changes apply without a restart. Disabled rules remain drafts. After a bridge restart, previously active rules continue after checks unless **Pause after bridge restart** is enabled.
 
 If another settings page saves while you are editing, the dashboard asks you to reload instead of overwriting the newer configuration. Copy any unsaved choices you want to keep, reload, and apply them to the latest settings.
 
@@ -369,7 +369,7 @@ For background on radiant response and stored heat, see [Google's True Radiant e
 
 Changes to Apple Home accessories, such as Eco switches or a separate humidity sensor, require a child-bridge restart. After saving, the dashboard offers **Restart child bridge** when Homebridge UI can authenticate locally and identify this exact running Nest child bridge. Save or discard unsaved edits before restarting.
 
-The button restarts only the identified Nest child bridge. The dashboard briefly disconnects, checks for a new running instance, and asks you to sign in again. Review the equipment and **Resume** enabled temperature and fan rules afterward. Restart requests are not repeated automatically if their result cannot be confirmed.
+The button restarts only the identified Nest child bridge. The dashboard briefly disconnects, checks for a new running instance, and asks you to sign in again. Previously active rules continue after current readings and checks unless restart pausing is enabled; intentional pauses remain in effect. Restart requests are not repeated automatically if their result cannot be confirmed.
 
 If direct restart is unavailable, the notice explains that the child bridge must be restarted in Homebridge. A plugin running on the main bridge or sharing a child bridge with another configured plugin must be restarted there. Homebridge UI must be reachable locally and its service authentication must be available; HTTPS connections retain certificate verification.
 
@@ -379,3 +379,13 @@ The Nest occupancy input represents Nest's Home/Away decision. When the same acc
 
 Each enabled Home presence rule exposes one combined occupancy sensor, named after the rule. Its output is excluded from the input picker to prevent feedback. The combined sensor is separate from Nest's native Home/Away state and does not change Google's Home/Away or Eco settings.
 
+
+## Homebridge configuration interface
+
+Homebridge plugin Settings and the standalone dashboard use the same climate application: Overview, Sensors & fans, Climate rules, and Settings. Rule editors, field help, drag ordering, heating recommendations, manual-target policy, Apple Home room-temperature display, runtime status, and live controls are available in both. Standalone web access does not need to be enabled to use the Homebridge interface.
+
+Use **Save changes** for climate configuration. It checks the saved revision before writing; a change made elsewhere requires reloading. The outer Homebridge Save button is disabled while this application is open. **Enabled** describes the saved rule permission; **Active**, **Waiting**, and **Paused** describe its current execution.
+
+Open **Connection & advanced setup** to edit account credentials, web-server settings or advanced schema fields, including while the bridge is unavailable. This form uses Homebridge’s Save button. Save or discard climate edits before opening it. Returning to climate controls discards unsaved form edits and reloads saved configuration. If the saved configuration changes while the form is open, reopen setup before saving. Raw advanced rule temperatures use Celsius; the graphical editors use your chosen display unit.
+
+A reported built-in Nest sensor can guide a temperature rule even when Nest omits its room-sensor scheduling mode or empty paired-sensor list. These missing fields still prevent automatic changes to native sensor schedules. A rule combining official Nest room sensors with Homebridge sensors requires confirmed native sensor setup.

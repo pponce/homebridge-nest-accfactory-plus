@@ -26,7 +26,7 @@ test('an explicit built-in sensor can guide heating when only the paired-sensor 
     assert.throws(() => sensorControlUpdate(settings, { action: 'hold', expected: state.signature }));
     for (const change of [
       { associatedRcsSensors: null }, { associatedRcsSensors: {} }, { associatedRcsSensors: [null] },
-      { rcsControlMode: undefined }, { rcsControlMode: 'unknown' }, { activeRcsSelection: undefined },
+      { rcsControlMode: 'unknown' }, { activeRcsSelection: undefined },
       { activeRcsSelection: sensor('bedroom') },
       { activeRcsSelection: { ...settings.activeRcsSelection, activeRcsSensor: { resourceId: 'bedroom' } } },
       { sensorSelection: { isThermostatSelected: true } },
@@ -167,7 +167,7 @@ test('known selected sensor stays readable without granting unsupported automati
       assert.equal(state.source, 'unknown');
       assert.equal(state.control, null);
       assert.equal(state.holdSignature, null);
-      assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: state }), false);
+      assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: state }), builtin && mode === undefined);
       assert.equal(state.diagnostics.issues[0].code, mode === undefined ? 'mode_missing' : 'mode_unknown');
       assert.throws(() => sensorControlUpdate(settings, { action: 'hold', expected: state.signature }));
       assert.doesNotMatch(JSON.stringify(state.diagnostics), /bedroom|private-unexpected-value|resourceId|rcsControlSchedule/);
@@ -202,4 +202,15 @@ test('ambiguous multi-sensor settings do not present the classic selection as au
   assert.equal(supported.diagnostics.associatedSensorCount, 1);
   assert.deepEqual(supported.diagnostics.issues, []);
   assert.equal(supported.reason, null);
+});
+
+test('reported backplate remains usable for heating with both optional metadata fields omitted', () => {
+  const settings = { activeRcsSelection: { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' } };
+  const state = sensorControlState(settings);
+  assert.equal(state.builtInConfirmed, true);
+  assert.equal(state.mode, 'unknown');
+  assert.equal(nativeSensorAllowsHeating({ active_rcs_sensor: '', native_sensor_control: state }), true);
+  assert.equal(state.supported, false);
+  assert.equal(state.control, null);
+  assert.throws(() => sensorControlUpdate(settings, { action: 'hold', expected: state.signature }));
 });

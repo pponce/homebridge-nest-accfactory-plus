@@ -1,599 +1,1096 @@
 {
-  "pluginAlias": "NestClimateCntrl",
-  "pluginType": "platform",
-  "singular": true,
-  "schema": {
-    "type": "object",
-    "properties": {
-      "name": {
-        "title": "Name",
-        "type": "string",
-        "default": "Nest Climate Cntrl",
-        "condition": "1=2"
-      },
-      "accounts": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
+    "pluginAlias": "NestClimateCntrl",
+    "pluginType": "platform",
+    "singular": true,
+    "schema": {
+        "type": "object",
+        "properties": {
             "name": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S",
-              "placeholder": "Account description for configuration"
+                "title": "Name",
+                "type": "string",
+                "default": "Nest Climate Cntrl",
+                "condition": "1=2"
             },
-            "type": {
-              "type": "string",
-              "default": "google",
-              "enum": [
-                "google",
-                "nest"
-              ]
-            },
-            "access_token": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S",
-              "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
-            },
-            "issueToken": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S",
-              "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
-            },
-            "cookie": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S",
-              "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
-            },
-            "authMethod": {
-              "type": "string",
-              "default": "issueTokenCookie",
-              "enum": [
-                "issueTokenCookie",
-                "refreshToken"
-              ]
-            },
-            "refreshToken": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S"
-            },
-            "fieldTest": {
-              "type": "boolean",
-              "default": false
-            },
-            "exclude": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          "required": [
-            "name",
-            "type"
-          ],
-          "allOf": [
-            {
-              "if": {
-                "properties": {
-                  "type": {
-                    "const": "google"
-                  }
-                }
-              },
-              "then": {
-                "oneOf": [
-                  {
+            "accounts": {
+                "type": "array",
+                "items": {
+                    "type": "object",
                     "properties": {
-                      "authMethod": {
-                        "enum": [
-                          "issueTokenCookie"
-                        ]
-                      }
+                        "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "placeholder": "Account description for configuration"
+                        },
+                        "type": {
+                            "type": "string",
+                            "default": "google",
+                            "enum": [
+                                "google",
+                                "nest"
+                            ]
+                        },
+                        "access_token": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
+                        },
+                        "issueToken": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
+                        },
+                        "cookie": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "placeholder": "See https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/AUTHENTICATION.md"
+                        },
+                        "authMethod": {
+                            "type": "string",
+                            "default": "issueTokenCookie",
+                            "enum": [
+                                "issueTokenCookie",
+                                "refreshToken"
+                            ]
+                        },
+                        "refreshToken": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "\\S"
+                        },
+                        "fieldTest": {
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "exclude": {
+                            "type": "boolean",
+                            "default": false
+                        }
                     },
                     "required": [
-                      "issueToken",
-                      "cookie"
+                        "name",
+                        "type"
                     ],
-                    "not": {
-                      "required": [
-                        "refreshToken"
-                      ]
-                    }
-                  },
-                  {
-                    "properties": {
-                      "authMethod": {
-                        "const": "refreshToken"
-                      }
-                    },
-                    "required": [
-                      "authMethod",
-                      "refreshToken"
-                    ],
-                    "not": {
-                      "anyOf": [
+                    "allOf": [
                         {
-                          "required": [
-                            "issueToken"
-                          ]
+                            "if": {
+                                "properties": {
+                                    "type": {
+                                        "const": "google"
+                                    }
+                                }
+                            },
+                            "then": {
+                                "oneOf": [
+                                    {
+                                        "properties": {
+                                            "authMethod": {
+                                                "enum": [
+                                                    "issueTokenCookie"
+                                                ]
+                                            }
+                                        },
+                                        "required": [
+                                            "issueToken",
+                                            "cookie"
+                                        ],
+                                        "not": {
+                                            "required": [
+                                                "refreshToken"
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "properties": {
+                                            "authMethod": {
+                                                "const": "refreshToken"
+                                            }
+                                        },
+                                        "required": [
+                                            "authMethod",
+                                            "refreshToken"
+                                        ],
+                                        "not": {
+                                            "anyOf": [
+                                                {
+                                                    "required": [
+                                                        "issueToken"
+                                                    ]
+                                                },
+                                                {
+                                                    "required": [
+                                                        "cookie"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
                         },
                         {
-                          "required": [
-                            "cookie"
-                          ]
+                            "if": {
+                                "properties": {
+                                    "type": {
+                                        "const": "nest"
+                                    }
+                                }
+                            },
+                            "then": {
+                                "required": [
+                                    "access_token"
+                                ]
+                            }
                         }
-                      ]
-                    }
-                  }
-                ]
-              }
+                    ]
+                }
             },
-            {
-              "if": {
+            "options": {
+                "type": "object",
                 "properties": {
-                  "type": {
-                    "const": "nest"
-                  }
+                    "debug": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "eveHistory": {
+                        "type": "boolean",
+                        "default": true
+                    },
+                    "exclude": {
+                        "type": "boolean"
+                    },
+                    "supportDump": {
+                        "type": "boolean",
+                        "default": false
+                    },
+                    "useNestAPI": {
+                        "type": "boolean"
+                    },
+                    "useGoogleAPI": {
+                        "type": "boolean"
+                    },
+                    "pauseOnRestart": {
+                        "type": "boolean",
+                        "default": false,
+                        "title": "Pause after bridge restart",
+                        "description": "Off: active rules continue after fresh readings and equipment checks. Paused rules stay paused. On: require Resume after every restart."
+                    }
                 }
-              },
-              "then": {
-                "required": [
-                  "access_token"
-                ]
-              }
-            }
-          ]
-        }
-      },
-      "options": {
-        "type": "object",
-        "properties": {
-          "debug": {
-            "type": "boolean",
-            "default": false
-          },
-          "eveHistory": {
-            "type": "boolean",
-            "default": true
-          },
-          "exclude": {
-            "type": "boolean"
-          },
-          "supportDump": {
-            "type": "boolean",
-            "default": false
-          },
-          "useNestAPI": {
-            "type": "boolean"
-          },
-          "useGoogleAPI": {
-            "type": "boolean"
-          }
-        }
-      },
-      "devices": {
-        "type": "array",
-        "items": {
-          "title": "Device",
-          "type": "object",
-          "properties": {
-            "serialNumber": {
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S",
-              "placeholder": "Device serial number"
             },
-            "name": {
-              "title": "Name",
-              "type": "string",
-              "placeholder": "Device description for configuration"
-            },
-            "eveHistory": {
-              "type": "boolean"
-            },
-            "exclude": {
-              "type": "boolean"
-            },
-            "external": {
-              "type": "string"
-            },
-            "fanDuration": {
-              "type": "string"
-            },
-            "hotwaterBoostTime": {
-              "type": "string"
-            },
-            "hotwaterMaxTemp": {
-              "type": "string"
-            },
-            "hotwaterMinTemp": {
-              "type": "string"
-            },
-            "humiditySensor": {
-              "type": "boolean"
-            },
-            "ecoSwitch": {
-              "type": "boolean",
-              "default": false
-            },
-            "homeKitRoomTemperature": {
-              "type": "boolean",
-              "title": "Show climate rule temperature in Apple Home",
-              "default": false,
-              "description": "While a temperature rule controls this thermostat, show the selected-sensor temperature and desired room target in its Apple Home tile. Apple Home target changes set the desired room temperature directly. Otherwise show Nest's actual temperature and target. Physical Nest and Google app controls still use the rule's manual-change setting."
-            },
-            "fanPresetSwitches": {
-              "type": "boolean",
-              "default": false
-            },
-            "heatingType": {
-              "type": "string",
-              "title": "Heating type",
-              "enum": ["unknown", "forcedAir", "radiators", "radiantFloor"],
-              "default": "unknown",
-              "description": "For Heating response & tuning in the web dashboard. Selecting a type does not change rule settings."
-            },
-            "heatingResponseEnabled": {
-              "type": "boolean",
-              "title": "Observe heating response locally",
-              "default": false,
-              "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat’s response history."
-            },
-            "scheduleTimeZone": {
-              "type": "string",
-              "title": "Nest schedule time zone",
-              "description": "Leave blank to use the time zone reported by Nest for the thermostat or its home. Choose a named IANA zone such as America/Los_Angeles to override it. The custom Settings page provides a time-zone picker."
-            },
-            "sensorPreview": {
-              "type": "object",
-              "title": "Read-only room sensor preview",
-              "properties": {
-                "selected": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  },
-                  "uniqueItems": true
-                },
-                "desired": {
-                  "type": "number",
-                  "minimum": 5,
-                  "maximum": 35,
-                  "default": 21
+            "devices": {
+                "type": "array",
+                "items": {
+                    "title": "Device",
+                    "type": "object",
+                    "properties": {
+                        "serialNumber": {
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "placeholder": "Device serial number"
+                        },
+                        "name": {
+                            "title": "Name",
+                            "type": "string",
+                            "placeholder": "Device description for configuration"
+                        },
+                        "eveHistory": {
+                            "type": "boolean"
+                        },
+                        "exclude": {
+                            "type": "boolean"
+                        },
+                        "external": {
+                            "type": "string"
+                        },
+                        "fanDuration": {
+                            "type": "string"
+                        },
+                        "hotwaterBoostTime": {
+                            "type": "string"
+                        },
+                        "hotwaterMaxTemp": {
+                            "type": "string"
+                        },
+                        "hotwaterMinTemp": {
+                            "type": "string"
+                        },
+                        "humiditySensor": {
+                            "type": "boolean"
+                        },
+                        "ecoSwitch": {
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "homeKitRoomTemperature": {
+                            "type": "boolean",
+                            "title": "Show climate rule temperature in Apple Home",
+                            "default": false,
+                            "description": "While a temperature rule controls this thermostat, show the selected-sensor temperature and desired room target in its Apple Home tile. Apple Home target changes set the desired room temperature directly. Otherwise show Nest's actual temperature and target. Physical Nest and Google app controls still use the rule's manual-change setting."
+                        },
+                        "fanPresetSwitches": {
+                            "type": "boolean",
+                            "default": false
+                        },
+                        "heatingType": {
+                            "type": "string",
+                            "title": "Heating type",
+                            "enum": [
+                                "unknown",
+                                "forcedAir",
+                                "radiators",
+                                "radiantFloor"
+                            ],
+                            "default": "unknown",
+                            "description": "For Heating response & tuning in the web dashboard. Selecting a type does not change rule settings."
+                        },
+                        "heatingResponseEnabled": {
+                            "type": "boolean",
+                            "title": "Observe heating response locally",
+                            "default": false,
+                            "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat\u2019s response history."
+                        },
+                        "scheduleTimeZone": {
+                            "type": "string",
+                            "title": "Nest schedule time zone",
+                            "description": "Leave blank to use the time zone reported by Nest for the thermostat or its home. Choose a named IANA zone such as America/Los_Angeles to override it. The custom Settings page provides a time-zone picker."
+                        },
+                        "sensorPreview": {
+                            "type": "object",
+                            "title": "Read-only room sensor preview",
+                            "properties": {
+                                "selected": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                },
+                                "desired": {
+                                    "type": "number",
+                                    "minimum": 5,
+                                    "maximum": 35,
+                                    "default": 21
+                                }
+                            }
+                        }
+                    }
                 }
-              }
-            }
-          }
-        }
-      },
-      "homes": {
-        "title": "Per Home configuration options",
-        "type": "array",
-        "items": {
-          "title": "Home",
-          "type": "object",
-          "properties": {
-            "name": {
-              "title": "Home name",
-              "type": "string",
-              "minLength": 1,
-              "pattern": "\\S"
             },
-            "exclude": {
-              "type": "boolean"
+            "homes": {
+                "title": "Per Home configuration options",
+                "type": "array",
+                "items": {
+                    "title": "Home",
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "title": "Home name",
+                            "type": "string",
+                            "minLength": 1,
+                            "pattern": "\\S"
+                        },
+                        "exclude": {
+                            "type": "boolean"
+                        }
+                    }
+                }
+            },
+            "dashboardTemperatureUnit": {
+                "type": "string",
+                "title": "Dashboard temperature units",
+                "enum": [
+                    "C",
+                    "F"
+                ],
+                "default": "C",
+                "description": "Celsius or Fahrenheit for dashboard readings, targets and rule limits. Does not change the thermostat display setting."
+            },
+            "climateRuleDrafts": {
+                "type": "object",
+                "title": "Climate automation rules",
+                "description": "Manage named rules in the standalone dashboard. Rules run only when enabled. Heating groups use bounded target adjustments; room fans and combined presence use selected Homebridge inputs.",
+                "properties": {
+                    "temperature": {
+                        "type": "array",
+                        "maxItems": 32,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "maxLength": 80
+                                },
+                                "enabled": {
+                                    "type": "boolean",
+                                    "default": false
+                                },
+                                "sourceIds": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                },
+                                "targetIds": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                },
+                                "thermostatId": {
+                                    "type": "string"
+                                },
+                                "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                        "temperature"
+                                    ],
+                                    "default": "temperature"
+                                },
+                                "aggregation": {
+                                    "type": "string",
+                                    "enum": [
+                                        "single",
+                                        "average"
+                                    ]
+                                },
+                                "manualTargetBehavior": {
+                                    "type": "string",
+                                    "enum": [
+                                        "follow",
+                                        "pause"
+                                    ]
+                                },
+                                "desiredTemperature": {
+                                    "type": "number",
+                                    "minimum": 5,
+                                    "maximum": 35,
+                                    "description": "Stored in Celsius (temperature differences also use Celsius). Use the climate rule editor for Fahrenheit input."
+                                },
+                                "maximumOffset": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 3,
+                                    "description": "Stored in Celsius (temperature differences also use Celsius). Use the climate rule editor for Fahrenheit input."
+                                },
+                                "minimumIntervalMinutes": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 60
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "name",
+                                "kind"
+                            ]
+                        }
+                    },
+                    "fans": {
+                        "type": "array",
+                        "maxItems": 32,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "maxLength": 80
+                                },
+                                "enabled": {
+                                    "type": "boolean",
+                                    "default": false
+                                },
+                                "sourceIds": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                },
+                                "targetIds": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                },
+                                "thermostatId": {
+                                    "type": "string"
+                                },
+                                "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                        "fan"
+                                    ],
+                                    "default": "fan"
+                                },
+                                "action": {
+                                    "type": "string",
+                                    "enum": [
+                                        "heating",
+                                        "cooling",
+                                        "temperature",
+                                        "temperature-speed"
+                                    ]
+                                },
+                                "speedMode": {
+                                    "type": "string",
+                                    "enum": [
+                                        "last",
+                                        "fixed",
+                                        "curve"
+                                    ]
+                                },
+                                "threshold": {
+                                    "type": "number",
+                                    "minimum": -40,
+                                    "maximum": 80,
+                                    "description": "Stored in Celsius (temperature differences also use Celsius). Use the climate rule editor for Fahrenheit input."
+                                },
+                                "hysteresis": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 10,
+                                    "description": "Stored in Celsius (temperature differences also use Celsius). Use the climate rule editor for Fahrenheit input."
+                                },
+                                "minimumIntervalMinutes": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 60
+                                },
+                                "startGap": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 10,
+                                    "description": "Stored in Celsius (temperature differences also use Celsius). Use the climate rule editor for Fahrenheit input."
+                                },
+                                "stopGap": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 10,
+                                    "description": "Stored in Celsius (temperature differences also use Celsius). Use the climate rule editor for Fahrenheit input."
+                                },
+                                "fullSpeedGap": {
+                                    "type": "number",
+                                    "minimum": 0.1,
+                                    "maximum": 20,
+                                    "description": "Stored in Celsius (temperature differences also use Celsius). Use the climate rule editor for Fahrenheit input."
+                                },
+                                "minimumSpeed": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 100
+                                },
+                                "maximumSpeed": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 100
+                                },
+                                "fixedSpeed": {
+                                    "type": "number",
+                                    "minimum": 1,
+                                    "maximum": 100
+                                },
+                                "priority": {
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100
+                                },
+                                "thresholdInclusive": {
+                                    "type": "boolean"
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "name",
+                                "kind"
+                            ]
+                        }
+                    },
+                    "occupancy": {
+                        "type": "array",
+                        "maxItems": 32,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {
+                                    "type": "string",
+                                    "pattern": "^[a-zA-Z0-9_-]{1,80}$"
+                                },
+                                "name": {
+                                    "type": "string",
+                                    "maxLength": 80
+                                },
+                                "enabled": {
+                                    "type": "boolean",
+                                    "default": false
+                                },
+                                "sourceIds": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                },
+                                "targetIds": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "uniqueItems": true
+                                },
+                                "thermostatId": {
+                                    "type": "string"
+                                },
+                                "kind": {
+                                    "type": "string",
+                                    "enum": [
+                                        "presence"
+                                    ],
+                                    "default": "presence"
+                                },
+                                "logic": {
+                                    "type": "string",
+                                    "enum": [
+                                        "any",
+                                        "all"
+                                    ]
+                                },
+                                "holdMinutes": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1440
+                                },
+                                "awayDelayMinutes": {
+                                    "type": "number",
+                                    "minimum": 0,
+                                    "maximum": 1440
+                                }
+                            },
+                            "required": [
+                                "id",
+                                "name",
+                                "kind"
+                            ]
+                        }
+                    }
+                }
+            },
+            "webDashboard": {
+                "type": "object",
+                "title": "Web dashboard",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "default": false,
+                        "title": "Enable standalone dashboard"
+                    },
+                    "host": {
+                        "type": "string",
+                        "default": "0.0.0.0",
+                        "title": "Listen address",
+                        "description": "Direct HTTP/HTTPS listen address. Reverse proxy mode always binds to 127.0.0.1 and accepts only the local proxy."
+                    },
+                    "port": {
+                        "type": "integer",
+                        "default": 9444,
+                        "minimum": 1024,
+                        "maximum": 65535,
+                        "title": "Web port"
+                    },
+                    "displayHost": {
+                        "type": "string",
+                        "title": "Browser hostname or IP"
+                    },
+                    "certificatePath": {
+                        "type": "string",
+                        "title": "TLS certificate file",
+                        "description": "Used only for direct HTTPS. Not read or generated in HTTP or reverse proxy mode."
+                    },
+                    "keyPath": {
+                        "type": "string",
+                        "title": "TLS private key file",
+                        "description": "Used only for direct HTTPS. Not read or generated in HTTP or reverse proxy mode."
+                    },
+                    "protocol": {
+                        "type": "string",
+                        "title": "Connection mode",
+                        "enum": [
+                            "https",
+                            "http",
+                            "proxy"
+                        ],
+                        "default": "https",
+                        "description": "Choose direct HTTPS with certificates in the plugin, direct HTTP (passwords and data travel unencrypted), or HTTPS through a proxy on the same machine. The proxy handles certificates and the HTTP-to-HTTPS redirect."
+                    },
+                    "publicOrigin": {
+                        "type": "string",
+                        "title": "Public HTTPS origin",
+                        "description": "Required in reverse proxy mode, for example https://climate.example.com. No path, query or credentials. The public port is optional; the backend port is separate."
+                    }
+                }
             }
-          }
         }
-      },
-      "dashboardTemperatureUnit": {
-        "type": "string",
-        "title": "Dashboard temperature units",
-        "enum": ["C", "F"],
-        "default": "C",
-        "description": "Celsius or Fahrenheit for dashboard readings, targets and rule limits. Does not change the thermostat display setting."
-      },
-      "climateRuleDrafts": {
-        "type": "object",
-        "title": "Climate automation rules",
-        "description": "Manage named rules in the standalone dashboard. Rules run only when enabled. Heating groups use bounded target adjustments; room fans and combined presence use selected Homebridge inputs.",
-        "properties": {
-          "temperature": { "type": "array", "items": { "type": "object" } },
-          "fans": { "type": "array", "items": { "type": "object" } },
-          "occupancy": { "type": "array", "items": { "type": "object" } }
-        }
-      },
-      "webDashboard": {
-        "type": "object",
-        "title": "Web dashboard",
-        "properties": {
-          "enabled": {
-            "type": "boolean",
-            "default": false,
-            "title": "Enable standalone dashboard"
-          },
-          "host": {
-            "type": "string",
-            "default": "0.0.0.0",
-            "title": "Listen address",
-            "description": "Direct HTTP/HTTPS listen address. Reverse proxy mode always binds to 127.0.0.1 and accepts only the local proxy."
-          },
-          "port": {
-            "type": "integer",
-            "default": 9444,
-            "minimum": 1024,
-            "maximum": 65535,
-            "title": "Web port"
-          },
-          "displayHost": {
-            "type": "string",
-            "title": "Browser hostname or IP"
-          },
-          "certificatePath": {
-            "type": "string",
-            "title": "TLS certificate file",
-            "description": "Used only for direct HTTPS. Not read or generated in HTTP or reverse proxy mode."
-          },
-          "keyPath": {
-            "type": "string",
-            "title": "TLS private key file",
-            "description": "Used only for direct HTTPS. Not read or generated in HTTP or reverse proxy mode."
-          },
-          "protocol": {
-            "type": "string",
-            "title": "Connection mode",
-            "enum": [
-              "https",
-              "http",
-              "proxy"
-            ],
-            "default": "https",
-            "description": "Choose direct HTTPS with certificates in the plugin, direct HTTP (passwords and data travel unencrypted), or HTTPS through a proxy on the same machine. The proxy handles certificates and the HTTP-to-HTTPS redirect."
-          },
-          "publicOrigin": {
-            "type": "string",
-            "title": "Public HTTPS origin",
-            "description": "Required in reverse proxy mode, for example https://climate.example.com. No path, query or credentials. The public port is optional; the backend port is separate."
-          }
-        }
-      }
-    }
-  },
-  "layout": [
-    {
-      "type": "fieldset",
-      "title": "Accounts",
-      "description": "One or more accounts to connect to Google/Nest services. See plugin documentation for details on obtaining required credentials for each account type.",
-      "expandable": true,
-      "expanded": true,
-      "items": [
+    },
+    "layout": [
         {
-          "type": "array",
-          "key": "accounts",
-          "title": " ",
-          "buttonText": "Add Account",
-          "orderable": false,
-          "arrayItemTitle": "{{value.name || 'Account'}}",
-          "items": [
-            {
-              "key": "accounts[].name",
-              "title": "Name"
-            },
-            {
-              "key": "accounts[].type",
-              "title": "Type",
-              "enumNames": [
-                "Google",
-                "Nest"
-              ],
-              "oneOf": [
+            "type": "fieldset",
+            "title": "Accounts",
+            "description": "One or more accounts to connect to Google/Nest services. See plugin documentation for details on obtaining required credentials for each account type.",
+            "expandable": true,
+            "expanded": true,
+            "items": [
                 {
-                  "enum": [
-                    "google"
-                  ]
+                    "type": "array",
+                    "key": "accounts",
+                    "title": " ",
+                    "buttonText": "Add Account",
+                    "orderable": false,
+                    "arrayItemTitle": "{{value.name || 'Account'}}",
+                    "items": [
+                        {
+                            "key": "accounts[].name",
+                            "title": "Name"
+                        },
+                        {
+                            "key": "accounts[].type",
+                            "title": "Type",
+                            "enumNames": [
+                                "Google",
+                                "Nest"
+                            ],
+                            "oneOf": [
+                                {
+                                    "enum": [
+                                        "google"
+                                    ]
+                                },
+                                {
+                                    "enum": [
+                                        "nest"
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "key": "accounts[].authMethod",
+                            "title": "Authentication",
+                            "enumNames": [
+                                "Issue Token and Cookie",
+                                "Legacy Refresh Token"
+                            ],
+                            "condition": {
+                                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google';"
+                            }
+                        },
+                        {
+                            "key": "accounts[].issueToken",
+                            "title": "Issue Token",
+                            "condition": {
+                                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
+                            }
+                        },
+                        {
+                            "key": "accounts[].cookie",
+                            "title": "Cookie",
+                            "condition": {
+                                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
+                            }
+                        },
+                        {
+                            "key": "accounts[].refreshToken",
+                            "title": "Refresh Token",
+                            "type": "password",
+                            "condition": {
+                                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && model.accounts[arrayIndices].authMethod === 'refreshToken';"
+                            }
+                        },
+                        {
+                            "key": "accounts[].access_token",
+                            "title": "Access Token",
+                            "condition": {
+                                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'nest';"
+                            }
+                        },
+                        {
+                            "key": "accounts[].fieldTest",
+                            "title": "Use Field Test API"
+                        },
+                        {
+                            "key": "accounts[].exclude",
+                            "title": "Exclude Account"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "fieldset",
+            "title": "Home Settings",
+            "description": "Add and configure settings for specific Nest or Google homes.",
+            "expandable": true,
+            "expanded": false,
+            "items": [
+                {
+                    "type": "array",
+                    "title": "Homes",
+                    "key": "homes",
+                    "description": "Each entry applies to a home. The name must match the home name in the Nest or Google Home apps.",
+                    "buttonText": "Add Home",
+                    "orderable": false,
+                    "items": [
+                        {
+                            "key": "homes[].name",
+                            "title": "Home Name",
+                            "placeholder": "Must match the home name in the Nest or Google Home apps"
+                        },
+                        {
+                            "key": "homes[].exclude",
+                            "title": "Exclude All Devices from Home"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "fieldset",
+            "title": "Device Settings",
+            "description": "Configure global device settings or override them for specific devices.",
+            "expandable": true,
+            "expanded": false,
+            "items": [
+                {
+                    "key": "options.exclude",
+                    "title": "Exclude All Devices"
                 },
                 {
-                  "enum": [
-                    "nest"
-                  ]
+                    "key": "options.eveHistory",
+                    "title": "Enable Eve History for All Devices"
+                },
+                {
+                    "key": "options.pauseOnRestart"
+                },
+                {
+                    "type": "array",
+                    "title": "Device Overrides",
+                    "key": "devices",
+                    "description": "Per-device settings. The climate Settings page provides detected devices, temperature units and heating recommendations.",
+                    "buttonText": "Add Device Override",
+                    "orderable": false,
+                    "arrayItemTitle": "{{value.name || value.serialNumber || 'Device'}}",
+                    "items": [
+                        {
+                            "key": "devices[].serialNumber",
+                            "title": "Serial Number"
+                        },
+                        {
+                            "key": "devices[].name",
+                            "title": "Name"
+                        },
+                        {
+                            "key": "devices[].exclude",
+                            "title": "Exclude Device"
+                        },
+                        {
+                            "key": "devices[].eveHistory",
+                            "title": "Enable Eve History"
+                        },
+                        {
+                            "key": "devices[].external",
+                            "title": "external"
+                        },
+                        {
+                            "key": "devices[].fanDuration",
+                            "title": "Fan duration"
+                        },
+                        {
+                            "key": "devices[].hotwaterBoostTime",
+                            "title": "hotwaterBoostTime"
+                        },
+                        {
+                            "key": "devices[].hotwaterMaxTemp",
+                            "title": "hotwaterMaxTemp"
+                        },
+                        {
+                            "key": "devices[].hotwaterMinTemp",
+                            "title": "hotwaterMinTemp"
+                        },
+                        {
+                            "key": "devices[].humiditySensor",
+                            "title": "Humidity sensor in Apple Home"
+                        },
+                        {
+                            "key": "devices[].ecoSwitch",
+                            "title": "Eco switch in Apple Home"
+                        },
+                        {
+                            "key": "devices[].homeKitRoomTemperature",
+                            "title": "Show climate rule temperature in Apple Home"
+                        },
+                        {
+                            "key": "devices[].fanPresetSwitches",
+                            "title": "Fan preset switches in Apple Home"
+                        },
+                        {
+                            "key": "devices[].heatingType",
+                            "title": "Heating type"
+                        },
+                        {
+                            "key": "devices[].heatingResponseEnabled",
+                            "title": "Observe heating response locally"
+                        },
+                        {
+                            "key": "devices[].scheduleTimeZone",
+                            "title": "Nest schedule time zone"
+                        }
+                    ]
                 }
-              ]
-            },
-            {
-              "key": "accounts[].authMethod",
-              "title": "Authentication",
-              "enumNames": [
-                "Issue Token and Cookie",
-                "Legacy Refresh Token"
-              ],
-              "condition": {
-                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google';"
-              }
-            },
-            {
-              "key": "accounts[].issueToken",
-              "title": "Issue Token",
-              "condition": {
-                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
-              }
-            },
-            {
-              "key": "accounts[].cookie",
-              "title": "Cookie",
-              "condition": {
-                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && (!model.accounts[arrayIndices].authMethod || model.accounts[arrayIndices].authMethod === 'issueTokenCookie');"
-              }
-            },
-            {
-              "key": "accounts[].refreshToken",
-              "title": "Refresh Token",
-              "type": "password",
-              "condition": {
-                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'google' && model.accounts[arrayIndices].authMethod === 'refreshToken';"
-              }
-            },
-            {
-              "key": "accounts[].access_token",
-              "title": "Access Token",
-              "condition": {
-                "functionBody": "return model.accounts[arrayIndices] && model.accounts[arrayIndices].type === 'nest';"
-              }
-            },
-            {
-              "key": "accounts[].fieldTest",
-              "title": "Use Field Test API"
-            },
-            {
-              "key": "accounts[].exclude",
-              "title": "Exclude Account"
-            }
-          ]
+            ]
+        },
+        {
+            "type": "fieldset",
+            "title": "Options",
+            "expandable": true,
+            "expanded": true,
+            "items": [
+                {
+                    "key": "options.debug",
+                    "title": "Enable Verbose Logging"
+                },
+                {
+                    "key": "options.supportDump",
+                    "title": "Enable Support Dump Logging",
+                    "description": "Enable detailed device data logging for troubleshooting. Only enable when requested as it may produce large logs."
+                }
+            ]
+        },
+        {
+            "type": "fieldset",
+            "title": "Web dashboard",
+            "expandable": true,
+            "expanded": false,
+            "description": "Choose direct HTTP, direct HTTPS, or HTTPS through a local reverse proxy. Create the separate web account in the custom settings page.",
+            "items": [
+                {
+                    "key": "dashboardTemperatureUnit",
+                    "title": "Dashboard temperature units",
+                    "type": "select",
+                    "titleMap": {
+                        "C": "Celsius (\u00b0C)",
+                        "F": "Fahrenheit (\u00b0F)"
+                    }
+                },
+                {
+                    "key": "webDashboard.enabled",
+                    "title": "Enable standalone dashboard"
+                },
+                {
+                    "key": "webDashboard.protocol",
+                    "title": "Connection mode",
+                    "titleMap": {
+                        "https": "HTTPS \u00b7 certificates in plugin",
+                        "http": "HTTP \u00b7 unencrypted",
+                        "proxy": "HTTPS through reverse proxy"
+                    }
+                },
+                {
+                    "key": "webDashboard.publicOrigin",
+                    "title": "Public HTTPS origin (reverse proxy mode)"
+                },
+                {
+                    "key": "webDashboard.port",
+                    "title": "Web port"
+                },
+                {
+                    "key": "webDashboard.host",
+                    "title": "Listen address"
+                },
+                {
+                    "key": "webDashboard.displayHost",
+                    "title": "Browser hostname or IP (optional)"
+                },
+                {
+                    "key": "webDashboard.certificatePath",
+                    "title": "TLS certificate file (optional)"
+                },
+                {
+                    "key": "webDashboard.keyPath",
+                    "title": "TLS private key file (optional)"
+                }
+            ]
+        },
+        {
+            "type": "fieldset",
+            "title": "Advanced rule configuration",
+            "expandable": true,
+            "expanded": false,
+            "description": "Use the climate rule editor for discovered sensors, drag ordering, help and execution status. These fields allow offline configuration using source IDs. All temperature values here use Celsius. Save and restart the child bridge when editing this form.",
+            "items": [
+                {
+                    "type": "array",
+                    "key": "climateRuleDrafts.temperature",
+                    "title": "Temperature rules",
+                    "arrayItemTitle": "{{value.name || 'Rule'}}",
+                    "items": [
+                        {
+                            "key": "climateRuleDrafts.temperature[].id"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].name"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].enabled"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].sourceIds"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].targetIds"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].thermostatId"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].kind"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].aggregation"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].manualTargetBehavior"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].desiredTemperature"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].maximumOffset"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].minimumIntervalMinutes"
+                        }
+                    ]
+                },
+                {
+                    "type": "array",
+                    "key": "climateRuleDrafts.fans",
+                    "title": "Fans rules",
+                    "arrayItemTitle": "{{value.name || 'Rule'}}",
+                    "items": [
+                        {
+                            "key": "climateRuleDrafts.fans[].id"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].name"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].enabled"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].sourceIds"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].targetIds"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].thermostatId"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].kind"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].action"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].speedMode"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].threshold"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].hysteresis"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].minimumIntervalMinutes"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].startGap"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].stopGap"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].fullSpeedGap"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].minimumSpeed"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].maximumSpeed"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].fixedSpeed"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].priority"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].thresholdInclusive"
+                        }
+                    ]
+                },
+                {
+                    "type": "array",
+                    "key": "climateRuleDrafts.occupancy",
+                    "title": "Occupancy rules",
+                    "arrayItemTitle": "{{value.name || 'Rule'}}",
+                    "items": [
+                        {
+                            "key": "climateRuleDrafts.occupancy[].id"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].name"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].enabled"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].sourceIds"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].targetIds"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].thermostatId"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].kind"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].logic"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].holdMinutes"
+                        },
+                        {
+                            "key": "climateRuleDrafts.occupancy[].awayDelayMinutes"
+                        }
+                    ]
+                }
+            ]
         }
-      ]
-    },
-    {
-      "type": "fieldset",
-      "title": "Home Settings",
-      "description": "Add and configure settings for specific Nest or Google homes.",
-      "expandable": true,
-      "expanded": false,
-      "items": [
-        {
-          "type": "array",
-          "title": "Homes",
-          "key": "homes",
-          "description": "Each entry applies to a home. The name must match the home name in the Nest or Google Home apps.",
-          "buttonText": "Add Home",
-          "orderable": false,
-          "items": [
-            {
-              "key": "homes[].name",
-              "title": "Home Name",
-              "placeholder": "Must match the home name in the Nest or Google Home apps"
-            },
-            {
-              "key": "homes[].exclude",
-              "title": "Exclude All Devices from Home"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "type": "fieldset",
-      "title": "Device Settings",
-      "description": "Configure global device settings or override them for specific devices.",
-      "expandable": true,
-      "expanded": false,
-      "items": [
-        {
-          "key": "options.exclude",
-          "title": "Exclude All Devices"
-        },
-        {
-          "key": "options.eveHistory",
-          "title": "Enable Eve History for All Devices"
-        },
-        {
-          "type": "array",
-          "title": "Device Overrides",
-          "key": "devices",
-          "description": "Override settings for specific devices using their serial number. Additional advanced options are available via manual configuration.",
-          "buttonText": "Add Device Override",
-          "orderable": false,
-          "arrayItemTitle": "{{value.name || value.serialNumber || 'Device'}}",
-          "items": [
-            {
-              "key": "devices[].serialNumber",
-              "title": "Serial Number"
-            },
-            {
-              "key": "devices[].name",
-              "title": "Name"
-            },
-            {
-              "key": "devices[].exclude",
-              "title": "Exclude Device"
-            },
-            {
-              "key": "devices[].eveHistory",
-              "title": "Enable Eve History"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "type": "fieldset",
-      "title": "Options",
-      "expandable": true,
-      "expanded": true,
-      "items": [
-        {
-          "key": "options.debug",
-          "title": "Enable Verbose Logging"
-        },
-        {
-          "key": "options.supportDump",
-          "title": "Enable Support Dump Logging",
-          "description": "Enable detailed device data logging for troubleshooting. Only enable when requested as it may produce large logs."
-        }
-      ]
-    },
-    {
-      "type": "fieldset",
-      "title": "Web dashboard",
-      "expandable": true,
-      "expanded": false,
-      "description": "Choose direct HTTP, direct HTTPS, or HTTPS through a local reverse proxy. Create the separate web account in the custom settings page.",
-      "items": [
-        {
-          "key": "dashboardTemperatureUnit",
-          "title": "Dashboard temperature units",
-          "type": "select",
-          "titleMap": { "C": "Celsius (°C)", "F": "Fahrenheit (°F)" }
-        },
-        {
-          "key": "webDashboard.enabled",
-          "title": "Enable standalone dashboard"
-        },
-        {
-          "key": "webDashboard.protocol",
-          "title": "Connection mode",
-          "titleMap": {
-            "https": "HTTPS \u00b7 certificates in plugin",
-            "http": "HTTP \u00b7 unencrypted",
-            "proxy": "HTTPS through reverse proxy"
-          }
-        },
-        {
-          "key": "webDashboard.publicOrigin",
-          "title": "Public HTTPS origin (reverse proxy mode)"
-        },
-        {
-          "key": "webDashboard.port",
-          "title": "Web port"
-        },
-        {
-          "key": "webDashboard.host",
-          "title": "Listen address"
-        },
-        {
-          "key": "webDashboard.displayHost",
-          "title": "Browser hostname or IP (optional)"
-        },
-        {
-          "key": "webDashboard.certificatePath",
-          "title": "TLS certificate file (optional)"
-        },
-        {
-          "key": "webDashboard.keyPath",
-          "title": "TLS private key file (optional)"
-        }
-      ]
-    }
-  ],
-  "customUi": true
+    ],
+    "customUi": true
 }

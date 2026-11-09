@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { WebDashboard } from '../src/web-dashboard.js';
 import { ClimateDashboard, RuntimeLedger } from '../src/climate-dashboard.js';
 import { nextSetpoint, editableConfig, displayTemperature, celsiusTemperature } from '../homebridge-ui/public/climate-utils.js';
 
@@ -285,3 +286,49 @@ test('saved history survives restart without counting the stopped interval', asy
   await second.stop();
 });
 
+
+test('Homebridge climate routes share configuration validation while standalone web access is disabled', async (t) => {
+  const f = await fixture(t);
+  const block = { platform: 'NestClimateCntrl', accounts: [{ refreshToken: 'PRIVATE-TOKEN' }] };
+  const configPath = path.join(f.storage, 'config.json');
+  await fs.writeFile(configPath, JSON.stringify({ platforms: [block] }));
+  const web = new WebDashboard({ storage: f.storage, configPath, platformConfig: block, dashboard: f.dashboard });
+  f.dashboard.webDashboard = web;
+  await web.start();
+  t.after(() => web.stop());
+  assert.equal(web.status().enabled, false);
+  assert.equal((await fetch(f.url + '/ui/config')).status, 403);
+  assert.equal((await fetch(f.url + '/ui/config', { headers: { ...f.headers, Origin: 'https://example.com' } })).status, 403);
+  const response = await fetch(f.url + '/ui/config', { headers: f.headers });
+  const envelope = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(JSON.stringify(envelope).includes('PRIVATE-TOKEN'), false);
+  assert.equal(envelope.config.options.pauseOnRestart, false);
+  const save = () => fetch(f.url + '/ui/config', { method: 'PUT',
+    headers: { ...f.headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ revision: envelope.revision, config: { options: { pauseOnRestart: true } } }),
+  });
+  const saved = await save();
+  assert.equal(saved.status, 200);
+  const result = await saved.json();
+  assert.equal(result.config.options.pauseOnRestart, true);
+  assert.equal(result.restartRequired, false);
+  assert.equal((await save()).status, 409);
+  assert.equal((await fetch(f.url + '/ui/login', { headers: f.headers })).status, 404);
+  const root = JSON.parse(await fs.readFile(configPath));
+  assert.equal(root.platforms[0].accounts[0].refreshToken, 'PRIVATE-TOKEN');
+});
+
+test('sensor and presence readings clear their reconnect flag without needing an HVAC state', async (t) => {
+  const f = await fixture(t);
+  f.dashboard.update('S', 'TemperatureSensor', { online: true, current_temperature: 20 }, 'A');
+  f.dashboard.update('H', 'HomeAway', { online: true, occupancy: false }, 'A');
+  f.dashboard.invalidate('A');
+  f.dashboard.update('S', 'TemperatureSensor', { online: true }, 'A');
+  assert.equal(f.dashboard.devices.get('S').needsUpdate, true);
+  f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 21 }, 'A');
+  f.dashboard.update('H', 'HomeAway', { occupancy: true }, 'A');
+  assert.equal(f.dashboard.devices.get('S').needsUpdate, false);
+  assert.equal(f.dashboard.devices.get('H').needsUpdate, false);
+  assert.equal(f.dashboard.devices.get('T').needsUpdate, true);
+});
