@@ -219,6 +219,12 @@
               "type": "boolean",
               "default": false
             },
+            "homeKitRoomTemperature": {
+              "type": "boolean",
+              "title": "Show climate rule temperature in Apple Home",
+              "default": false,
+              "description": "While a temperature rule controls this thermostat, show the selected-sensor temperature and desired room target in its Apple Home tile. Apple Home target changes set the desired room temperature directly. Otherwise show Nest's actual temperature and target. Physical Nest and Google app controls still use the rule's manual-change setting."
+            },
             "fanPresetSwitches": {
               "type": "boolean",
               "default": false

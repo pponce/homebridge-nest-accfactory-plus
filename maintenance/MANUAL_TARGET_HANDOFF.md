@@ -13,7 +13,8 @@ Repository: `pponce/homebridge-nest-climate-cntrl`. Base `main`: `c9a630af438b26
 - Native schedule events use their absolute heating target after native confirmation. Future-only schedule edits preserve manual adjustments. Unknown targets and time-zone changes require review.
 - Changing the saved desired value uses it directly. Use saved room target resets a temporary target without pausing. Resume/re-enable starts from the saved target. Restart still requires Resume.
 - Dashboard mode choice, help, desired versus adjusted target labels, current target source, and reset control. Heating observations use the effective desired target.
-- HomeKit presentation is unchanged. The user asked only to discuss displaying the group average/desired target in HomeKit; do not implement that projection without authorization.
+- Authorized HomeKit extension: per-thermostat Show climate rule temperature in Apple Home, off by default. Active rules project group current temperature and desired target. HomeKit desired edits are absolute and bypass the physical-target pause option. Native fallback for paused/disabled/unavailable rules, modes and stale readings. No accessory recreation or raw Nest data replacement.
+- Physical-target pause is a per-rule toggle, off by default.
 
 ## Checks
 
@@ -26,6 +27,6 @@ Objective: default manual target following with an optional pause mode; preserve
 Repo/branch: pponce/homebridge-nest-climate-cntrl, feature/manual-room-target -> main. Base c9a630af438b268cd3885efe9ababe1ef6e63189. Target beta.19.
 Completed: relative manual changes, explicit pause policy, desired/saved/Nest runtime targets, own-write and command-acceptance separation, rapid HomeKit changes, schedule target handoff, saved-target reset, dashboard labels/help and documentation.
 Local validation: 150 focused tests passed; syntax/diff checks passed. Full GitHub CI and hardware verification pending.
-Decisions: existing HomeKit tile still shows actual Nest target and uses relative adjustments. Projecting desired/group temperature into HomeKit is discussion only; no action authorized. Mode/Eco/lock/source changes and ambiguous confirmations still pause. No native temperature hold is created.
+Decisions: HomeKit defaults to actual Nest values. Optional room display uses absolute desired edits while physical Nest/Google changes use relative follow or explicit pause (default off). Mode/Eco/lock/source changes and ambiguous confirmations still pause. No native temperature hold is created.
 Next: run GitHub CI, resolve any full-platform/coverage/browser failures, integrate validated code, and prepare the next GitHub beta plus a pinned npm publisher. Do not publish npm automatically.
 ```

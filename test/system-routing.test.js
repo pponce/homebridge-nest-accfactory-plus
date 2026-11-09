@@ -238,3 +238,23 @@ for (let unavailable of ['account', 'authorisation', 'transport', 'resource']) {
     assert.deepEqual(flow.commands, []);
   });
 }
+
+test('HomeKit room requests go only to automation and never leak into native command or manual-change handling', async (context) => {
+  const flow = await platformHarness(context, { value: traits });
+  const requests = [];
+  flow.platform.automation = {
+    setHomeKitRoomTarget: async (id, request) => requests.push({ id, request }),
+    manualThermostat: async () => assert.fail('Room targets are not native manual changes'),
+    stop: async () => {},
+  };
+  await flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 } });
+  assert.deepEqual(requests, [{ id: 'DEVICE_TEST', request: { ruleId: 'rooms', value: 21 } }]);
+  assert.equal(flow.commands.length, 0);
+  await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 },
+    target_temperature_low: 21 }));
+  flow.platform.automation.setHomeKitRoomTarget = async () => { throw new Error('Rule unavailable'); };
+  await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 } }));
+  delete flow.platform.automation.setHomeKitRoomTarget;
+  await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 } }));
+  assert.equal(flow.commands.length, 0);
+});

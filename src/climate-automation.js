@@ -100,7 +100,7 @@ export function heatingTarget(desired, physical, room, maximumOffset = 1.5, scal
 }
 
 export class ClimateAutomation {
-  constructor({ directory, dashboard, config, accessFactory, presence, now = Date.now, intervalMs = 15000, log }) {
+  constructor({ directory, dashboard, config, accessFactory, presence, onState, now = Date.now, intervalMs = 15000, log }) {
     this.directory = directory;
     this.dashboard = dashboard;
     this.config = config;
@@ -109,6 +109,7 @@ export class ClimateAutomation {
     this.now = now;
     this.intervalMs = intervalMs;
     this.log = log;
+    this.onState = onState;
     this.states = new Map();
     this.leases = new Map();
     this.fanOverrides = new Map();
@@ -317,6 +318,7 @@ export class ClimateAutomation {
       })
       .finally(() => {
         this.pending = undefined;
+        this.onState?.();
       });
     return this.pending;
   }
@@ -596,8 +598,8 @@ export class ClimateAutomation {
     return Boolean(device && account?.authorised && account.observing && !device.needsUpdate && device.data.online === true);
   }
 
-  temperatureInputs(rule) {
-    const chosen = rule.sourceIds.map((id) => this.sources.get(id));
+  temperatureInputs(rule, sources = this.sources) {
+    const chosen = rule.sourceIds.map((id) => sources.get(id));
     if (
       !chosen.length ||
       chosen.some(
@@ -612,6 +614,74 @@ export class ClimateAutomation {
       return null;
     }
     return chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length;
+  }
+
+  homeKitRoom(serial) {
+    if (this.stopping || this.error || !this.deviceOptions?.some((option) =>
+      option.serialNumber.toUpperCase() === serial.toUpperCase() && option.homeKitRoomTemperature === true)) {
+      return null;
+    }
+    const candidates = [...this.states.values()].filter((state) =>
+      state.rule.kind === 'temperature' && state.rule.enabled && state.rule.thermostatId === serial);
+    const state = candidates.length === 1 ? candidates[0] : undefined;
+    if (!state?.controlStarted || state.paused || state.manualTarget || state.scheduleTarget ||
+        !['active', 'interval', 'updating'].includes(this.temperatureControlStatus(state))) {
+      return null;
+    }
+    const live = this.dashboard.snapshot();
+    const device = live.devices.find((entry) => entry.serial === serial);
+    const account = live.accounts.find((entry) => entry.id === device?.account);
+    if (!device || !account?.authorised || !account.observing || device.needsUpdate || device.data.online !== true ||
+        device.data.hvac_mode !== 'heat' || device.data.eco_mode !== false || device.data.temperature_lock === true ||
+        !nativeSensorAllowsHeating(device.data) || !this.sensorSetup.permits(state.rule)) {
+      return null;
+    }
+    const lease = this.leases.get('temperature:' + serial);
+    const actual = target(device);
+    const schedule = this.schedule(device, serial);
+    if (lease?.restoring || (lease && lease.owner !== state.rule.id) ||
+        !equal(actual, lease?.expected ?? state.referenceTarget) && !(lease?.pending && equal(actual, lease.before)) ||
+        schedule.position !== state.scheduleKey || schedule.signature !== state.scheduleSignature) {
+      return null;
+    }
+    const sources = new Map(automationSources(live, this.external).flatMap((source) =>
+      [source.id, ...(source.aliases ?? [])].map((id) => [id, source])));
+    const temperature = this.temperatureInputs(state.rule, sources);
+    return temperature === null || !validTarget(desiredTarget(state)) ? null : {
+      ruleId: state.rule.id, temperature, desiredTemperature: desiredTarget(state),
+    };
+  }
+
+  setHomeKitRoomTarget(deviceId, request) {
+    return this.serialize(async () => {
+      const envelope = await this.config.snapshot();
+      const state = this.states.get(request?.ruleId);
+      const serial = state?.rule.thermostatId;
+      const saved = envelope.config.rules.temperature.find((rule) => rule.id === request?.ruleId);
+      const enabled = envelope.config.devices.some((option) =>
+        option.serialNumber.toUpperCase() === serial?.toUpperCase() && option.homeKitRoomTemperature === true);
+      if (envelope.rulesError || !enabled || JSON.stringify(saved) !== JSON.stringify(state?.rule) ||
+          !this.homeKitRoom(serial) || this.dashboard.devices.get(serial)?.id !== deviceId ||
+          !request || Object.keys(request).some((key) => !['ruleId', 'value'].includes(key)) || !validTarget(request.value)) {
+        throw new Error('The room-temperature rule is unavailable. Refresh the thermostat before changing its target.');
+      }
+      // This is an absolute room target. Retain pending compensation ownership so its feedback
+      // cannot be mistaken for a physical Nest change, and preserve the minimum write interval.
+      const previous = state.roomTarget;
+      state.roomTarget = { value: request.value, source: 'manual' };
+      state.targetEpoch = (state.targetEpoch ?? 0) + 1;
+      try {
+        await this.persist();
+      } catch (error) {
+        state.roomTarget = previous;
+        this.pause(state, 'The desired room temperature could not be saved. Review the rule, then Resume.');
+        throw error;
+      }
+      await this.evaluate();
+      if (!this.homeKitRoom(serial)) {
+        throw new Error('Room control became unavailable. Review the rule before changing its target.');
+      }
+    }).finally(() => this.onState?.());
   }
 
   pause(state, reason) {
@@ -1190,6 +1260,7 @@ export class ClimateAutomation {
           }
         }
       });
+      this.onState?.();
     }
     return requests;
   }
@@ -1217,6 +1288,7 @@ export class ClimateAutomation {
           }
         }
       });
+      this.onState?.();
     }
   }
 
@@ -1282,11 +1354,12 @@ export class ClimateAutomation {
       await this.persist();
       await this.evaluate();
       return this.snapshot();
-    });
+    }).finally(() => this.onState?.());
   }
 
   async stop() {
     this.stopping = true;
+    this.onState?.();
     clearInterval(this.timer);
     await this.queue;
     try {

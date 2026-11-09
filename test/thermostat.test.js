@@ -211,3 +211,62 @@ test('initial and updated humidifier capabilities retain enum zero and reuse the
     assert.equal(expected.includes(existing.getCharacteristic(type).onGet()), true);
   }
 });
+
+test('HomeKit room display changes only current and desired temperatures and falls back to the same native service', async () => {
+  const native = {
+    nest_google_device_uuid: 'THERMO', current_temperature: 23, target_temperature: 24, target_temperature_low: 24,
+    hvac_mode: 'heat', eco_mode: false, can_heat: true, online: true, removed_from_base: false, hvac_state: 'heating',
+  };
+  const device = new Thermostat(native);
+  device.hap = hap;
+  device.thermostatService = service();
+  device.batteryService = service();
+  device.history = () => {};
+  let room = { ruleId: 'rooms', temperature: 20, desiredTemperature: 21 };
+  device.getClimateRoom = () => room;
+  await device.onUpdate(native);
+  assert.equal(device.getTemperature(hap.Characteristic.TargetTemperature), 21);
+  assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.CurrentTemperature).value, 20);
+  assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.TargetTemperature).value, 21);
+  assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.CurrentHeatingCoolingState).value,
+    hap.Characteristic.CurrentHeatingCoolingState.HEAT);
+  assert.equal(device.deviceData.target_temperature_low, 24, 'raw native data stays intact');
+  const identity = device.thermostatService;
+  room = null;
+  device.updateClimateRoom();
+  assert.equal(device.thermostatService, identity);
+  assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.CurrentTemperature).value, 23);
+  assert.equal(device.getTemperature(hap.Characteristic.TargetTemperature), 24);
+  assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.TargetTemperature).value, 24);
+  room = { ruleId: 'rooms', temperature: 20, desiredTemperature: 21 };
+  for (const change of [{ hvac_mode: 'cool' }, { eco_mode: true }, { temperature_lock: true }]) {
+    device.deviceData = { ...native, ...change };
+    assert.equal(device.climateRoomView(), null);
+  }
+});
+
+test('HomeKit room target writes use the rule request and propagate failures without a direct Nest write', async () => {
+  const device = new Thermostat({ nest_google_device_uuid: 'THERMO', current_temperature: 23,
+    target_temperature: 24, target_temperature_low: 24, hvac_mode: 'heat', eco_mode: false });
+  device.hap = hap;
+  device.thermostatService = service();
+  device.thermostatService.updateCharacteristic(hap.Characteristic.TargetHeatingCoolingState, hap.Characteristic.TargetHeatingCoolingState.HEAT);
+  let room = { ruleId: 'rooms', temperature: 20, desiredTemperature: 21 };
+  device.getClimateRoom = () => room;
+  const requests = [];
+  device.set = async (request) => {
+    requests.push(request);
+    room.desiredTemperature = request.climate_room_target.value;
+  };
+  await device.setTemperature(hap.Characteristic.TargetTemperature, 22);
+  assert.deepEqual(requests, [{ uuid: 'THERMO', climate_room_target: { ruleId: 'rooms', value: 22 } }]);
+  assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.TargetTemperature).value, 22);
+  assert.equal(device.deviceData.target_temperature_low, 24);
+  device.set = async () => { throw new Error('Rule became unavailable'); };
+  await assert.rejects(device.setTemperature(hap.Characteristic.TargetTemperature, 23), /unavailable/);
+  assert.equal(device.thermostatService.getCharacteristic(hap.Characteristic.TargetTemperature).value, 22);
+  room = null;
+  device.set = async (request) => requests.push(request);
+  await device.setTemperature(hap.Characteristic.TargetTemperature, 25);
+  assert.deepEqual(requests.at(-1), { uuid: 'THERMO', target_temperature_low: 25 }, 'native mode retains existing routing');
+});

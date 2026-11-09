@@ -1382,3 +1382,111 @@ test('manual speed changes in last-setting mode block all rules and survive rest
   assert.equal(f.engine.fanObservations.size, 0);
 });
 
+
+test('HomeKit room view is opt-in per thermostat and uses fresh group values without replacing Nest data', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  f.devices.push({ serialNumber: 'OTHER', homeKitRoomTemperature: true });
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  f.devices.push({ serialNumber: 't', homeKitRoomTemperature: true });
+  assert.deepEqual(f.engine.homeKitRoom('T'), { ruleId: 'rooms', temperature: 20, desiredTemperature: 21 });
+  assert.equal(f.dashboard.devices.get('T').data.target_temperature_low, 22.5);
+  f.external[0].temperature = 22;
+  await f.engine.tick();
+  assert.equal(f.engine.homeKitRoom('T').temperature, 21);
+  f.advance(91000);
+  assert.equal(f.engine.homeKitRoom('T'), null, 'expired source readings cannot be displayed as a live group');
+  await f.engine.tick();
+  assert.ok(f.engine.homeKitRoom('T'));
+  f.accounts[0].observing = false;
+  assert.equal(f.engine.homeKitRoom('T'), null);
+});
+
+test('HomeKit desired-target edits stay absolute even with manual pause enabled and retain the write interval', async (t) => {
+  const f = await fixture(t, { temperature: [{ ...temperatureRule, manualTargetBehavior: 'pause' }] });
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  await f.engine.tick();
+  const writes = f.commands.length;
+  let updates = 0;
+  f.engine.onState = () => updates++;
+  await f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 });
+  await f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 23 });
+  assert.equal(f.rule('rooms').desiredTemperature, 23);
+  assert.equal(f.rule('rooms').savedDesiredTemperature, 21);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.commands.length, writes, 'manual room edits do not bypass the heating interval');
+  assert.equal(f.engine.homeKitRoom('T').desiredTemperature, 23);
+  assert.equal(updates, 2);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  assert.equal(f.commands.at(-1).target_temperature_low, 24.5, 'the next bounded Nest target compensates for the group');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 23, 'compensation feedback is not another user edit');
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 25 }, 'A');
+  assert.equal(f.engine.homeKitRoom('T'), null, 'unprocessed physical changes cannot expose an obsolete room target');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true, 'physical Nest changes still honor pause');
+  assert.equal(f.engine.homeKitRoom('T'), null);
+});
+
+test('HomeKit room edits preserve pending compensation acknowledgement and do not write a direct Nest target', async (t) => {
+  const f = await fixture(t);
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  assert.equal(f.engine.leases.get('temperature:T').pending, true);
+  await f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 20 });
+  assert.equal(f.rule('rooms').desiredTemperature, 20);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.engine.leases.get('temperature:T').pending, false);
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.dashboard.devices.get('T').data.target_temperature_low, 22.5);
+});
+
+test('HomeKit room writes reject disabled settings, wrong ownership, invalid targets and paused rules', async (t) => {
+  const f = await fixture(t);
+  const request = { ruleId: 'rooms', value: 22 };
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', request));
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  for (const [id, payload] of [
+    ['wrong', request], ['thermostat', { ...request, ruleId: 'missing' }],
+    ['thermostat', { ...request, value: 33 }], ['thermostat', { ...request, value: '22' }],
+    ['thermostat', { ...request, unexpected: true }], ['thermostat', null],
+  ]) {
+    await assert.rejects(f.engine.setHomeKitRoomTarget(id, payload));
+  }
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  await f.engine.control({ id: 'rooms', action: 'pause' });
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', request));
+});
+
+test('HomeKit room writes reject changed configuration and unavailable physical modes before any target write', async (t) => {
+  const f = await fixture(t);
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  await f.engine.tick();
+  f.rules({ temperature: [{ ...temperatureRule, desiredTemperature: 24 }] });
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 }));
+  f.rules({ temperature: [temperatureRule] });
+  for (const change of [{ eco_mode: true }, { hvac_mode: 'cool' }, { temperature_lock: true }, { online: false }]) {
+    const data = { ...f.dashboard.devices.get('T').data };
+    f.dashboard.update('T', 'Thermostat', change, 'A');
+    assert.equal(f.engine.homeKitRoom('T'), null);
+    await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 }));
+    f.dashboard.update('T', 'Thermostat', data, 'A');
+  }
+  assert.equal(f.commands.length, 1);
+});
+
+test('failed storage of a HomeKit desired target rejects the edit and pauses without a cloud command', async (t) => {
+  const f = await fixture(t);
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  await f.engine.tick();
+  const persist = f.engine.persist;
+  f.engine.persist = async () => { throw new Error('Fixture disk unavailable'); };
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 }), /disk unavailable/);
+  f.engine.persist = persist;
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  assert.equal(f.commands.length, 1);
+});

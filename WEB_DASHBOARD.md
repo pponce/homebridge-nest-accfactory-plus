@@ -95,16 +95,27 @@ Only one enabled group can control a thermostat. A group does not create an inde
 
 The **desired room temperature** is the target for the selected sensor or average. The **Nest target (adjusted)** is the value sent to the thermostat to achieve that room temperature. Both appear in Execution status; the Overview card shows the actual Nest target and its expanded controller information shows the desired room temperature and group reading.
 
-Under **Manual Nest target changes**, choose:
+**Pause after a manual Nest target change** is off by default:
 
-- **Keep group active and adjust desired room temperature** (default): changing Nest’s target moves the desired room target by the same increase or decrease, accounting for Nest’s display rounding. This applies to the physical thermostat, Google’s app and the existing Nest thermostat tile in Apple Home. For example, a desired room target of **70 °F** with an adjusted Nest target of **72 °F** becomes a desired **71 °F** when Nest is raised to **73 °F**. The selected sensors stay active.
-- **Pause after a manual Nest target change**: changing Nest’s target pauses the group and leaves that manual setting in place. Select **Resume automatic control** when you want the group to use its saved room target again.
+- **Off:** changing Nest’s target moves the desired room target by the same increase or decrease, accounting for Nest’s display rounding. This applies to the physical thermostat and Google’s app. For example, a desired room target of **70 °F** with an adjusted Nest target of **72 °F** becomes a desired **71 °F** when Nest is raised to **73 °F**. The selected sensors stay active.
+- **On:** changing Nest’s target pauses the group and leaves that manual setting in place. Select **Resume automatic control** when you want the group to use its saved room target again.
 
+Apple Home follows this same policy when it displays native Nest temperatures.
 Saving a changed **Desired room temperature** uses that exact room target. A manual adjustment does not rewrite the saved rule target, sensor membership or Nest’s weekly schedule. **Use saved room target** ends a temporary adjustment without pausing the group. Resume and re-enabling a rule start from the saved target.
 
 At the next reported Nest schedule event, the group waits for Nest to confirm its scheduled heating target, then uses that value as the desired room temperature and continues with the same sensors. An edit to a future schedule point does not end the current manual adjustment. If no Nest schedule is reported, a manual adjustment lasts until another target change, a saved-target reset or Resume. This controller does not create a Nest temperature hold or its own sensor-group schedule.
 
-Apple Home continues to display Nest’s actual temperature and adjusted target. A HomeKit tile showing the group average and desired target is not provided. Off, Eco, heating-mode changes, temperature locks and native sensor changes still take priority. Failed commands, conflicting feedback during a pending adjustment and unconfirmed schedule targets pause control for review. The plugin recognizes its own accepted target writes and does not reinterpret them as manual adjustments.
+Off, Eco, heating-mode changes, temperature locks and native sensor changes still take priority. Failed commands, conflicting feedback during a pending adjustment and unconfirmed schedule targets pause control for review. The plugin recognizes its own accepted target writes and does not reinterpret them as manual adjustments.
+
+### Show the room target in Apple Home
+
+In **Settings → your thermostat → Apple Home temperature display**, enable **Show climate rule temperature in Apple Home**. This setting is **off by default for each thermostat** and takes effect after saving on the next automation check, without restarting the bridge.
+
+While a temperature rule controls that thermostat, its existing Apple Home tile shows the selected-sensor temperature as the current temperature and the desired room target as the set temperature. Changing that tile’s target sets the desired room temperature directly, even when **Pause after a manual Nest target change** is on. The group remains active, the saved rule target stays unchanged, and automatic Nest adjustments still respect the configured interval and offset limit.
+
+The physical Nest and Google app continue to show the actual Nest target. Their changes follow the rule’s pause setting. The dashboard shows the desired room target and adjusted Nest target separately. The tile’s heating indicator continues to reflect actual equipment activity; humidity remains the thermostat’s humidity reading.
+
+If the rule is paused, disabled, restoring control, awaiting a manual or scheduled Nest target, or lacks usable readings, Apple Home shows Nest’s actual temperature and target. Changing that native target does not resume a paused rule. Cooling, Auto/range and Eco also use native readings and controls. The accessory identity stays the same, so existing rooms and scenes are retained; temperature automations use whichever values the tile currently represents.
 
 ### Change Eco from the overview
 

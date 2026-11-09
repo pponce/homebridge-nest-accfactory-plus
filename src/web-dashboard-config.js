@@ -16,8 +16,9 @@ const DEVICE_FIELDS = [
   'scheduleTimeZone',
   'heatingType',
   'heatingResponseEnabled',
+  'homeKitRoomTemperature',
 ];
-const bools = ['eveHistory', 'humiditySensor', 'ecoSwitch', 'fanPresetSwitches', 'heatingResponseEnabled'];
+const bools = ['eveHistory', 'humiditySensor', 'ecoSwitch', 'fanPresetSwitches', 'heatingResponseEnabled', 'homeKitRoomTemperature'];
 const object = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const revision = (bytes) => crypto.createHash('sha256').update(bytes).digest('hex');
 export class DashboardConfigError extends Error {
@@ -70,6 +71,7 @@ function runtimeSignature(block) {
       delete device.scheduleTimeZone;
       delete device.heatingType;
       delete device.heatingResponseEnabled;
+      delete device.homeKitRoomTemperature;
     }
   }
   runtime.name ??= 'Nest Climate Cntrl';
