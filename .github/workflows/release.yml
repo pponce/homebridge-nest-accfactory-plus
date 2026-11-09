@@ -69,6 +69,12 @@ jobs:
       - name: "${{ steps.browser.outputs.detail }}"
         if: always() && steps.browser.outcome != 'skipped'
         run: test '${{ steps.browser.outcome }}' = 'success'
+      - name: Retain dashboard screenshots for release review
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-dashboard-review
+          path: ${{ runner.temp }}/climate-dashboard-review
   release:
     needs: [test, dashboard-browser]
     runs-on: ubuntu-latest

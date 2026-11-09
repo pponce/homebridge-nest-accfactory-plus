@@ -102,6 +102,10 @@ try {
     } else { code = 404; body = { error: 'Unknown fixture endpoint' }; }
     await route.fulfill({ status: code, contentType: 'application/json', body: JSON.stringify(body) });
   });
+  const refreshDashboard = async () => {
+    await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+    await page.waitForFunction(() => !document.getElementById('refresh-status').disabled);
+  };
   await page.goto('http://127.0.0.1:' + server.address().port + '/#rules');
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).waitFor();
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).check();
@@ -113,7 +117,7 @@ try {
   await dialog.getByRole('button', { name: 'Keep current settings', exact: true }).click();
   await page.waitForFunction(() => !document.getElementById('confirm-dialog').open && document.getElementById('save').disabled);
   assert.equal(requests.length, 0, 'Cancelling setup must send no sensor command');
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   assert.equal(await dialog.isVisible(), false, 'Polling must not reopen the confirmation');
   await page.locator('#rule-runtime').getByRole('button', { name: 'Prepare Nest for group', exact: true }).click();
   await page.keyboard.press('Escape');
@@ -124,7 +128,7 @@ try {
   assert.deepEqual(requests, [{ id: 'mixed', action: 'prepareSensors', confirmation: 'confirmed-native-required' }]);
   assert.equal(await page.locator('#rule-runtime').getByRole('button', { name: 'Prepare Nest for group', exact: true }).count(), 0);
   phase = 'held';
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   await page.locator('#rule-runtime').getByRole('button', { name: 'Restore Nest sensor settings', exact: true }).click();
   await dialog.getByRole('button', { name: 'Keep current settings', exact: true }).click();
   assert.equal(requests.length, 1, 'Cancelling restoration must send no command');
@@ -154,7 +158,7 @@ try {
   assert.equal(await page.locator('#rule-runtime').getByRole('button', { name: 'Prepare Nest for group', exact: true }).count(), 0);
   assert.match(await page.locator('#rule-preview').innerText(), /confirmed built-in Nest temperature source/);
   phase = 'required'; rejectNext = true;
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   await page.locator('#rule-runtime').getByRole('button', { name: 'Prepare Nest for group', exact: true }).click();
   await dialog.getByRole('button', { name: 'Prepare thermostat', exact: true }).click();
   await page.locator('#notice').getByText('Nest sensor settings changed. Refresh and review the new setup.', { exact: true }).waitFor();
@@ -167,7 +171,7 @@ try {
   diagnosticStates = [{ ...settings, rcsControlMode: undefined },
     { ...settings, rcsControlMode: 'RCS_CONTROL_MODE_UNSPECIFIED', activeRcsSelection: remote }];
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   const downstairs = page.getByRole('combobox', { name: 'Temperature controlled by for Downstairs Nest', exact: true });
   const upstairs = page.getByRole('combobox', { name: 'Temperature controlled by for Upstairs Nest', exact: true });
   assert.equal(await downstairs.locator('option:checked').textContent(), 'Thermostat sensor');
@@ -190,19 +194,19 @@ try {
   assert.doesNotMatch(text, /PRIVATE-|fixture-csrf|resourceId|signature|rcsControlSchedule/);
   assert.ok(requestMethods.slice(methodsBefore).every((method) => method === 'GET'), 'Diagnostic download must only read status');
   diagnosticStates = [{ ...settings, associatedRcsSensors: undefined }, { ...settings, activeRcsSelection: undefined }];
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   assert.equal(await downstairs.locator('option:checked').textContent(), 'Thermostat sensor');
   assert.equal(await upstairs.locator('option:checked').textContent(), 'Current sensor not reported');
   diagnosticStates = [settings, { ...settings, activeRcsSelection: remote, associatedRcsSensors: [] }];
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   assert.equal(await downstairs.isDisabled(), false, 'Supported native selection remains usable');
   assert.equal(await upstairs.isDisabled(), true, 'An unassociated selection never enables writes');
   diagnosticStates = [{ ...settings, sensorSelection: {} }, { ...settings, multiSensorSettings: { multiSensorEnabled: true } }];
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   assert.equal(await downstairs.locator('option:checked').textContent(), 'Current sensor not reported');
   assert.equal(await upstairs.locator('option:checked').textContent(), 'Current sensor not reported');
   diagnosticStates = [{ ...settings, rcsControlMode: undefined }, { ...settings, activeRcsSelection: remote, rcsControlMode: undefined }];
-  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await refreshDashboard();
   await page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   const output = process.env.REVIEW_OUTPUT_DIR || path.join(root, 'maintenance/review/sensor-selection');
