@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { DATA_SOURCE } from '../src/consts.js';
+import { sensorControlState, sensorControlUpdate } from '../src/nest-sensor-control.js';
 
 const source = await fs.readFile(new URL('../src/system.js', import.meta.url), 'utf8');
 const begin = source.indexOf('  async #set(');
@@ -36,11 +37,12 @@ function setup() {
     'raw',
     'crypto',
     'DATA_SOURCE',
+    'sensorControlUpdate',
     'return new class { #connections = new Map([["A",connection]]); #rawData = raw; climateWrites = new Map();' +
       'run(values, origin) { return this.#set("A","T",values, origin); }' +
       source.slice(begin, end) +
       '};',
-  )(connection, raw, crypto, DATA_SOURCE);
+  )(connection, raw, crypto, DATA_SOURCE, sensorControlUpdate);
   return { calls, raw, connection, host };
 }
 test('Eco uses per-device resource commands with explicit manual/inactive modes', async () => {
@@ -64,6 +66,66 @@ test('sensor selection writes the associated thermostat and preserves other sett
   await f.host.run({ temperature_sensor: '' });
   assert.deepEqual(f.calls[1][3].batchUpdateStateRequest[0].state.value.activeRcsSelection, { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' });
   await assert.rejects(f.host.run({ temperature_sensor: 'FOREIGN' }), AggregateError);
+  assert.equal(f.calls.length, 2);
+});
+test('native sensor hold is one guarded trait write and does not optimistically modify observed state', async () => {
+  const f = setup();
+  const settings = f.raw.T.value.remote_comfort_sensing_settings;
+  settings.rcsControlMode = 'RCS_CONTROL_MODE_SCHEDULE';
+  settings.activeRcsSelection = { rcsSourceType: 'RCS_SOURCE_TYPE_SINGLE_SENSOR', activeRcsSensor: { resourceId: 'S' } };
+  settings.rcsControlSchedule = { intervals: { 0: { rcsSelection: structuredClone(settings.activeRcsSelection), startSecondsInDay: 0 } } };
+  const before = structuredClone(settings);
+  const state = sensorControlState(settings);
+  await f.host.run({ native_sensor_control: { action: 'hold', expected: state.signature } }, { automation: true });
+  assert.equal(f.calls.length, 1);
+  const updates = f.calls[0][3].batchUpdateStateRequest;
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].traitRequest.resourceId, 'T');
+  assert.equal(updates[0].traitRequest.traitLabel, 'remote_comfort_sensing_settings');
+  const held = updates[0].state.value;
+  assert.equal(held.rcsControlMode, 'RCS_CONTROL_MODE_HOLD');
+  assert.deepEqual(held.rcsControlSchedule, before.rcsControlSchedule);
+  assert.deepEqual(held.associatedRcsSensors, before.associatedRcsSensors);
+  assert.deepEqual(settings, before);
+  // A later cloud observation, not command acceptance, supplies the held state.
+  f.raw.T.value.remote_comfort_sensing_settings = structuredClone(held);
+  await f.host.run(
+    { native_sensor_control: { action: 'restore', expected: state.holdSignature, control: state.control } },
+    { automation: true },
+  );
+  assert.deepEqual(f.calls[1][3].batchUpdateStateRequest[0].state.value, before);
+});
+test('native sensor changes reject concurrent settings edits and API denial', async () => {
+  const f = setup();
+  const settings = f.raw.T.value.remote_comfort_sensing_settings;
+  settings.rcsControlMode = 'RCS_CONTROL_MODE_SCHEDULE';
+  const state = sensorControlState(settings);
+  settings.rcsControlSchedule = { intervals: {} };
+  await assert.rejects(f.host.run({ native_sensor_control: { action: 'hold', expected: state.signature } }), AggregateError);
+  assert.equal(f.calls.length, 0);
+  f.connection.grpcTransport.command = async () => ({ status: 7, data: [] });
+  await assert.rejects(
+    f.host.run({ native_sensor_control: { action: 'hold', expected: sensorControlState(settings).signature } }),
+    AggregateError,
+  );
+  assert.equal(settings.rcsControlMode, 'RCS_CONTROL_MODE_SCHEDULE');
+});
+test('native sensor control requires Google and preserves manual thermostat precedence', async () => {
+  const f = setup();
+  f.raw.T.value.remote_comfort_sensing_settings.rcsControlMode = 'RCS_CONTROL_MODE_HOLD';
+  let manual = 0;
+  f.host.automation = { manualThermostat: async () => {
+    manual += 1;
+  } };
+  const command = {
+    native_sensor_control: { action: 'hold', expected: sensorControlState(f.raw.T.value.remote_comfort_sensing_settings).signature },
+  };
+  await f.host.run(command, { automation: true });
+  assert.equal(manual, 0);
+  await f.host.run(command);
+  assert.equal(manual, 1);
+  f.raw.T.source = DATA_SOURCE.NEST;
+  await assert.rejects(f.host.run(command, { automation: true }), AggregateError);
   assert.equal(f.calls.length, 2);
 });
 test('Eco rejects unavailable capability, malformed values and API denial', async () => {
@@ -162,3 +224,4 @@ test('preset switch awaits command, resets after acceptance, and propagates erro
   await assert.rejects(service.onSet(true), /failed/);
   await assert.rejects(f.device.runFanPreset(999));
 });
+

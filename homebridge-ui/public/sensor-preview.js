@@ -86,7 +86,10 @@ export function previewGroup({ sources, selected, desired, thermostat, now = Dat
   }
   const roomTemperature = chosen.reduce((sum, source) => sum + source.temperature, 0) / chosen.length;
   const info = { roomTemperature, count: chosen.length, measurementAgeKnown: chosen.every((source) => Number.isFinite(source.measuredAt)) };
-  if (thermostat?.data?.active_rcs_sensor !== '' || !Number.isFinite(thermostat.data.physical_temperature)) {
+  const control = thermostat?.data?.native_sensor_control;
+  if (thermostat?.data?.active_rcs_sensor !== '' ||
+      (control && control.reported !== false && (!control.supported || control.source !== 'thermostat')) ||
+      !Number.isFinite(thermostat.data.physical_temperature)) {
     return { ...info, state: 'paused', reason: 'Preview requires a confirmed built-in Nest temperature source.' };
   }
   const native = sources.find((source) => source.id === 'nest:' + thermostat.id);
@@ -110,3 +113,4 @@ export function previewGroup({ sources, selected, desired, thermostat, now = Dat
     reason: 'Read-only estimate. No thermostat changes are sent; device limits and control behavior still require validation.',
   };
 }
+

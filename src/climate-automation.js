@@ -8,6 +8,7 @@ import { sensorSources, presenceSources } from '../homebridge-ui/public/sensor-p
 import { scheduleTimeZone } from '../homebridge-ui/public/climate-utils.js';
 import { normalizeFanRule } from '../homebridge-ui/public/fan-speed.js';
 import { runFanSpeed, releaseFanSpeed, validSpeedLease, prepareFanRules, handoffFanLease } from './fan-speed-control.js';
+import { TemperatureSensorSetup, nativeSensorAllowsHeating } from './temperature-sensor-setup.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
@@ -111,6 +112,7 @@ export class ClimateAutomation {
     this.rules = [];
     this.stopping = false;
     this.heatingResponse = new HeatingResponse({ directory, now });
+    this.sensorSetup = new TemperatureSensorSetup(this);
   }
 
   async start({ schedule = true } = {}) {
@@ -167,11 +169,13 @@ export class ClimateAutomation {
         }
         this.fanOverrides = new Map(data.fanOverrides);
       }
+      this.sensorSetup.load(data.sensorSetups);
     } catch (error) {
       if (error.code !== 'ENOENT') {
         this.states.clear();
         this.leases.clear();
         this.fanOverrides.clear();
+        this.sensorSetup.leases.clear();
         this.recoveryRequired = true;
         this.error = 'Saved automation state could not be read. Review equipment and Resume each rule.';
       }
@@ -194,7 +198,8 @@ export class ClimateAutomation {
   }
 
   async persist() {
-    const bytes = JSON.stringify({ version: 1, states: [...this.states], leases: [...this.leases], fanOverrides: [...this.fanOverrides] });
+    const bytes = JSON.stringify({ version: 1, states: [...this.states], leases: [...this.leases],
+      fanOverrides: [...this.fanOverrides], sensorSetups: this.sensorSetup.entries() });
     const operation = this.saving.then(async () => {
       const temporary = path.join(this.directory, 'automation-' + crypto.randomUUID() + '.tmp');
       let file;
@@ -241,8 +246,10 @@ export class ClimateAutomation {
         fault: state.fault,
         override: state.override,
         lastAction: state.lastAction,
+        sensorSetup: this.sensorSetup.status(state.rule),
       })),
       pendingRestorations: [...this.leases.values()].filter((lease) => lease.restoring).length,
+      sensorSetups: this.sensorSetup.snapshot(),
     };
   }
 
@@ -340,6 +347,7 @@ export class ClimateAutomation {
       }
     }
     this.refreshSnapshot();
+    await this.sensorSetup.observe();
     await this.observeHeating();
     this.presence?.sync(this.rules.filter((rule) => rule.kind === 'presence' && rule.enabled));
     // Persist configuration intent before permitting any side effects.
@@ -372,7 +380,8 @@ export class ClimateAutomation {
       if (!state.rule.enabled) {
         state.phase = 'disabled';
         state.reason = 'Rule is disabled.';
-        if (!currentIds.has(state.rule.id) && ![...this.leases.values()].some((lease) => lease.owner === state.rule.id)) {
+        if (!currentIds.has(state.rule.id) && ![...this.leases.values()].some((lease) => lease.owner === state.rule.id) &&
+            !this.sensorSetup.owns(state.rule.id)) {
           this.states.delete(state.rule.id);
         }
         continue;
@@ -430,7 +439,8 @@ export class ClimateAutomation {
               room !== null &&
               data.hvac_mode === 'heat' &&
               data.eco_mode === false &&
-              data.active_rcs_sensor === '' &&
+              nativeSensorAllowsHeating(data) &&
+              this.sensorSetup.permits(rule) &&
               ['heating', 'off'].includes(data.hvac_state) &&
               data.can_heat !== false,
             room,
@@ -613,10 +623,19 @@ export class ClimateAutomation {
       state.reason = 'Thermostat connection unavailable. Nest may retain its last target.';
       return;
     }
+    if (!this.sensorSetup.permits(rule)) {
+      state.phase = 'waiting';
+      state.reason = this.sensorSetup.status(rule)?.reason ||
+        'Another rule owns the native Nest sensor setup. Restore its sensor settings before continuing.';
+      if (lease) {
+        await this.release(key, lease);
+      }
+      return;
+    }
     if (
       device.data.hvac_mode !== 'heat' ||
       device.data.eco_mode !== false ||
-      device.data.active_rcs_sensor !== '' ||
+      !nativeSensorAllowsHeating(device.data) ||
       device.data.can_heat === false ||
       device.data.temperature_lock === true
     ) {
@@ -703,7 +722,8 @@ export class ClimateAutomation {
     if (state.paused || this.stopping) {
       return;
     }
-    await this.dashboard.setAutomationTarget(rule.thermostatId, proposed, lease.before, () => !state.paused && !this.stopping);
+    await this.dashboard.setAutomationTarget(rule.thermostatId, proposed, lease.before,
+      () => !state.paused && !this.stopping && this.sensorSetup.permits(rule));
     state.lastAction = { at: this.now(), value: proposed, message: 'Heating target accepted; awaiting device feedback.' };
     state.phase = 'waiting';
   }
@@ -874,7 +894,7 @@ export class ClimateAutomation {
       lease.kind === 'temperature' &&
       (device.data.hvac_mode !== 'heat' ||
         device.data.eco_mode !== false ||
-        device.data.active_rcs_sensor !== '' ||
+        !nativeSensorAllowsHeating(device.data) ||
         device.data.temperature_lock === true)
     ) {
       this.leases.delete(key);
@@ -945,8 +965,18 @@ export class ClimateAutomation {
 
   control(payload) {
     return this.serialize(async () => {
-      if (this.stopping || !payload || Object.keys(payload).some((key) => !['id', 'action', 'minutes'].includes(key))) {
+      if (this.stopping || !payload || Object.keys(payload).some((key) => !['id', 'action', 'minutes', 'confirmation'].includes(key))) {
         throw new Error('Invalid automation command.');
+      }
+      if (['prepareSensors', 'restoreSensors'].includes(payload.action)) {
+        await this.evaluate();
+        const state = this.states.get(payload.id);
+        if (!state || state.rule.kind !== 'temperature') {
+          throw new DashboardConfigError('Select a saved temperature rule.');
+        }
+        await this.sensorSetup.action(state, payload.action, payload.confirmation);
+        await this.evaluate();
+        return this.snapshot();
       }
       const state = this.states.get(payload.id);
       if (!state?.rule.enabled || !['pause', 'resume', 'home', 'away'].includes(payload.action)) {
@@ -1010,3 +1040,4 @@ export class ClimateAutomation {
     await this.heatingResponse.persist(true);
   }
 }
+

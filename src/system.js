@@ -67,6 +67,7 @@ import { WebDashboard } from './web-dashboard.js';
 import { ClimateAutomation } from './climate-automation.js';
 import { ClimatePresence } from './climate-presence.js';
 import { rememberCachedIdentity } from './identity.js';
+import { sensorControlUpdate } from './nest-sensor-control.js';
 
 // Define constants
 import {
@@ -980,9 +981,10 @@ export default class NestAccfactory {
     if (
       !origin?.automation &&
       values &&
-      ['target_temperature', 'target_temperature_low', 'target_temperature_high', 'hvac_mode', 'eco_mode', 'temperature_sensor'].some(
-        (key) => Object.hasOwn(values, key),
-      )
+      [
+        'target_temperature', 'target_temperature_low', 'target_temperature_high', 'hvac_mode',
+        'eco_mode', 'temperature_sensor', 'native_sensor_control',
+      ].some((key) => Object.hasOwn(values, key))
     ) {
       await this.automation?.manualThermostat(nest_google_device_uuid);
     }
@@ -1037,6 +1039,10 @@ export default class NestAccfactory {
         if (key === 'uuid') {
           // We don't do anything with the key containing the uuid
           continue;
+        }
+
+        if (key === 'native_sensor_control' && this.#rawData[nest_google_device_uuid].source !== DATA_SOURCE.GOOGLE) {
+          throw new Error('Automatic Nest sensor setup requires the Google thermostat connection');
         }
 
         if (this.#rawData?.[nest_google_device_uuid]?.source === DATA_SOURCE.GOOGLE && connection.grpcTransport !== undefined) {
@@ -1120,6 +1126,15 @@ export default class NestAccfactory {
               value === ''
                 ? { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' }
                 : { rcsSourceType: 'RCS_SOURCE_TYPE_SINGLE_SENSOR', activeRcsSensor: { resourceId: value } };
+          }
+
+          if (key === 'native_sensor_control') {
+            const settings = this.#rawData[nest_google_device_uuid].value?.remote_comfort_sensing_settings;
+            setUpdateTrait(
+              'remote_comfort_sensing_settings',
+              'type.nestlabs.com/nest.trait.hvac.RemoteComfortSensingSettingsTrait',
+              sensorControlUpdate(settings, value),
+            );
           }
 
           if (
@@ -2112,3 +2127,4 @@ export default class NestAccfactory {
     return [];
   }
 }
+

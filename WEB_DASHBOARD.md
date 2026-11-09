@@ -48,7 +48,7 @@ For example, **21 °C = 69.8 °F** for a target, while a **1 °C turn-off gap = 
 
 ## Try your first rules
 
-Create each rule with **Enable automatic execution** off to inspect its inputs first. Turning it on and selecting **Save changes** starts that rule without a bridge restart. The **Execution status** panel reports the running engine; **Current signals · preview only** is a separate snapshot of the editor's inputs.
+Create each rule with **Enable automatic execution** off to inspect its inputs first. Turning it on and selecting **Save changes** enables that rule without a bridge restart. It starts when its required inputs and thermostat setup are ready. The **Execution status** panel reports the running engine; **Current signals · preview only** is a separate snapshot of the editor's inputs.
 
 The engine checks rules approximately every **15 seconds**, including when no browser is open. Slow bridge responses can extend this interval. Motion inputs are polled, so very short pulses between polls may be missed. Sensors that maintain an occupancy state are useful alongside motion sensors.
 
@@ -68,13 +68,13 @@ Discovery records when a value was read, which may differ from when the sensor m
 
 **Goal:** use the temperatures in the occupied rooms to guide a Nest thermostat's heating target.
 
-1. On **Overview**, confirm that the thermostat is online and that **Temperature controlled by** is **Thermostat sensor**. If needed, select it and apply the change. Use **Heat** mode and turn **Eco off** through your normal Nest controls. The engine does not change modes or native sensor selection for you.
+1. On **Overview**, confirm that the thermostat is online. Use **Heat** mode and turn **Eco off** through your normal Nest controls. Nest must use its built-in thermostat sensor while a temperature group controls heating. Mixed groups can offer the assisted sensor setup described below; other groups require this selection through your normal Nest controls.
 2. Open **Settings → your thermostat → Heating response & tuning** and check **Nest schedule time zone**. **Automatic** uses the named time zone reported by the thermostat, or its paired Nest home. If Nest has not reported one, choose a zone such as **Pacific Time — Los Angeles** and save before enabling a group that uses a Nest weekly schedule.
 3. Open **Climate rules → Temperature → Create temperature group**, or use **+**. Name it **Downstairs comfort** and select the thermostat serving those rooms.
 4. Enter your target in **Desired room temperature**, using the units shown beside the field. For example, enter **21 °C** or **69.8 °F**. Live heating targets must be between **9 and 32 °C (48.2–89.6 °F)**.
 5. Choose **Equal average of selected sensors** and select two or more inputs. A Nest living-room sensor at **20 °C** plus a Homebridge dining-room sensor at **22 °C** averages **21 °C**. Nest-only, other Homebridge-only and mixed groups are supported. For a single room, choose **One selected sensor** and select exactly one input.
 6. Review **Maximum target adjustment** and **Minimum update interval (minutes)**. Defaults are **1.5 °C / 2.7 °F** and **5 minutes**; a **0.5 °C / 0.9 °F** adjustment limit is a useful starting point for a small, supervised trial.
-7. Turn on **Enable automatic execution** and select **Save changes**. Watch **Execution status** for the group reading, desired room target, physical Nest target and command feedback. It can take a polling cycle and device feedback for a change to appear.
+7. Turn on **Enable automatic execution** and select **Save changes**. If a group mixes Nest room sensors with other Homebridge temperature sensors and needs native sensor setup, review the in-page confirmation. **Prepare thermostat** authorizes the sensor changes; **Keep current settings** leaves the group waiting. Watch **Execution status** for sensor confirmation, the group reading, desired room target, physical Nest target and command feedback. It can take a polling cycle and device feedback for a change to appear.
 8. Confirm the target on the physical thermostat or in Nest. Use **Pause rule** to finish the trial. The engine restores its previous target only while it still owns that setting and Nest remains in the same control context.
 
 The heating controller starts with:
@@ -90,6 +90,16 @@ It limits that adjustment, rounds on the device's Celsius/Fahrenheit grid, and k
 Only one enabled group can control a thermostat. A group does not create an independent physical HVAC zone or pair third-party devices as native Nest sensors. This heating pilot does not compensate in Cool or Heat/Cool range mode and does not provide weighted or scheduled groups.
 
 Change the **desired room temperature in Climate rules**. Apple Home continues to show Nest's physical target; changing it directly pauses the software group. Manual target/mode changes, Eco, a native sensor change, a lock or a Nest schedule boundary take priority. Select **Resume automatic control** when you want a new room-temperature hold.
+
+### Assisted Nest sensor setup for mixed groups
+
+A group that selects both a Nest room sensor and a temperature source from another Homebridge accessory can offer **Prepare Nest for group** in **Execution status**. The action is available only after the rule is saved and enabled, while the thermostat is connected and its native sensor controls are recognized.
+
+After you confirm, the plugin selects the built-in thermostat sensor and places native sensor selection on hold. The saved native sensor schedule and paired room sensors are preserved. Nest room sensors remain inputs to the group average. This action does not change the weekly temperature schedule, Heat/Cool mode or Eco. The heating rule waits for fresh Nest feedback confirming the requested sensor setup before adjusting the target.
+
+To return to native sensor control, select **Restore Nest sensor settings** in the rule’s execution panel or on the thermostat’s **Overview** card. After confirmation, the group pauses, restores any heating target it still controls, and then restores the saved native sensor selection and schedule mode. The Overview action remains available after a group is disabled or deleted. Restoration requires the current sensor settings to match the setup made by the group; subsequent manual Nest changes take priority.
+
+If sensor control is unavailable, unknown, or uses an unsupported multi-sensor configuration, the dashboard explains the limitation and keeps automatic setup unavailable. Mixed groups require recognized feedback for both the built-in sensor and native sensor hold before heating can start. A manual selection in the Nest app still needs that supported feedback. **Execution status** distinguishes accepted commands from confirmed device feedback. Confirm the thermostat’s response in the Nest app during the initial trial. Polling does not open setup confirmations, and cancelling a confirmation sends no sensor command.
 
 ### Room-fan example
 
@@ -318,3 +328,4 @@ If direct restart is unavailable, the notice explains that the child bridge must
 The Nest occupancy input represents Nest's Home/Away decision. When the same accessory is also discovered through Homebridge, the source picker shows one Nest input using the accessory identity. Sensors with the same display name but different identities remain separate. Existing rules that selected the Homebridge copy continue to resolve that input.
 
 Each enabled Home presence rule exposes one combined occupancy sensor, named after the rule. Its output is excluded from the input picker to prevent feedback. The combined sensor is separate from Nest's native Home/Away state and does not change Google's Home/Away or Eco settings.
+

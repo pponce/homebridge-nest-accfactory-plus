@@ -433,6 +433,22 @@ test('preview refuses missing, stale and invalid inputs and pauses for native so
   }
 });
 
+test('preview preserves confirmed built-in readings without an RCS trait and rejects reported unknown sensor control', () => {
+  const f = model();
+  const args = { ...f, selected: ['external'], desired: 21 };
+  f.thermostat.data.native_sensor_control = { reported: false, supported: false, source: 'unknown' };
+  assert.equal(previewGroup(args).state, 'preview');
+  f.thermostat.data.active_rcs_sensor = 'S';
+  assert.equal(previewGroup(args).state, 'paused');
+  f.thermostat.data.active_rcs_sensor = '';
+  f.thermostat.data.native_sensor_control = { reported: true, supported: false, source: 'unknown' };
+  assert.equal(previewGroup(args).state, 'paused');
+  f.thermostat.data.native_sensor_control = { reported: true, supported: true, source: 'remote' };
+  assert.equal(previewGroup(args).state, 'paused');
+  f.thermostat.data.native_sensor_control = { reported: true, supported: true, source: 'thermostat' };
+  assert.equal(previewGroup(args).state, 'preview');
+});
+
 test('speed discovery reads fresh RotationSpeed feedback and reports supported steps without leaking control identifiers', async (t) => {
   const f = await fixture(t, { minStep: 25 });
   const fan = (await f.access.refresh()).sources.find((source) => source.kind === 'fan');
@@ -516,3 +532,4 @@ test('legacy Fan services also use RotationSpeed while preserving boolean power 
   const last = f.requests.filter((request) => request.options.method === 'PUT').at(-1);
   assert.equal(JSON.parse(last.options.body).characteristics[0].value, false);
 });
+

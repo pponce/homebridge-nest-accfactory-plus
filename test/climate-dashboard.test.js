@@ -50,8 +50,33 @@ test('dashboard isolates non-climate resources and clears native sensor selectio
   f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: 'S' }, 'A');
   assert.equal(f.dashboard.snapshot().devices.find((d) => d.serial === 'T').data.active_rcs_sensor, 'S');
   f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: undefined }, 'A');
+  assert.equal(f.dashboard.snapshot().devices.find((d) => d.serial === 'T').data.active_rcs_sensor, undefined);
+  f.dashboard.update('T', 'Thermostat', { active_rcs_sensor: '' }, 'A');
   assert.equal(f.dashboard.snapshot().devices.find((d) => d.serial === 'T').data.active_rcs_sensor, '');
 });
+test('native sensor writes recheck capability, connectivity and unchanged settings when queued', async () => {
+  const accounts = [{ id: 'A', authorised: true, observing: true }];
+  const commands = [];
+  const dashboard = new ClimateDashboard('/tmp/unused-sensor-control', {
+    accounts: () => accounts,
+    command: async (...args) => commands.push(args),
+  });
+  const native = { supported: true, signature: 'observed' };
+  dashboard.update('T', 'Thermostat', { nest_google_device_uuid: 'T', online: true, native_sensor_control: native }, 'A');
+  const request = { action: 'hold', expected: 'observed' };
+  await assert.rejects(dashboard.setNativeSensorControl('missing', request), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(dashboard.setNativeSensorControl('T', { ...request, expected: 'stale' }), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(dashboard.setNativeSensorControl('T', request, () => false), { code: 'CLIMATE_CONFLICT' });
+  accounts[0].observing = false;
+  await assert.rejects(dashboard.setNativeSensorControl('T', request), { code: 'CLIMATE_CONFLICT' });
+  accounts[0].observing = true;
+  await dashboard.setNativeSensorControl('T', request);
+  assert.equal(commands.length, 1);
+  assert.equal(commands[0][2].guard(), true);
+  dashboard.update('T', 'Thermostat', { native_sensor_control: { ...native, signature: 'changed' } }, 'A');
+  assert.equal(commands[0][2].guard(), false);
+});
+
 test('configuration editor preserves legacy credentials, overrides and unknown fields', () => {
   const original = {
     google: { issuetoken: 'fixture-url', cookie: 'fixture-cookie' },
@@ -259,3 +284,4 @@ test('saved history survives restart without counting the stopped interval', asy
   assert.equal(second.ledger.previous.size, 0);
   await second.stop();
 });
+

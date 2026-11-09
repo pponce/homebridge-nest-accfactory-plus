@@ -57,6 +57,7 @@ import HomeKitDevice from '../HomeKitDevice.js';
 import { processSoftwareVersion, scaleValue, adjustTemperature, parseDurationToSeconds, buildDeviceDescription } from '../utils.js';
 import { buildMappedObject, createMappingContext } from '../translator.js';
 import { reportedScheduleTimeZone } from '../schedule-time-zone.js';
+import { sensorControlState } from '../nest-sensor-control.js';
 
 // Define constants
 import {
@@ -2169,6 +2170,13 @@ const THERMOSTAT_FIELD_MAP = {
   },
 
   // RCS / remote comfort sensor fields
+  native_sensor_control: {
+    google: {
+      fields: ['remote_comfort_sensing_settings'],
+      translate: ({ raw }) => sensorControlState(raw?.value?.remote_comfort_sensing_settings),
+    },
+  },
+
   active_rcs_sensor: {
     google: {
       fields: ['remote_comfort_sensing_settings'],
@@ -2318,6 +2326,7 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
         // Apply thermostat-specific post-map adjustments
         if (typeof mappedResult?.data === 'object' && mappedResult.data?.constructor === Object) {
+          mappedResult.data.native_sensor_control = sensorControlState(rawData[object_key]?.value?.remote_comfort_sensing_settings);
           Object.assign(mappedResult.data, reportedScheduleTimeZone(rawData, object_key));
           mappedResult.data.physical_temperature = mappedResult.data.current_temperature;
           // If an active remote temperature sensor is selected, use its temperature as the thermostat current temperature
@@ -2421,3 +2430,4 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
   return devices;
 }
+

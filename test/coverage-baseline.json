@@ -228,5 +228,16 @@
     "lines": 95,
     "branches": 95,
     "functions": 100
+  },
+  "src/nest-sensor-control.js": {
+    "lines": 100,
+    "branches": 100,
+    "functions": 100
+  },
+  "src/temperature-sensor-setup.js": {
+    "lines": 100,
+    "branches": 90,
+    "functions": 100
   }
 }
+

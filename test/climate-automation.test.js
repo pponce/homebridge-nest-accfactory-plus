@@ -7,6 +7,7 @@ import { ClimateAutomation, heatingTarget, automationSources } from '../src/clim
 import { ClimateDashboard } from '../src/climate-dashboard.js';
 import { validateRuleDrafts } from '../src/web-dashboard-config.js';
 import { fanState, speedCapabilities } from '../homebridge-ui/public/fan-speed.js';
+import { sensorControlState } from '../src/nest-sensor-control.js';
 
 const minute = 60000;
 const temperatureRule = {
@@ -81,6 +82,10 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
       can_heat: true,
       eco_mode: false,
       active_rcs_sensor: '',
+      native_sensor_control: sensorControlState({
+        rcsControlMode: 'RCS_CONTROL_MODE_HOLD', activeRcsSelection: { rcsSourceType: 'RCS_SOURCE_TYPE_BACKPLATE' },
+        associatedRcsSensors: [{ deviceId: { resourceId: 'S' } }], rcsControlSchedule: { intervals: {} },
+      }),
       schedules: {},
     },
     'A',
@@ -1099,3 +1104,4 @@ test('manual speed changes in last-setting mode block all rules and survive rest
   assert.equal(f.engine.fanOverrides.size, 0);
   assert.equal(f.engine.fanObservations.size, 0);
 });
+

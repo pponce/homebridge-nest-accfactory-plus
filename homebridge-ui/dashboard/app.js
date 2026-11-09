@@ -34,7 +34,7 @@ function icon(name) {
 }
 document.querySelectorAll('[data-icon]').forEach((node) => node.replaceChildren(icon(node.dataset.icon)));
 const state = {
-  session: null, envelope: null, config: null, dirty: false, saving: false, live: false, heating: null, restarting: false, restartMessage: '',
+  session: null, envelope: null, config: null, dirty: false, saving: false, live: false, heating: null, restarting: false, restartMessage: '', sensorSetupBusy: false,
   status: { accounts: [], devices: [] }, external: { sources: [], bridges: [] },
   page: 'overview', sourceFilter: 'all', ruleKind: 'temperature', ruleId: null, discovering: false,
 };
@@ -65,12 +65,13 @@ function toast(message) {
   clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false;
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, 6000);
 }
-function confirmAction(title, detail, accept, cancel = 'Keep editing') {
+function confirmAction(title, detail, accept, cancel = 'Keep editing', acceptStyle = 'danger') {
   const dialog = $('confirm-dialog');
   if (dialog.open) return Promise.resolve(false);
   $('confirm-title').textContent = title;
   $('confirm-detail').textContent = detail;
   $('confirm-accept').textContent = accept;
+  $('confirm-accept').className = 'button ' + acceptStyle;
   $('confirm-cancel').textContent = cancel;
   dialog.returnValue = 'cancel';
   return new Promise((resolve) => {
@@ -142,6 +143,7 @@ function markDirty() {
   $('save-detail').textContent = 'Saving applies enabled rules. Disabled rules remain drafts.'; $('save').disabled = state.saving;
   renderHeatingRecommendations();
   renderRestart();
+  document.querySelectorAll('.sensor-setup button').forEach((control) => { control.disabled = true; });
 }
 async function api(route, { method = 'GET', body, anonymous = false, timeout = 20000 } = {}) {
   const headers = { Accept: 'application/json' };
@@ -295,14 +297,24 @@ function renderThermostats() {
     }
     controls.append(actions);
     if (Array.isArray(data.linked_rcs_sensors)) {
+      const nativeControl = data.native_sensor_control;
+      const selectionAvailable = available && (!nativeControl || nativeControl.supported === true);
       const selection = el('div', undefined, 'source-control'); const label = el('label', 'Temperature controlled by'); const select = el('select');
       select.setAttribute('aria-label', 'Temperature controlled by for ' + (data.description || 'thermostat'));
       const builtin = el('option', 'Thermostat sensor'); builtin.value = ''; select.append(builtin);
       for (const id of data.linked_rcs_sensors) { const sensor = state.status.devices.find((entry) => entry.id === id); const option = el('option', sensor?.data?.description || 'Nest sensor'); option.value = id; select.append(option); }
-      select.value = data.active_rcs_sensor || ''; select.disabled = !available; label.append(select);
-      const apply = button('Apply', () => sendCommand(device, 'sensor', select.value, apply), 'button secondary'); apply.disabled = !available;
+      if (nativeControl && !nativeControl.supported) { const unknown = el('option', 'Current selection unavailable'); unknown.value = 'unavailable'; select.append(unknown); }
+      select.value = nativeControl && !nativeControl.supported ? 'unavailable' : data.active_rcs_sensor || ''; select.disabled = !selectionAvailable; label.append(select);
+      const apply = button('Apply', () => sendCommand(device, 'sensor', select.value, apply), 'button secondary'); apply.disabled = !selectionAvailable;
       apply.setAttribute('aria-label', 'Apply temperature source for ' + (data.description || 'thermostat')); selection.append(label, apply); controls.append(selection);
-      controls.append(el('p', 'Native Nest selection · its sensor schedule may replace this choice.', 'small-note'));
+      controls.append(el('p', nativeControl && !nativeControl.supported ? nativeControl.reason || 'Review native sensor selection in the Nest app.' : 'Native Nest selection · its sensor schedule may replace this choice.', 'small-note'));
+    }
+    for (const setup of state.status.automation?.sensorSetups || []) {
+      if (setup.thermostatId !== device.serial) continue;
+      const section = el('div', undefined, 'preview-box');
+      section.append(el('h4', 'Temperature group · ' + setup.name));
+      renderSensorSetup(section, setup.id, setup);
+      controls.append(section);
     }
     if (actions.childElementCount || controls.childElementCount > 1) card.append(controls);
     host.append(card);
@@ -685,8 +697,50 @@ function renderRuleEditor() {
   }, 'button danger')); host.append(footer); renderRulePreview();
 }
 async function ruleCommand(id, action) {
+  if (state.dirty || state.saving || state.sensorSetupBusy) return;
+  const current = state.status.automation?.rules?.find((entry) => entry.id === id);
+  if (action === 'resume' && current?.sensorSetup?.canPrepare) {
+    await sensorSetupAction(id, 'prepareSensors', current.sensorSetup);
+    return;
+  }
   try { state.status.automation = await api('/rules/command', { method: 'POST', body: { id, action, ...(['home', 'away'].includes(action) ? { minutes: 60 } : {}) } }); renderRulePreview(); }
   catch (error) { notice(error.message, 'danger'); }
+}
+async function sensorSetupAction(id, action, setup) {
+  const restoring = action === 'restoreSensors';
+  if (state.dirty || !state.live || state.sensorSetupBusy || !setup?.confirmation || !(restoring ? setup.canRestore : setup.canPrepare)) return;
+  const name = setup.thermostatName || 'this thermostat';
+  state.sensorSetupBusy = true;
+  try {
+    const confirmed = await confirmAction(
+      restoring ? 'Restore Nest sensor control?' : 'Prepare Nest for this temperature group?',
+      restoring
+        ? 'Pause this group and restore the saved sensor selection and sensor schedule mode for ' + name + '. Any heating target still controlled by the group is restored first. Restoration proceeds only while Nest’s sensor settings still match the group’s setup.'
+        : 'For ' + name + ', pause native sensor scheduling and select the built-in thermostat sensor. The saved sensor schedule is kept, and paired Nest room sensors remain available to this group. The group can start after Nest confirms the setup. Your temperature schedule, heating mode and Eco settings stay as configured. Use Restore Nest sensor settings when you want native sensor control again.',
+      restoring ? 'Restore sensor settings' : 'Prepare thermostat',
+      'Keep current settings',
+      'primary',
+    );
+    if (!confirmed || state.dirty || !state.live) return;
+    state.status.automation = await api('/rules/command', { method: 'POST', body: { id, action, confirmation: setup.confirmation } });
+    toast(restoring ? 'Restoration requested · check execution status' : 'Sensor setup requested · waiting for Nest confirmation');
+  } catch (error) { notice(error.message, 'danger'); }
+  finally { state.sensorSetupBusy = false; renderRulePreview(); renderThermostats(); }
+}
+function renderSensorSetup(host, id, setup) {
+  if (!setup) return;
+  const section = el('div', undefined, 'sensor-setup');
+  section.append(el('strong', 'Nest sensor setup'), el('p', setup.reason || 'Review the thermostat’s sensor control before using this group.'));
+  const actions = el('div', undefined, 'timer-buttons');
+  for (const [available, label, action] of [[setup.canPrepare, 'Prepare Nest for group', 'prepareSensors'], [setup.canRestore, 'Restore Nest sensor settings', 'restoreSensors']]) {
+    if (!available) continue;
+    const control = button(label, () => sensorSetupAction(id, action, setup));
+    control.disabled = state.dirty || state.saving || state.sensorSetupBusy || !state.live;
+    actions.append(control);
+  }
+  section.append(actions);
+  if (actions.childElementCount && state.dirty) section.append(el('p', 'Save or discard edits before changing Nest sensor settings.', 'small-note'));
+  host.append(section);
 }
 function renderRuleRuntime(rule) {
   const host = $('rule-runtime'); if (!host) return;
@@ -702,6 +756,7 @@ function renderRuleRuntime(rule) {
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
   if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
   if (current?.lastAction) host.append(el('p', current.lastAction.message + ' ' + new Date(current.lastAction.at).toLocaleTimeString()));
+  renderSensorSetup(host, rule.id, current?.sensorSetup);
   if (current?.enabled) {
     const actions = el('div', undefined, 'timer-buttons');
     for (const [label, action] of [[current.paused ? 'Resume automatic control' : 'Pause rule', current.paused ? 'resume' : 'pause'], ...(rule.kind === 'presence' ? [['Force Home · 1 hour', 'home'], ['Force Away · 1 hour', 'away'], ['Resume automatic presence', 'resume']] : [])]) {
@@ -788,18 +843,29 @@ async function save() {
   if (invalid) { invalid.reportValidity(); return; }
   const curveError = (state.config.rules.fans || []).filter((rule) => rule.enabled).map((rule) => fanSpeedError(normalizeFanRule(rule))).find(Boolean);
   if (curveError) { notice(curveError, 'danger'); return; }
+  const sensorSetupCandidates = (state.config.rules.temperature || []).filter((rule) => {
+    const previous = (state.envelope.config.rules.temperature || []).find((entry) => entry.id === rule.id);
+    return rule.enabled && (!previous?.enabled || previous.thermostatId !== rule.thermostatId ||
+      JSON.stringify([...(previous.sourceIds || [])].sort()) !== JSON.stringify([...(rule.sourceIds || [])].sort()));
+  }).map((rule) => rule.id);
   state.saving = true; $('save').disabled = true; $('discard').disabled = true; renderRestart();
   try {
     const envelope = await api('/config', { method: 'PUT', body: { revision: state.envelope.revision, config: state.config } });
     state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true;
     state.restartMessage = '';
-    notice(envelope.restartRequired ? 'Saved. Restart the child bridge to apply accessory settings.' : 'Saved. Enabled rules run automatically; disabled rules remain drafts.');
+    notice(envelope.restartRequired ? 'Saved. Restart the child bridge to apply accessory settings.' : 'Saved. Check execution status for running rules and any required setup. Disabled rules remain drafts.');
     renderAll(); toast(envelope.restartRequired ? 'Setup saved · child-bridge restart required' : 'Rules saved');
-    api('/status').then((status) => { state.status = status; renderLive(); }).catch(() => {});
+    try {
+      state.status = await api('/status'); state.live = true; renderLive();
+      for (const id of sensorSetupCandidates) {
+        const setup = state.status.automation?.rules?.find((entry) => entry.id === id)?.sensorSetup;
+        if (setup?.canPrepare) await sensorSetupAction(id, 'prepareSensors', setup);
+      }
+    } catch { /* The configuration was saved; live status can be refreshed separately. */ }
   } catch (error) {
     notice(error.status === 409 ? 'The configuration changed elsewhere. Your edits are still here, but nothing was saved. Discard to load the latest setup, then reapply your changes.' : error.message, error.status === 409 ? 'warning' : 'danger');
     $('save-title').textContent = error.status === 409 ? 'Newer configuration found' : 'Changes not saved';
-  } finally { state.saving = false; $('save').disabled = !state.dirty; $('discard').disabled = false; renderRestart(); }
+  } finally { state.saving = false; $('save').disabled = !state.dirty; $('discard').disabled = false; renderRestart(); renderRulePreview(); renderThermostats(); }
 }
 $('save').addEventListener('click', save);
 $('discard').addEventListener('click', async () => {
@@ -859,4 +925,5 @@ async function restartChildBridge() {
 $('restart-child').addEventListener('click', restartChildBridge);
 function renderAll() { renderLive(); renderSettings(); renderRules(); renderRestart(); }
 checkSession();
+
 

@@ -3,6 +3,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { nativeSensorAllowsHeating } from './temperature-sensor-setup.js';
 
 const FIELDS = [
   'description',
@@ -24,6 +25,7 @@ const FIELDS = [
   'fan_timer_speed',
   'active_rcs_sensor',
   'linked_rcs_sensors',
+  'native_sensor_control',
   'schedules',
   'schedule_mode',
   'schedule_time_zone',
@@ -152,9 +154,9 @@ export class ClimateDashboard {
     }
     const previous = this.devices.get(serial) ?? { serial, type, data: {} };
     const safe = Object.fromEntries(FIELDS.filter((key) => data[key] !== undefined).map((key) => [key, data[key]]));
-    // Sensor selection explicitly clears the previous sensor when returning to the backplate.
+    // An explicit empty selection means backplate; unknown selection must remain unknown.
     if (Object.hasOwn(data, 'active_rcs_sensor')) {
-      safe.active_rcs_sensor = data.active_rcs_sensor ?? '';
+      safe.active_rcs_sensor = data.active_rcs_sensor;
     }
     this.devices.set(serial, {
       ...previous,
@@ -162,6 +164,7 @@ export class ClimateDashboard {
       needsUpdate: previous.needsUpdate === true && data.hvac_state === undefined,
       id: data.nest_google_device_uuid ?? previous.id,
       lastUpdate: Date.now(),
+      nativeSensorRevision: (previous.nativeSensorRevision ?? 0) + (Object.hasOwn(data, 'native_sensor_control') ? 1 : 0),
       data: { ...previous.data, ...safe },
     });
     this.sample();
@@ -227,7 +230,7 @@ export class ClimateDashboard {
         device.data.online === true &&
         device.data.hvac_mode === 'heat' &&
         device.data.eco_mode === false &&
-        device.data.active_rcs_sensor === '' &&
+        nativeSensorAllowsHeating(device.data) &&
         device.data.temperature_lock !== true &&
         Number.isFinite(actual) &&
         Math.abs(actual - expected) < 0.15 &&
@@ -242,6 +245,24 @@ export class ClimateDashboard {
       throw error;
     }
     await this.command(this.devices.get(serial).id, { target_temperature_low: value }, { automation: true, guard: ready });
+  }
+
+  async setNativeSensorControl(serial, value, permitted = () => true) {
+    const ready = () => {
+      const device = this.devices.get(serial);
+      const account = this.accounts().find((entry) => entry.id === device?.account);
+      return (
+        permitted() && device?.type === 'Thermostat' && account?.authorised && account.observing &&
+        !device.needsUpdate && device.data.online === true && device.data.native_sensor_control?.supported === true &&
+        device.data.native_sensor_control.signature === value.expected
+      );
+    };
+    if (!ready()) {
+      const error = new Error('Nest sensor settings changed before the command.');
+      error.code = 'CLIMATE_CONFLICT';
+      throw error;
+    }
+    await this.command(this.devices.get(serial).id, { native_sensor_control: value }, { automation: true, guard: ready });
   }
 
   async control(payload) {
@@ -353,3 +374,4 @@ export class ClimateDashboard {
     }
   }
 }
+
