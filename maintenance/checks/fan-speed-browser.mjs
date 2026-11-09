@@ -129,7 +129,7 @@ try {
   const saved = async () => (await server.config.snapshot()).config.rules.fans;
   const save = async () => { await page.getByRole('button', { name: 'Save changes', exact: true }).click(); await page.waitForFunction(() => document.getElementById('save-bar').hidden); };
   const drag = async (name, target, after = false, cancel = false) => {
-    await page.locator('#rule-order-help').scrollIntoViewIfNeeded();
+    await page.locator('#rule-list').evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
     const handle = await row(name).locator('.rule-drag-handle').boundingBox();
     const destination = await row(target).boundingBox();
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
@@ -223,14 +223,16 @@ try {
   assert.equal(await page.locator('#save-bar').isHidden(), true, 'Viewing legacy order does not rewrite priorities');
   const touch = await page.context().newCDPSession(page);
   await touch.send('Emulation.setTouchEmulationEnabled', { enabled: true });
-  await page.locator('#rule-order-help').scrollIntoViewIfNeeded();
+  await page.locator('#rule-list').evaluate((node) => node.scrollIntoView({ block: 'center', behavior: 'instant' }));
   const touchStart = await row('Night breeze').locator('.rule-drag-handle').boundingBox();
   const touchEnd = await row('Cooling circulation').boundingBox();
   const touchX = touchStart.x + touchStart.width / 2;
+  const touchY = touchStart.y + touchStart.height / 2;
+  assert.equal(await page.evaluate(({ x, y }) => Boolean(document.elementFromPoint(x, y)?.closest('.rule-drag-handle')), { x: touchX, y: touchY }), true, 'Touch starts on a visible drag handle');
   await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: touchX, y: touchStart.y + touchStart.height / 2 }] });
   await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: touchX, y: touchEnd.y + 2 }] });
   await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  assert.deepEqual(await names(), ['Night breeze', 'Cooling circulation', 'Living room comfort']);
+  assert.deepEqual(await names(), ['Night breeze', 'Cooling circulation', 'Living room comfort'], 'Touch drag puts Night breeze first');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
   await save();
   await row('Night breeze').locator('.rule-item').click();

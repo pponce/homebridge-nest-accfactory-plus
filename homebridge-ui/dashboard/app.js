@@ -605,6 +605,8 @@ document.addEventListener('pointerup', (event) => {
 });
 document.addEventListener('pointercancel', (event) => { if (event.pointerId === fanDrag?.pointerId) cancelFanDrag(); });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && fanDrag) { event.preventDefault(); cancelFanDrag(); } });
+window.addEventListener('blur', cancelFanDrag);
+document.addEventListener('visibilitychange', () => { if (document.hidden) cancelFanDrag(); });
 function fanRuleRow(rule, index, count, item) {
   const row = el('div', undefined, 'fan-rule-row'); row.dataset.ruleId = rule.id;
   const handle = button('', () => {}, 'rule-drag-handle'); handle.append(icon('grip'));
@@ -721,7 +723,15 @@ function renderRuleEditor() {
   rulePickers = [];
   const host = $('rule-editor'); host.replaceChildren();
   const head = el('div', undefined, 'editor-header'); head.append(el('h3', { temperature: 'A temperature group', presence: 'A sense of home', fan: 'Air, when you want it' }[rule.kind]), el('span', rule.enabled ? 'Execution enabled' : 'Disabled draft', 'draft-chip')); host.append(head);
-  inputField(host, 'Rule name', rule.name, (value) => { rule.name = value; const active = $('rule-list').querySelector('[aria-pressed="true"] strong'); if (active) active.textContent = value; });
+  inputField(host, 'Rule name', rule.name, (value) => {
+    rule.name = value; const active = $('rule-list').querySelector('[aria-pressed="true"] strong'); if (active) active.textContent = value;
+    const row = active?.closest('.fan-rule-row');
+    if (row) {
+      const position = orderedFanRules().findIndex((entry) => entry.id === rule.id) + 1;
+      row.querySelector('.rule-drag-handle').setAttribute('aria-label', 'Reorder ' + value + ', position ' + position + ' of ' + rules('fan').length);
+      for (const [direction, label] of [['up', 'Move up'], ['down', 'Move down']]) row.querySelector('[data-reorder="' + direction + '"]').setAttribute('aria-label', label + ': ' + value);
+    }
+  });
   toggle(host, 'Enable automatic execution', rule.kind === 'presence' ? 'After saving, this rule publishes its combined Home/Away state as a separate Apple Home occupancy sensor. It does not change Google’s Home/Away or Eco settings.' : 'After saving, this rule can control the selected equipment. You can pause it below. Temperature and fan rules require Resume after a bridge restart.', rule.enabled, (value) => { rule.enabled = value; renderRules(); });
   if (rule.kind === 'temperature') {
     const target = editorSection(host, '01', 'Choose the room target', 'Choose the thermostat this rule will control and the temperature you want the selected rooms to reach.');
