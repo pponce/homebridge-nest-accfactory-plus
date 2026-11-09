@@ -12,6 +12,8 @@ import tempfile
 
 PROJECT = Path(__file__).resolve().parents[2]
 VERSION = json.loads((PROJECT / 'package.json').read_text())['version']
+CHANNEL = 'beta' if '-' in VERSION else 'latest'
+HELPER = 'update-checkout-and-publish-beta.sh' if CHANNEL == 'beta' else 'update-checkout-and-publish-release.sh'
 MOCK = r'''#!/usr/bin/env python3
 import json, os, pathlib, shutil, subprocess, sys
 name = pathlib.Path(sys.argv[0]).name
@@ -46,7 +48,7 @@ if name == 'curl':
             (root / 'release-requested').write_text('uploading')
             assets = []
         destination.write_text(json.dumps({'tag_name': 'v' + version, 'draft': scenario == 'github-bad-release',
-                                          'prerelease': True, 'assets': assets}))
+                                          'prerelease': '-' in version, 'assets': assets}))
         print('200', end=''); sys.exit(0)
     fallback = scenario in ['fallback-archive', 'fallback-checksum', 'download-failure', 'invalid-release', 'api-json']
     if url.startswith('https://github.com/') and fallback:
@@ -88,6 +90,7 @@ if name == 'npm':
         (root / 'published').write_text('yes')
         sys.exit(0)
     if args[0] == 'view' and args[2] == 'version':
+        assert args[1].endswith('@' + os.environ['PUBLISH_CHANNEL'])
         print(os.environ['PUBLISH_VERSION'])
         sys.exit(0)
     if args[0] == 'view':
@@ -143,12 +146,12 @@ def run_case(scenario):
             script.write_text(MOCK)
             script.chmod(0o755)
         env = dict(os.environ, HOME=str(home), PATH=str(bin_dir) + ':' + os.environ['PATH'],
-                   SSH_CONNECTION='198.51.100.10 12345 192.0.2.20 22', PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario, PUBLISH_VERSION=VERSION, REAL_GIT=shutil.which('git'))
+                   SSH_CONNECTION='198.51.100.10 12345 192.0.2.20 22', PUBLISH_FIXTURE=str(root), PUBLISH_SCENARIO=scenario, PUBLISH_VERSION=VERSION, PUBLISH_CHANNEL=CHANNEL, REAL_GIT=shutil.which('git'))
         release = checkout / f'maintenance/releases/v{VERSION}'
         if scenario == 'pending':
             release.mkdir(parents=True)
             (release / 'npm-upload-accepted').write_text('fixture accepted upload')
-        result = subprocess.run(['bash', str(PROJECT / 'maintenance/update-checkout-and-publish-beta.sh'),
+        result = subprocess.run(['bash', str(PROJECT / 'maintenance' / HELPER),
                                  *(['--github-release'] if scenario.startswith('github-') else [])],
                                 env=env, text=True, capture_output=True, timeout=45)
         calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
@@ -181,7 +184,7 @@ def run_case(scenario):
             assert f'rsync -P {subprocess.check_output(["id", "-un"], text=True).strip()}@192.0.2.20:' in result.stdout
         if scenario == 'success':
             assert (release / 'npm-upload-accepted').exists()
-            assert '--tag' in publishes[0] and publishes[0][publishes[0].index('--tag') + 1] == 'beta'
+            assert '--tag' in publishes[0] and publishes[0][publishes[0].index('--tag') + 1] == CHANNEL
         if scenario == 'artifacts':
             assert artifact.read_text() == 'retain this local artifact'
             assert '/maintenance/artifacts/' in (checkout / '.git/info/exclude').read_text()
@@ -218,5 +221,3 @@ with tempfile.TemporaryDirectory(prefix='publish-ignore-fixture-') as temp:
     result = git('merge', '--ff-only', '--no-overwrite-ignore', 'incoming', check=False)
     assert result.returncode != 0 and target.read_text() == 'retained local content'
     print('ignored artifact collision: passed')
-
-

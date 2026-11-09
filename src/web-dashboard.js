@@ -556,7 +556,9 @@ export class WebDashboard {
         if ([400, 409].includes(error.status)) {
           throw new DashboardConfigError(error.message, error.status);
         }
-        throw new DashboardConfigError('The temperature change could not be confirmed. Refresh and review the thermostat and rule status.', 503);
+        throw new DashboardConfigError(
+          'The temperature change could not be confirmed. Refresh and review the thermostat and rule status.', 503,
+        );
       }
       return;
     }

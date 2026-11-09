@@ -130,7 +130,7 @@ export async function checkTemperatureEditor(browser, base, output) {
     await page.emulateMedia({ colorScheme: 'dark' }); await page.screenshot({ path: path.join(output, 'temperature-room-dark.png'), fullPage: true });
     assert.deepEqual(errors, []);
     console.log('Temperature editor: room/native targets, C/F, range validation, polling drafts, stale controller, confirmation, timeout, rejection, lost response, cancellation and mobile layout passed.');
-  } catch (error) { error.message = 'Temperature editor [' + stage + ']: ' + error.message; throw error; }
+  } catch (error) { throw new Error('Temperature editor [' + stage + ']: ' + error.message.replaceAll('\n', ' ') + ' ' + JSON.stringify({ actual: error.actual, expected: error.expected }), { cause: error }); }
   finally { await page.close(); }
 
   // The Homebridge host renders the shared overview without temperature command controls.

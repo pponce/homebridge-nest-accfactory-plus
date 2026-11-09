@@ -1,30 +1,22 @@
-## v0.5.0-beta.5
+## v0.5.0
 
-- Offer three dashboard connection modes: direct HTTP, direct HTTPS with plugin certificate settings, and HTTPS through a local reverse proxy.
-- Let the proxy handle certificates and HTTP-to-HTTPS redirects while the dashboard uses HTTP on IPv4 loopback without reading or generating certificates.
-- Validate the public HTTPS origin and Host, retain secure session cookies and CSRF protection, and generate links without the internal port. Forwarded headers cannot change trust decisions.
-- Add reverse-proxy setup guidance and automated coverage for login, sessions, actions, settings, logout, and rejected requests.
+**Nest Climate Cntrl: room temperature groups, fan automation and a live climate dashboard.**
 
-## v0.5.0-beta.4
+- Adjust temperature directly on a standalone dashboard thermostat card using an inline editor with plus/minus controls, a numeric field, Apply and Cancel. Active climate rules edit the desired room temperature and show the adjusted Nest target separately. Native control and paused rules edit Nest heating/cooling targets, including both limits in Heat • Cool mode. Celsius and Fahrenheit are supported.
+- Temperature commands show the requested target while checking feedback for up to 30 seconds. Failed or unconfirmed commands show the last reported setting. Stop waiting dismisses the check without reversing a command already sent. Stale edits, unsupported modes, Eco, lock, offline devices and invalid target ranges are checked before dispatch.
+- Combine selected Nest and Homebridge temperature sensors using an equal or weighted average. Heating rules apply bounded target adjustments while retaining Nest's built-in control sensor. Confirmed built-in selection works when optional room-sensor scheduling metadata is absent. Missing or conflicting active-sensor feedback prevents compensation.
+- Manual Nest target changes move the group's desired temperature by the same increase or decrease by default. Each rule can instead pause after a manual change. The optional per-thermostat Apple Home room-temperature display shows the group reading and desired target; it defaults off. Direct room-target edits retain the group and its adjustment interval.
+- Previously active temperature and fan rules recover after a bridge restart once current readings and equipment checks pass. Explicit pauses remain paused. Pause after bridge restart is optional and defaults off. The overview distinguishes native control, active rules, waiting conditions and paused rules.
+- Run Homebridge room fans by temperature or Nest heating/cooling activity. Choose the last setting, a fixed speed or a bounded temperature-based speed curve. Order competing rules by dragging them, with keyboard controls also available. Manual fan overrides suspend automatic control until Resume.
+- Combine Nest Home/Away, motion and occupancy into a separate Climate presence accessory using any/all logic, motion holds and an Away delay. Timed Home/Away overrides are available; combined presence does not change Google's Home/Away or Eco state.
+- Review heating response and tuning recommendations for the selected heating type, with local observations, confidence and explicit Apply controls.
+- Homebridge Settings and the standalone dashboard share climate settings, source discovery, rule editors, help, previews and execution status. Temperature action editing appears only in the standalone dashboard. Eco commands use optimistic feedback with a bounded confirmation wait.
+- The optional dashboard supports direct HTTPS, direct HTTP or HTTPS through a local reverse proxy, with separate sign-in, authenticated commands, CSRF protection, responsive layouts and light/dark themes. Weekly schedules and observed runtime remain available.
+- Retain supported Nest thermostats, associated room sensors, Heat Links, Protect and native Home/Away, plus compatible legacy Google refresh-token authentication. Optional Apple Home Eco and HVAC fan timer switches default off.
 
-- Add optional HTTP dashboard access with visible unencrypted-password warnings and separate HTTP sessions.
-- Keep HTTPS as the default and document trusted certificates and hostname setup.
+Existing Nest Climate Cntrl installations update normally. Moving from Nest Accfactory or Plus requires a fresh Climate child bridge and Apple Home pairing; follow [Migration](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0/MIGRATION.md). This climate edition does not expose cameras, doorbells, floodlights, Yale locks or weather. See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0/WEB_DASHBOARD.md) for setup, controls and rule behavior.
 
-## v0.5.0-beta.3
-
-- Allow web dashboard passwords of 8–128 characters in server validation and Homebridge setup; existing passwords remain valid.
-- Update web setup guidance and cover the password boundaries in server and browser checks.
-- Preserve local maintenance artifacts during checkout updates and refuse to overwrite ignored files.
-
-## v0.5.0-beta.2 — Nest Climate Cntrl
-
-- Add an optional standalone HTTPS dashboard with a separate login, responsive desktop/phone layout, light/dark appearance, favicon and iOS Home Screen icon. See [web dashboard setup](WEB_DASHBOARD.md).
-- Add web settings editing with concurrent-change detection and inactive temperature, occupancy and room-fan rule drafts. Automatic rule execution is not included.
-- Add a custom settings dashboard with thermostat status, native sensor selection, schedules, runtime coverage and diagnostics.
-- Add optional Eco and momentary HVAC fan-preset switches, disabled by default.
-- Focus discovery on thermostats, sensors and Heat Links; retain Protect and Nest Home/Away. Camera, doorbell, floodlight-camera, Yale lock and weather exposure are removed; use upstream Nest Accfactory for those capabilities.
-- Change the package to `homebridge-nest-climate-cntrl` and platform to `NestClimateCntrl`. Moving from Nest Accfactory or Plus requires a fresh child bridge, Apple Home pairing and recreated accessory assignments; see [cutover instructions](MIGRATION.md). Existing Climate installations can update normally.
-- Retain compatible existing legacy Google refresh-token authentication.
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
 
 # Nest Accfactory Plus changelog
 

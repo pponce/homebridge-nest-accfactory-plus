@@ -11,8 +11,9 @@ import tempfile
 
 
 root = Path(__file__).resolve().parents[2]
-script = root / "maintenance/install-execution-beta.sh"
 version = json.loads((root / "package.json").read_text())["version"]
+script = root / ("maintenance/install-execution-beta.sh" if "-" in version else "maintenance/install-release.sh")
+label = "execution beta" if "-" in version else "release"
 subprocess.run(["bash", "-n", str(script)], check=True)
 
 with tempfile.TemporaryDirectory(prefix="climate-install-test-") as temporary:
@@ -103,8 +104,8 @@ fi
                                 env=env, text=True, capture_output=True, check=True)
         actual = calls.read_text().splitlines() if calls.exists() else []
         assert actual == expected_calls, (scenario, actual, result.stdout, result.stderr)
-        assert "=== Nest Climate execution beta update START ===" in result.stdout
-        assert "=== Nest Climate execution beta update END ===" in result.stdout
+        assert f"=== Nest Climate {label} update START ===" in result.stdout
+        assert f"=== Nest Climate {label} update END ===" in result.stdout
         assert "SHELL STILL OPEN" in result.stdout
         assert ("RESULT: SUCCESS" in result.stdout) == success, (scenario, result.stdout, result.stderr)
         print(f"PASS: {scenario}")
