@@ -1,3 +1,19 @@
+## v0.5.0-beta.11
+
+**Temperature-based speed for Homebridge room fans.**
+
+- Choose **Climate rules → Room fans → Run condition → Temperature-based speed**. Set a comfort target, separate start/stop gaps, minimum running speed, maximum speed, and the temperature gap for maximum speed. Selected temperature readings are averaged equally.
+- A linear curve increases airflow as the room gets warmer. For example, a 72 °F target can start at 74 °F/25%, reach 76 °F/50%, cap at 78 °F/75%, and release control at 72.5 °F. The comfort target does not change a thermostat target.
+- The editor previews the curve in Fahrenheit or Celsius and shows supported steps for each selected fan. The closest supported step is chosen within the configured limits; a 70% cap on a 25/50/75/100% fan therefore permits at most 50%.
+- Speed mode requires fresh, readable and writable Homebridge fan-speed control. A speed command is confirmed before a separate on command is sent when needed. Normal adjustments are spaced at least one minute apart, with small changes ignored except at curve limits. A reduced cap can lower an owned fan's speed immediately.
+- Manual power or speed changes pause the speed rule. When demand clears or control is released, fans started by the rule turn off; previously running fans return to their earlier speed within the cap. Failures affecting one fan retain restoration ownership for other fans already changed by the rule.
+
+Existing on/off and HVAC-follow rules retain their settings. After updating, refresh the dashboard and review and **Resume** enabled temperature/fan rules. Begin with one speed-capable fan and confirm its physical response. A rule's cap limits its commands; it does not restrict manual controls or the fan's internal behavior.
+
+See the [fan-speed setup guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.11/WEB_DASHBOARD.md#temperature-based-fan-speed).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.10
 
 **Schedule time zones, child-bridge restarts, and clear presence inputs.**
