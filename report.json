@@ -1,0 +1,21 @@
+{
+  "sourceCommit": "4ba99fb43f9d91d86edd16153c9f50722e38092d",
+  "sourceBranch": "feature/compact-navigation",
+  "fixtureDataOnly": true,
+  "checks": [
+    "collapsed embedded and mobile navigation",
+    "keyboard and pointer dismissal",
+    "theme collision and contrast",
+    "responsive layout and desktop sidebar",
+    "shared settings persistence"
+  ],
+  "screenshots": [
+    "navigation-embedded-desktop.png",
+    "navigation-embedded-dark.png",
+    "navigation-embedded-mobile.png",
+    "navigation-mobile.png",
+    "navigation-mobile-dark.png",
+    "overview-desktop.png",
+    "overview-mobile.png"
+  ]
+}
