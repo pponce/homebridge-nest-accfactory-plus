@@ -1,3 +1,17 @@
+## v0.5.0-beta.10
+
+**Schedule time zones, child-bridge restarts, and clear presence inputs.**
+
+- **Nest schedule time zone** offers Automatic detection and named choices in both configuration interfaces. Automatic uses the zone reported by the thermostat, or its paired Nest home. Manual selections take priority; the picker shows the detected value and source. Named zones handle daylight-saving changes.
+- Schedule previews, scheduled heating control and heating-history day counts use the same effective zone. Unknown zones require a manual choice when a Nest weekly schedule is present. A changed effective zone starts fresh heating evidence and pauses an active scheduled hold.
+- After saving accessory settings, **Restart child bridge** is available when Homebridge UI can identify and authorize this exact running Nest child bridge. The dashboard checks for reconnection and prompts you to sign in again. Pending edits must be saved or discarded first. Unavailable restart access offers guidance to restart through Homebridge.
+- Nest Home/Away appears once in the presence source picker when the same accessory is also discovered through Homebridge. Existing selections of that Homebridge copy remain supported. Each enabled Home presence rule exposes one combined occupancy output, excluded from its own input picker.
+- Temperature-rule guidance explains which thermostat is controlled and which readings contribute to the room average. The controlled thermostat is an optional input to that average.
+
+After updating, refresh the dashboard and review and **Resume** enabled temperature/fan rules. Fan rules support on/off control in this release. See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.10/WEB_DASHBOARD.md).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.9
 
 **Heating response & tuning for each thermostat.**
