@@ -192,6 +192,11 @@ export default class NestAccfactory {
             directory: this.webDashboard.directory,
             dashboard: this.dashboard,
             config: this.webDashboard.config,
+            onState: () => {
+              for (const tracked of this.#trackedDevices.values()) {
+                tracked.device?.updateClimateRoom?.();
+              }
+            },
             presence: new ClimatePresence(this.api, this.presenceAccessories, this.config?._bridge?.username ?? 'main'),
             log: this.log,
           });
@@ -899,6 +904,9 @@ export default class NestAccfactory {
                 }
 
                 let tempDevice = new deviceModule.class(this.cachedAccessories, this.api, deviceData);
+                if (deviceModule.class.TYPE === DEVICE_TYPE.THERMOSTAT) {
+                  tempDevice.getClimateRoom = () => this.automation?.homeKitRoom?.(serialNumber) ?? null;
+                }
                 await tempDevice.add({
                   hapAccessoryName: accessoryName,
                   hapCategory: getDeviceHKCategory(deviceModule.class.TYPE),
@@ -917,6 +925,7 @@ export default class NestAccfactory {
                 // Track this device once created
                 this.#trackedDevices.set(serialNumber, {
                   uuid: tempDevice.uuid,
+                  device: tempDevice,
                   nest_google_device_uuid: deviceData.nest_google_device_uuid,
                   type: deviceModule.class.TYPE, // Store type of device
                   source: undefined, // gets filled out later
@@ -978,15 +987,23 @@ export default class NestAccfactory {
   }
 
   async #set(uuid, nest_google_device_uuid, values, origin) {
+    if (Object.hasOwn(values ?? {}, 'climate_room_target')) {
+      if (origin?.automation || !this.automation?.setHomeKitRoomTarget ||
+          Object.keys(values).some((key) => !['uuid', 'climate_room_target'].includes(key))) {
+        throw new Error('Invalid room-temperature command.');
+      }
+      return this.automation.setHomeKitRoomTarget(nest_google_device_uuid, values.climate_room_target);
+    }
+    let manualTargetRequests;
     if (
       !origin?.automation &&
       values &&
       [
         'target_temperature', 'target_temperature_low', 'target_temperature_high', 'hvac_mode',
-        'eco_mode', 'temperature_sensor', 'native_sensor_control',
+        'eco_mode', 'temperature_sensor', 'native_sensor_control', 'temperature_lock',
       ].some((key) => Object.hasOwn(values, key))
     ) {
-      await this.automation?.manualThermostat(nest_google_device_uuid);
+      manualTargetRequests = await this.automation?.manualThermostat(nest_google_device_uuid, values);
     }
     const previous = this.climateWrites.get(nest_google_device_uuid) ?? Promise.resolve();
     const operation = previous
@@ -1001,7 +1018,16 @@ export default class NestAccfactory {
       });
     this.climateWrites.set(nest_google_device_uuid, operation);
     try {
-      return await operation;
+      const result = await operation;
+      if (manualTargetRequests?.length) {
+        await this.automation?.manualThermostatResult?.(manualTargetRequests, true);
+      }
+      return result;
+    } catch (error) {
+      if (manualTargetRequests?.length) {
+        await this.automation?.manualThermostatResult?.(manualTargetRequests, false);
+      }
+      throw error;
     } finally {
       if (this.climateWrites.get(nest_google_device_uuid) === operation) {
         this.climateWrites.delete(nest_google_device_uuid);

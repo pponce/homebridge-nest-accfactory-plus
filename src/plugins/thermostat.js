@@ -146,7 +146,8 @@ export default class NestThermostat extends HomeKitDevice {
     this.addCharacteristic(this.thermostatService, this.hap.Characteristic.CurrentTemperature, {
       props: { minStep: 0.5 },
       onGet: () => {
-        return Number.isFinite(Number(this.deviceData.current_temperature)) === true ? Number(this.deviceData.current_temperature) : null;
+        return this.climateRoomView()?.temperature ??
+          (Number.isFinite(Number(this.deviceData.current_temperature)) ? Number(this.deviceData.current_temperature) : null);
       },
     });
 
@@ -427,8 +428,12 @@ export default class NestThermostat extends HomeKitDevice {
         : this.hap.Characteristic.TemperatureDisplayUnits.FAHRENHEIT,
     );
 
-    if (deviceData.current_temperature !== undefined) {
-      this.thermostatService.updateCharacteristic(this.hap.Characteristic.CurrentTemperature, deviceData.current_temperature);
+    const room = this.climateRoomView(deviceData);
+    this.displayedRoomId = room?.ruleId;
+    if (deviceData.current_temperature !== undefined || room) {
+      this.thermostatService.updateCharacteristic(
+        this.hap.Characteristic.CurrentTemperature, room?.temperature ?? deviceData.current_temperature,
+      );
     }
 
     // If thermostat isn't online or removed from base, report in HomeKit
@@ -642,7 +647,9 @@ export default class NestThermostat extends HomeKitDevice {
       // heating mode, either eco or normal
       if (deviceData.target_temperature_low !== undefined) {
         this.thermostatService.updateCharacteristic(this.hap.Characteristic.HeatingThresholdTemperature, deviceData.target_temperature_low);
-        this.thermostatService.updateCharacteristic(this.hap.Characteristic.TargetTemperature, deviceData.target_temperature_low);
+        this.thermostatService.updateCharacteristic(
+          this.hap.Characteristic.TargetTemperature, room?.desiredTemperature ?? deviceData.target_temperature_low,
+        );
         historyEntry.target = { low: 0, high: deviceData.target_temperature_low };
       }
 
@@ -1137,12 +1144,52 @@ export default class NestThermostat extends HomeKitDevice {
     return currentMode;
   }
 
+  climateRoomView(data = this.deviceData) {
+    const room = this.getClimateRoom?.();
+    return data.hvac_mode === 'heat' && data.eco_mode === false && data.temperature_lock !== true &&
+      Number.isFinite(room?.temperature) && Number.isFinite(room?.desiredTemperature) ? room : null;
+  }
+
+  updateClimateRoom() {
+    if (!this.thermostatService || !this.hap) {
+      return;
+    }
+    const room = this.climateRoomView();
+    this.displayedRoomId = room?.ruleId;
+    const current = room?.temperature ?? this.deviceData.current_temperature;
+    if (Number.isFinite(current)) {
+      this.thermostatService.updateCharacteristic(this.hap.Characteristic.CurrentTemperature, current);
+    }
+    const desired = this.getTemperature(this.hap.Characteristic.TargetTemperature);
+    if (Number.isFinite(desired)) {
+      this.thermostatService.updateCharacteristic(this.hap.Characteristic.TargetTemperature, desired);
+    }
+  }
+
   async setTemperature(characteristic, temperature) {
     if (typeof characteristic !== 'function' || typeof characteristic?.UUID !== 'string') {
       return;
     }
 
     let mode = this.thermostatService.getCharacteristic(this.hap.Characteristic.TargetHeatingCoolingState).value;
+    const room = this.climateRoomView();
+    if (this.displayedRoomId && this.displayedRoomId !== room?.ruleId &&
+        characteristic.UUID === this.hap.Characteristic.TargetTemperature.UUID) {
+      this.updateClimateRoom();
+      throw new Error('Temperature control changed. Refresh the thermostat before changing its target.');
+    }
+    if (room && mode === this.hap.Characteristic.TargetHeatingCoolingState.HEAT &&
+        characteristic.UUID === this.hap.Characteristic.TargetTemperature.UUID) {
+      try {
+        await this.set({
+          uuid: this.deviceData.nest_google_device_uuid,
+          climate_room_target: { ruleId: room.ruleId, value: temperature },
+        });
+      } finally {
+        this.updateClimateRoom();
+      }
+      return;
+    }
     let targetKey = undefined;
     let modeLabel = '';
 
@@ -1200,6 +1247,10 @@ export default class NestThermostat extends HomeKitDevice {
     // so we return the appropriate value and fallback where needed.
     if (typeof characteristic !== 'function' || typeof characteristic?.UUID !== 'string') {
       return null;
+    }
+    const room = this.climateRoomView();
+    if (room && characteristic.UUID === this.hap.Characteristic.TargetTemperature.UUID) {
+      return room.desiredTemperature;
     }
 
     let currentTemperature = {

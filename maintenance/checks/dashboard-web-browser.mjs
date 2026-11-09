@@ -19,11 +19,14 @@ let authenticated = false;
 let statusAvailable = true;
 let conflict = false;
 let ecoEnabled = false;
+let manualRoomTarget = null;
 const commands = [];
 const saves = [];
 const ruleActions = [];
 const pausedRules = new Set();
 const automation = () => ({ available: true, rules: Object.values(config.rules).flat().map((rule) => ({ ...rule,
+  ...(rule.kind === 'temperature' && manualRoomTarget !== null ? { desiredTemperature: manualRoomTarget,
+    savedDesiredTemperature: rule.desiredTemperature, targetSource: 'manual', hasSchedule: true, nestTarget: 24 } : {}),
   paused: pausedRules.has(rule.id), phase: !rule.enabled ? 'disabled' : pausedRules.has(rule.id) ? 'paused' : 'active',
   reason: !rule.enabled ? 'Rule is disabled.' : pausedRules.has(rule.id) ? 'Paused by you.' : 'Automatic rule is running.' })) });
 const day = 86400000;
@@ -177,7 +180,9 @@ try {
   assert.equal(await page.getByLabel('Turn Eco on for Living room').isEnabled(), true);
   await page.getByRole('link', { name: 'Settings', exact: true }).click();
   assert.equal(await page.getByLabel('Default HVAC fan duration').inputValue(), '1h');
+  assert.equal(await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().isChecked(), false);
   await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
+  assert.equal(await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).isChecked(), false);
   const help = page.getByRole('button', { name: 'Help for Desired room temperature (°C)', exact: true });
   const tooltip = page.getByRole('tooltip');
   await help.hover(); await tooltip.waitFor();
@@ -214,8 +219,13 @@ try {
   await phone.getByLabel('Rule name', { exact: true }).tap(); await phone.getByRole('tooltip').waitFor({ state: 'hidden' });
   assert.equal(await phone.locator('#save-bar').isVisible(), false, 'Touch help leaves the draft unchanged');
   await phone.close();
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().check();
+  assert.equal(await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).nth(1).isChecked(), false, 'each thermostat keeps its own setting');
+  await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
   await page.getByLabel('Rule name', { exact: true }).fill('Downstairs balance');
   await page.getByLabel('Desired room temperature (°C)', { exact: true }).fill('22');
+  await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).check();
   await page.getByLabel('Office sensor', { exact: false }).check();
   await page.getByText('2 sources · desired 22.0°C.', { exact: false }).waitFor();
   await capture('rules-desktop.png');
@@ -224,10 +234,18 @@ try {
   await page.getByText('Saved. Check execution status for running rules and any required setup. Disabled rules remain drafts.', { exact: true }).waitFor();
   assert.equal(saves.length, 1);
   assert.equal(saves[0].config.rules.temperature[0].desiredTemperature, 22);
+  assert.equal(saves[0].config.rules.temperature[0].manualTargetBehavior, 'pause');
   assert.equal(saves[0].config.rules.temperature[0].enabled, false);
   assert.equal(saves[0].config.devices[0].fanDuration, '1h');
+  assert.equal(saves[0].config.devices[0].homeKitRoomTemperature, true);
   assert.equal(saves[0].config.devices[0].scheduleTimeZone, 'America/Los_Angeles');
   assert.equal(commands.length, 0);
+  manualRoomTarget = 23;
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await page.locator('#rule-runtime').getByText('Desired room temperature: 23.0°C · Nest target (adjusted): 24.0°C', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Desired room temperature (°C)', { exact: true }).inputValue(), '22', 'runtime targets never rewrite the saved editor value');
+  assert.equal(await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).isChecked(), true);
+  manualRoomTarget = null;
   await page.getByRole('tab', { name: 'Home & away', exact: false }).click();
   await page.getByRole('button', { name: 'Help for Motion hold (minutes)', exact: true }).click();
   assert.match(await tooltip.innerText(), /Further detections extend the hold/);

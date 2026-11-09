@@ -275,7 +275,8 @@ test('whole-Fahrenheit commands accept half-Celsius feedback without masking a s
   assert.equal(f.commands.length, 1);
   f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5 }, 'A');
   await f.engine.tick();
-  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.ok(Math.abs(f.rule('rooms').desiredTemperature - (21 + 1 / 1.8)) < 0.000001);
   assert.equal(f.commands.length, 1);
 });
 
@@ -295,7 +296,7 @@ test('sensor recovery cannot bypass the heating update interval after restoring 
 });
 
 test('manual cloud target changes pause heating without restoring over the user', async (t) => {
-  const f = await fixture(t);
+  const f = await fixture(t, { temperature: [{ ...temperatureRule, manualTargetBehavior: 'pause' }] });
   await f.engine.tick();
   f.dashboard.update('T', 'Thermostat', { target_temperature_low: 20.5 }, 'A');
   f.advance(6 * minute);
@@ -305,6 +306,214 @@ test('manual cloud target changes pause heating without restoring over the user'
   assert.equal(f.commands.length, 1);
   await f.engine.stop();
   assert.equal(f.commands.length, 1);
+});
+
+test('the default follows native target changes without changing saved settings or sensor membership', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').desiredTemperature, 22);
+  assert.equal(f.rule('rooms').savedDesiredTemperature, 21);
+  assert.equal(f.rule('rooms').targetSource, 'manual');
+  assert.equal(f.rule('rooms').temperatureControl, 'active');
+  assert.equal(f.rule('rooms').nextChangeAt, f.now() + 5 * minute);
+  assert.equal(f.commands.length, 1, 'the manual write also starts the command interval');
+  assert.deepEqual((await f.config.snapshot()).config.rules.temperature[0],
+    validateRuleDrafts({ temperature: [temperatureRule] }).temperature[0]);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 22, 'compensation acknowledgements cannot become manual adjustments');
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  assert.equal(f.rule('rooms').paused, false);
+});
+
+test('HomeKit target requests wait for acceptance and feedback, accumulate quick changes, and leave the group active', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  const first = await f.engine.manualThermostat('thermostat', { uuid: 'thermostat', target_temperature_low: 23.5 });
+  const second = await f.engine.manualThermostat('thermostat', { uuid: 'thermostat', target_temperature_low: 24.5 });
+  await f.engine.manualThermostatResult(first, true);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'updating');
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  assert.equal(f.commands.length, 1);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 24.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 21, 'feedback alone cannot confirm a queued request');
+  await f.engine.manualThermostatResult(second, true);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 23);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.commands.length, 1);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 23);
+});
+
+test('failed and unconfirmed HomeKit requests pause without retries or a fabricated desired temperature', async (t) => {
+  for (const accepted of [false, true]) {
+    const f = await fixture(t);
+    await f.engine.tick();
+    const request = await f.engine.manualThermostat('thermostat', { target_temperature_low: 23.5 });
+    await f.engine.manualThermostatResult(request, accepted);
+    f.advance(2 * minute);
+    await f.engine.tick();
+    assert.equal(f.rule('rooms').paused, true);
+    assert.equal(f.rule('rooms').desiredTemperature, 21);
+    assert.equal(f.commands.length, 1);
+    await f.engine.stop();
+    assert.equal(f.commands.length, 1, 'the last native target must not be overwritten');
+  }
+});
+
+test('the pause option covers HomeKit while duplicate target writes do not pause an active rule', async (t) => {
+  const f = await fixture(t, { temperature: [{ ...temperatureRule, manualTargetBehavior: 'pause' }] });
+  await f.engine.tick();
+  await f.engine.manualThermostat('thermostat', { target_temperature_low: 22.5 });
+  assert.equal(f.rule('rooms').paused, false);
+  await f.engine.manualThermostat('thermostat', { target_temperature_low: 23.5 });
+  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.engine.leases.size, 0);
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+});
+
+test('saved desired edits and Resume use the exact saved target instead of preserving a temporary adjustment', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 22);
+  f.rules({ temperature: [{ ...temperatureRule, desiredTemperature: 24 }] });
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 24);
+  assert.equal(f.rule('rooms').targetSource, 'rule');
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 24.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 25);
+  await f.engine.control({ id: 'rooms', action: 'pause' });
+  await f.engine.control({ id: 'rooms', action: 'resume' });
+  assert.equal(f.rule('rooms').desiredTemperature, 24);
+});
+
+test('the saved room target can be restored without pausing the sensor group', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 22);
+  await f.engine.control({ id: 'rooms', action: 'resetTarget' });
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  assert.equal(f.rule('rooms').targetSource, 'rule');
+  assert.equal(f.rule('rooms').paused, false);
+  const pending = await f.engine.manualThermostat('thermostat', { target_temperature_low: 24.5 });
+  await assert.rejects(f.engine.control({ id: 'rooms', action: 'resetTarget' }), /confirmation/);
+  await f.engine.manualThermostatResult(pending, false);
+});
+
+test('scheduled targets expire manual adjustments only after native feedback, with no command echo loop', async (t) => {
+  const f = await fixture(t, {});
+  f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+  f.dashboard.update('T', 'Thermostat', { schedules: { 0: { a: { time: 36060, 'temp-min': 19 } } } }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 22);
+  f.advance(minute);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'updating');
+  assert.equal(f.commands.length, 1);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 19 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 19);
+  assert.equal(f.rule('rooms').targetSource, 'schedule');
+  assert.equal(f.rule('rooms').paused, false);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  assert.equal(f.commands.at(-1).target_temperature_low, 20.5);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 19);
+});
+
+test('an unconfirmed or ambiguous scheduled heating target pauses instead of fighting Nest', async (t) => {
+  for (const desired of [19, undefined]) {
+    const f = await fixture(t, {});
+    f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+    f.dashboard.update('T', 'Thermostat', { schedules: { 0: { a: { time: 36060, 'temp-min': desired } } } }, 'A');
+    f.rules({ temperature: [temperatureRule] });
+    await f.engine.tick();
+    f.advance(minute);
+    await f.engine.tick();
+    f.advance(2 * minute);
+    await f.engine.tick();
+    assert.equal(f.rule('rooms').paused, true);
+    assert.match(f.rule('rooms').reason, /schedule/);
+    assert.equal(f.commands.length, 1);
+  }
+});
+
+test('future schedule edits preserve a manual room target until its current schedule event changes', async (t) => {
+  const f = await fixture(t, {});
+  f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+  const schedules = { 0: { a: { time: 200, 'temp-min': 19 }, b: { time: 50000, 'temp-min': 20 } } };
+  f.dashboard.update('T', 'Thermostat', { schedules }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+  await f.engine.tick();
+  schedules[0].b['temp-min'] = 18;
+  f.dashboard.update('T', 'Thermostat', { schedules }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').targetSource, 'manual');
+  assert.equal(f.rule('rooms').desiredTemperature, 22);
+  assert.equal(f.rule('rooms').paused, false);
+});
+
+test('manual following keeps desired targets within heating limits', async (t) => {
+  for (const [desiredTemperature, room, actual, expected] of [[31, 24, 32, 32], [10, 20, 9, 9]]) {
+    const f = await fixture(t, {});
+    f.source('room').temperature = room;
+    f.rules({ temperature: [{ ...temperatureRule, desiredTemperature, sourceIds: ['room'] }] });
+    await f.engine.tick();
+    await f.engine.tick();
+    f.dashboard.update('T', 'Thermostat', { target_temperature_low: actual }, 'A');
+    await f.engine.tick();
+    assert.equal(f.rule('rooms').desiredTemperature, expected);
+    assert.equal(f.rule('rooms').paused, false);
+  }
+  assert.throws(() => validateRuleDrafts({ temperature: [{ ...temperatureRule, manualTargetBehavior: 'invalid' }] }), /supported/);
+});
+
+test('a direct manual request invalidates an automation command queued before it', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  f.source('room').temperature = 24;
+  f.advance(5 * minute);
+  let requests;
+  const set = f.dashboard.setAutomationTarget.bind(f.dashboard);
+  f.dashboard.setAutomationTarget = async (...args) => {
+    requests = await f.engine.manualThermostat('thermostat', { target_temperature_low: 23.5 });
+    return set(...args);
+  };
+  await f.engine.tick();
+  assert.equal(f.commands.length, 1, 'the cancelled compensation must not reach Nest');
+  assert.equal(f.rule('rooms').paused, false);
+  f.dashboard.setAutomationTarget = set;
+  await f.engine.manualThermostatResult(requests, true);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 23.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').targetSource, 'manual');
+  assert.equal(f.rule('rooms').desiredTemperature, 22, 'an unsent compensation cannot change the manual adjustment baseline');
 });
 
 test('direct manual commands pause before feedback and resume explicitly starts a new hold', async (t) => {
@@ -356,7 +565,7 @@ test('Eco, Off, native sensor changes and loss of observation never trigger comp
   assert.match(f.rule('rooms').reason, /connection unavailable/);
 });
 
-test('schedule boundaries pause a hold even when the numeric target has not changed', async (t) => {
+test('schedule boundaries use the scheduled room target even when the numeric Nest target has not changed', async (t) => {
   const f = await fixture(t, {});
   f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
   f.dashboard.update('T', 'Thermostat', { schedules: { 0: { a: { time: 36060, 'temp-min': 22.5 } } } }, 'A');
@@ -365,8 +574,10 @@ test('schedule boundaries pause a hold even when the numeric target has not chan
   assert.equal(f.commands.length, 1);
   f.advance(minute);
   await f.engine.tick();
-  assert.equal(f.rule('rooms').paused, true);
-  assert.match(f.rule('rooms').reason, /schedule/);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').desiredTemperature, 22.5);
+  assert.equal(f.rule('rooms').targetSource, 'schedule');
+  assert.equal(f.rule('rooms').savedDesiredTemperature, 21);
   assert.equal(f.commands.length, 1);
 });
 
@@ -610,7 +821,7 @@ test('loss of fan input restores an owned fan and disconnected fans retain pendi
   assert.equal(f.fanCommands.at(-1).running, false);
 });
 
-test('missing Nest schedule time zone blocks heating and manual changes are respected even before the first write', async (t) => {
+test('missing Nest schedule time zone blocks heating and manual changes adjust the room target before the first write', async (t) => {
   const f = await fixture(t, {});
   f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5, schedules: { 0: { a: { time: 200, 'temp-min': 22.5 } } } }, 'A');
   f.rules({ temperature: [temperatureRule] });
@@ -622,7 +833,8 @@ test('missing Nest schedule time zone blocks heating and manual changes are resp
   assert.equal(f.commands.length, 0);
   f.dashboard.update('T', 'Thermostat', { target_temperature_low: 20 }, 'A');
   await f.engine.tick();
-  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').desiredTemperature, 18.5);
   assert.equal(f.commands.length, 0);
 });
 
@@ -1170,3 +1382,113 @@ test('manual speed changes in last-setting mode block all rules and survive rest
   assert.equal(f.engine.fanObservations.size, 0);
 });
 
+
+test('HomeKit room view is opt-in per thermostat and uses fresh group values without replacing Nest data', async (t) => {
+  const f = await fixture(t);
+  await f.engine.tick();
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  f.devices.push({ serialNumber: 'OTHER', homeKitRoomTemperature: true });
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  f.devices.push({ serialNumber: 't', homeKitRoomTemperature: true });
+  assert.deepEqual(f.engine.homeKitRoom('T'), { ruleId: 'rooms', temperature: 20, desiredTemperature: 21 });
+  assert.equal(f.dashboard.devices.get('T').data.target_temperature_low, 22.5);
+  f.external[0].temperature = 22;
+  await f.engine.tick();
+  assert.equal(f.engine.homeKitRoom('T').temperature, 21);
+  f.advance(91000);
+  assert.equal(f.engine.homeKitRoom('T'), null, 'expired source readings cannot be displayed as a live group');
+  await f.engine.tick();
+  assert.ok(f.engine.homeKitRoom('T'));
+  f.accounts[0].observing = false;
+  assert.equal(f.engine.homeKitRoom('T'), null);
+});
+
+test('HomeKit desired-target edits stay absolute even with manual pause enabled and retain the write interval', async (t) => {
+  const f = await fixture(t, { temperature: [{ ...temperatureRule, manualTargetBehavior: 'pause' }] });
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  await f.engine.tick();
+  const writes = f.commands.length;
+  let updates = 0;
+  f.engine.onState = () => updates++;
+  await f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 });
+  await f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 23 });
+  assert.equal(f.rule('rooms').desiredTemperature, 23);
+  assert.equal(f.rule('rooms').savedDesiredTemperature, 21);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.commands.length, writes, 'manual room edits do not bypass the heating interval');
+  assert.equal(f.engine.homeKitRoom('T').desiredTemperature, 23);
+  assert.equal(updates, 2);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  assert.equal(f.commands.at(-1).target_temperature_low, 24.5, 'the next bounded Nest target compensates for the group');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 23, 'compensation feedback is not another user edit');
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 25 }, 'A');
+  assert.equal(f.engine.homeKitRoom('T'), null, 'unprocessed physical changes cannot expose an obsolete room target');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true, 'physical Nest changes still honor pause');
+  assert.equal(f.engine.homeKitRoom('T'), null);
+});
+
+test('HomeKit room edits preserve pending compensation acknowledgement and do not write a direct Nest target', async (t) => {
+  const f = await fixture(t);
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  assert.equal(f.engine.leases.get('temperature:T').pending, true);
+  await f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 20 });
+  assert.equal(f.rule('rooms').desiredTemperature, 20);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.engine.leases.get('temperature:T').pending, false);
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.dashboard.devices.get('T').data.target_temperature_low, 22.5);
+});
+
+test('HomeKit room writes reject disabled settings, wrong ownership, invalid targets and paused rules', async (t) => {
+  const f = await fixture(t);
+  const request = { ruleId: 'rooms', value: 22 };
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', request));
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  for (const [id, payload] of [
+    ['wrong', request], ['thermostat', { ...request, ruleId: 'missing' }],
+    ['thermostat', { ...request, value: 33 }], ['thermostat', { ...request, value: '22' }],
+    ['thermostat', { ...request, unexpected: true }], ['thermostat', null],
+  ]) {
+    await assert.rejects(f.engine.setHomeKitRoomTarget(id, payload));
+  }
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  await f.engine.control({ id: 'rooms', action: 'pause' });
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', request));
+});
+
+test('HomeKit room writes reject changed configuration and unavailable physical modes before any target write', async (t) => {
+  const f = await fixture(t);
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  await f.engine.tick();
+  f.rules({ temperature: [{ ...temperatureRule, desiredTemperature: 24 }] });
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 }));
+  f.rules({ temperature: [temperatureRule] });
+  for (const change of [{ eco_mode: true }, { hvac_mode: 'cool' }, { temperature_lock: true }, { online: false }]) {
+    const data = { ...f.dashboard.devices.get('T').data };
+    f.dashboard.update('T', 'Thermostat', change, 'A');
+    assert.equal(f.engine.homeKitRoom('T'), null);
+    await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 }));
+    f.dashboard.update('T', 'Thermostat', data, 'A');
+  }
+  assert.equal(f.commands.length, 1);
+});
+
+test('failed storage of a HomeKit desired target rejects the edit and pauses without a cloud command', async (t) => {
+  const f = await fixture(t);
+  f.devices.push({ serialNumber: 'T', homeKitRoomTemperature: true });
+  await f.engine.tick();
+  const persist = f.engine.persist;
+  f.engine.persist = async () => {
+    throw new Error('Fixture disk unavailable');
+  };
+  await assert.rejects(f.engine.setHomeKitRoomTarget('thermostat', { ruleId: 'rooms', value: 22 }), /disk unavailable/);
+  f.engine.persist = persist;
+  assert.equal(f.rule('rooms').desiredTemperature, 21);
+  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.engine.homeKitRoom('T'), null);
+  assert.equal(f.commands.length, 1);
+});

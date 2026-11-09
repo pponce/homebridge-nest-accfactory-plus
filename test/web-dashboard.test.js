@@ -1006,3 +1006,27 @@ test('heating recommendations use authenticated reads and CSRF-protected explici
   assert.equal((await call(server, '/api/heating-response/apply', { ...mutation, csrf })).data.applied, 'rooms');
   assert.equal(applies, 1);
 });
+
+test('per-thermostat HomeKit room view defaults off and saves without a restart or changing other overrides', async (t) => {
+  const state = await fixture(t);
+  const store = new WebDashboardConfig(state.configPath, state.block, { knownDevices: () => ['THERMO', 'NEW'] });
+  const before = await store.snapshot();
+  assert.notEqual(before.config.devices[0].homeKitRoomTemperature, true);
+  const saved = await store.save({ revision: before.revision, config: { devices: [
+    { serialNumber: 'THERMO', homeKitRoomTemperature: true },
+  ] } });
+  assert.equal(saved.config.devices[0].homeKitRoomTemperature, true);
+  assert.equal(saved.restartRequired, false);
+  const actual = JSON.parse(await fs.readFile(state.configPath, 'utf8'));
+  const expected = structuredClone(state.root);
+  expected.platforms[1].devices[0].homeKitRoomTemperature = true;
+  assert.deepEqual(actual, expected);
+  await assert.rejects(store.save({ revision: saved.revision, config: { devices: [
+    { serialNumber: 'THERMO', homeKitRoomTemperature: 'true' },
+  ] } }));
+  const off = await store.save({ revision: saved.revision, config: { devices: [
+    { serialNumber: 'THERMO', homeKitRoomTemperature: false },
+  ] } });
+  assert.equal(off.config.devices[0].homeKitRoomTemperature, false);
+  assert.equal(off.restartRequired, false);
+});
