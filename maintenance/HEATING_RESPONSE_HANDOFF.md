@@ -25,5 +25,7 @@ Add thermostat heating-type settings, bounded local response history and per-tem
 
 - Collecting observations never automatically applies guidance. Applying starting/learned recommendations is a separate, explicit per-rule action.
 - Confidence is observational, not statistical or proof of causality. Numeric presets and recommendation formulas are documented in `WEB_DASHBOARD.md`.
-- All six compatibility configurations passed on the initial feature revision. Browser fixtures were updated for the recommendations API; the dedicated heating fixture is checking the real authenticated UI/API. Review the final GitHub validation and screenshots before promotion to main.
+- All six compatibility configurations and all four browser suites passed on implementation revision `978de3a919df3860cbe805a768b513969c1535e9`, in GitHub Actions run `42550745332`. This includes project lint, coverage, build and migration restoration.
+- Desktop and 390px mobile screenshots were inspected. A final UI-only adjustment places the live schedule-time-zone field in the heating section; browser captures reset scroll/focus and clear toasts for review. Final branch validation runs before main promotion.
+- Screenshot artifacts are stored on `review/heating-response`; the publication helper records the exact tested source revision.
 - No npm publication or new release is requested by this feature task. Installed-system observation still needs multiple days of real heating cycles after a future install.

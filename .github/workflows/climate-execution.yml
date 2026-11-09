@@ -129,5 +129,5 @@ jobs:
         run: node maintenance/checks/publish-dashboard-review.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          GITHUB_SHA: ${{ needs.format.outputs.revision }}
+          REVIEW_SOURCE_COMMIT: ${{ needs.format.outputs.revision }}
           REVIEW_OUTPUT_DIR: ${{ runner.temp }}/climate-dashboard-review

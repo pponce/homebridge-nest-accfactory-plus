@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 const repository = process.env.GITHUB_REPOSITORY;
-const source = process.env.GITHUB_SHA;
+const source = process.env.REVIEW_SOURCE_COMMIT || process.env.GITHUB_SHA;
 const token = process.env.GITHUB_TOKEN;
 const heating = process.env.GITHUB_REF === 'refs/heads/feature/heating-response';
 if (repository !== 'pponce/homebridge-nest-climate-cntrl' || (!heating && process.env.GITHUB_REF !== 'refs/heads/feature/standalone-dashboard') ||

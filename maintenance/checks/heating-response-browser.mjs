@@ -100,6 +100,9 @@ try {
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForTimeout(250);
   assert.equal(await type.evaluate((element) => element === document.activeElement), true);
+  await page.waitForFunction(() => document.getElementById('toast').hidden);
+  await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
+  await page.waitForFunction(() => window.scrollY === 0);
   await page.screenshot({ path: path.join(output, 'heating-response-desktop.png'), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
