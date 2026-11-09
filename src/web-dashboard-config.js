@@ -102,6 +102,7 @@ export function validateRuleDrafts(value) {
         'action',
         'enabled',
         'desiredTemperature',
+        'manualTargetBehavior',
         'maximumOffset',
         'minimumIntervalMinutes',
         'startGap',
@@ -137,6 +138,7 @@ export function validateRuleDrafts(value) {
       }
       for (const [field, choices] of [
         ['aggregation', ['single', 'average']],
+        ['manualTargetBehavior', ['follow', 'pause']],
         ['logic', ['any', 'all']],
         ['action', ['heating', 'cooling', 'temperature', speedAction]],
         ['speedMode', ['last', 'fixed', 'curve']],

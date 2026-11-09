@@ -448,7 +448,7 @@ function renderThermostats() {
     current.setAttribute('aria-label', 'Current temperature ' + formatTemp(data.current_temperature));
     const target = el('div', undefined, 'temperature-target');
     const targetText = data.hvac_mode === 'range' || data.hvac_mode === 'heatcool' ? formatTemp(data.target_temperature_low) + '–' + formatTemp(data.target_temperature_high) : formatTemp(data.target_temperature);
-    target.append(el('strong', targetText), document.createTextNode('Target · ' + (data.hvac_mode || 'Unknown mode'))); row.append(current, target);
+    target.append(el('strong', targetText), document.createTextNode('Nest target · ' + (data.hvac_mode || 'Unknown mode'))); row.append(current, target);
     const facts = el('div', undefined, 'device-facts');
     if (Number.isFinite(data.current_humidity)) { const fact = el('span'); fact.append(icon('droplet'), document.createTextNode(Math.round(data.current_humidity) + '% humidity')); facts.append(fact); }
     const updated = el('span'); updated.append(icon('clock'), document.createTextNode(when(device.lastUpdate))); facts.append(updated);
@@ -509,6 +509,12 @@ function renderTemperatureController(device, expanded) {
   heading.append(el('span', 'Temperature controlled by', 'control-caption'), el('strong', view.title, 'controller-name'));
   summary.append(heading, pill(view.label, view.tone), icon('down'));
   const body = el('div', undefined, 'controller-details'); body.append(el('p', view.detail, 'small-note'));
+  const applied = view.rules.find((rule) => ['active', 'interval', 'updating'].includes(rule.status));
+  const runtime = applied && state.status.automation?.rules?.find((rule) => rule.id === applied.id);
+  if (Number.isFinite(runtime?.desiredTemperature)) {
+    body.append(el('p', 'Desired room temperature: ' + formatTemp(runtime.desiredTemperature) +
+      ' · Selected rooms: ' + formatTemp(runtime.roomTemperature), 'small-note'));
+  }
   const group = (title, entries) => {
     body.append(el('h4', title)); const list = el('ul', undefined, 'controller-list');
     for (const entry of entries) {
@@ -833,7 +839,7 @@ function newRule() {
   if (rules().length >= 32) { toast('Use at most 32 rules per category.'); return; }
   const rule = { id: crypto.randomUUID(), kind: state.ruleKind, enabled: false, sourceIds: [],
     name: state.ruleKind === 'temperature' ? 'New temperature group' : state.ruleKind === 'presence' ? 'Home presence' : 'Room fan comfort' };
-  if (state.ruleKind === 'temperature') { rule.aggregation = 'average'; rule.desiredTemperature = 21; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
+  if (state.ruleKind === 'temperature') { rule.aggregation = 'average'; rule.desiredTemperature = 21; rule.manualTargetBehavior = 'follow'; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
   else if (state.ruleKind === 'presence') { rule.logic = 'any'; rule.holdMinutes = 10; rule.awayDelayMinutes = 20; const home = sources().find((source) => source.provider === 'nest' && source.kind === 'occupancy'); if (home) rule.sourceIds = [home.id]; }
   else { rule.targetIds = []; rule.action = 'temperature'; rule.speedMode = 'last'; rule.priority = 0; rule.threshold = 24; rule.hysteresis = 1; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
   const fanItems = state.ruleKind === 'fan' ? orderedFanRules() : null;
@@ -884,7 +890,8 @@ function ruleFieldHelp(title, rule) {
     case 'Thermostat': return rule.kind === 'fan'
       ? 'Watch this thermostat for active heating or cooling. Selecting Heat or Cool mode alone does not start the fans; the equipment must actually be running. This rule does not switch the HVAC system on.'
       : 'Choose the Nest thermostat whose heating target this group adjusts. Its own temperature counts toward the group only if you also select it under Temperature sources.';
-    case 'Desired room temperature': return 'The temperature you want the selected rooms to reach. The group adjusts the Nest heating target within your maximum adjustment to help the selected reading or average reach this temperature.';
+    case 'Desired room temperature': return 'The temperature you want the selected rooms to reach. Saving a changed value uses this exact room target and clears a temporary adjustment. Nest’s displayed target may differ because the group compensates for room readings. Resume uses this saved target.';
+    case 'Manual Nest target changes': return 'Keep the group active by default: raising or lowering Nest’s displayed target moves the desired room temperature by the same amount. This includes the physical thermostat, Google’s app and the existing Apple Home thermostat tile. A temporary adjustment ends at the next confirmed Nest schedule target. Choose Pause to require Resume instead. Eco, Off and other mode or sensor changes still pause control.';
     case 'Combine readings': return 'Equal average gives each selected temperature sensor the same weight. One selected sensor uses just that sensor and requires exactly one selection. Missing or stale selected readings pause automatic heating adjustments.';
     case 'Maximum target adjustment': return 'Limits how far the heating target sent to Nest can differ from your desired room temperature, in either direction. With this draft, the limit is ±' + formatDifference(rule.maximumOffset ?? 1.5) + '. Nest targets also stay within the supported heating range.';
     case 'Minimum update interval (minutes)': return 'The shortest wait between automatic heating-target changes. Readings can refresh more often, and an unchanged target does not need another command. Review heating response in Settings for tuning suggestions.';
@@ -984,7 +991,9 @@ function renderRuleEditor() {
     const fields = el('div', undefined, 'form-grid'); thermostatSelect(fields, rule); temperatureField(fields, 'Desired room temperature', rule.desiredTemperature ?? 21, (value) => { rule.desiredTemperature = value; }, { min: rule.enabled ? 9 : 5, max: rule.enabled ? 32 : 35 }); target.append(fields);
     const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Only selected readings count toward the room average. Include the controlled thermostat here if you want its temperature counted; you can also use only other room sensors. Automatic control requires Heat mode, Eco off and Nest’s built-in control sensor.');
     ruleInputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
-    const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from the target sent to Nest. Manual changes and Nest schedule boundaries pause the rule. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
+    const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from Nest’s adjusted target. Choose how manual Nest target changes affect the group. A confirmed scheduled target becomes the new room target. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
+    ruleInputField(limits, 'Manual Nest target changes', rule.manualTargetBehavior ?? 'follow', (value) => { rule.manualTargetBehavior = value; },
+      { choices: [['follow', 'Keep group active and adjust desired room temperature'], ['pause', 'Pause after a manual Nest target change']] });
     const tuningLink = el('a', 'Review heating response & tuning in Settings', 'small-note'); tuningLink.href = '#settings'; limits.append(tuningLink);
     temperatureField(limits, 'Maximum target adjustment', rule.maximumOffset ?? 1.5, (value) => { rule.maximumOffset = value; }, { min: 0, max: 3, difference: true });
     ruleInputField(limits, 'Minimum update interval (minutes)', rule.minimumIntervalMinutes ?? 5, (value) => { rule.minimumIntervalMinutes = value; }, { type: 'number', min: 1, max: 60, step: 1 });
@@ -1113,7 +1122,11 @@ function renderRuleRuntime(rule) {
   if (runtime.error) host.append(el('p', runtime.error));
   if (runtime.pendingRestorations) host.append(el('p', 'Some owned settings are waiting to be restored. Check equipment connectivity.'));
   host.append(el('strong', current?.phase || 'Not saved'), el('p', current?.reason || 'Save this rule to apply its settings.'));
-  if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Nest target: ' + formatTemp(current.nestTarget) + ' · Room target: ' + formatTemp(current.desiredTemperature)));
+  if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Desired room temperature: ' + formatTemp(current.desiredTemperature) + ' · Nest target (adjusted): ' + formatTemp(current.nestTarget)));
+  if (current?.kind === 'temperature' && current.targetSource === 'manual') host.append(el('p', current.hasSchedule ?
+    'Manual room-temperature adjustment · until the next confirmed Nest schedule target.' : 'Manual room-temperature adjustment · until another target change or Resume.'));
+  if (current?.kind === 'temperature' && current.targetSource === 'schedule') host.append(el('p', 'Following Nest’s scheduled room temperature.'));
+  if (current?.kind === 'temperature' && current.targetSource && current.targetSource !== 'rule') host.append(el('p', 'Saved rule target: ' + formatTemp(current.savedDesiredTemperature) + '. Use the saved target to end this adjustment.'));
   for (const fan of current?.fanSpeeds || []) host.append(el('p', fan.name + ': current ' + (Number.isFinite(fan.currentSpeed) ? fan.currentSpeed + '%' : 'unavailable') + ' · requested ' + (Number.isFinite(fan.proposedSpeed) ? fan.proposedSpeed + '%' : 'unsupported') + ' · cap ' + fan.maximumSpeed + '%'));
   for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Manual override · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
@@ -1124,6 +1137,10 @@ function renderRuleRuntime(rule) {
     const actions = el('div', undefined, 'timer-buttons');
     for (const [label, action] of [[current.paused ? 'Resume automatic control' : 'Pause rule', current.paused ? 'resume' : 'pause'], ...(rule.kind === 'presence' ? [['Force Home · 1 hour', 'home'], ['Force Away · 1 hour', 'away'], ['Resume automatic presence', 'resume']] : [])]) {
       const item = button(label, () => ruleCommand(rule.id, action), 'button secondary'); item.disabled = state.dirty; actions.append(item);
+    }
+    if (rule.kind === 'temperature' && !current.paused && ['manual', 'schedule'].includes(current.targetSource)) {
+      const reset = button('Use saved room target', () => ruleCommand(rule.id, 'resetTarget'));
+      reset.disabled = state.dirty || current.temperatureControl === 'updating'; actions.append(reset);
     }
     if (current.fanOverrides?.length && !current.paused) { const resume = button('Resume overridden fans', () => ruleCommand(rule.id, 'resume')); resume.disabled = state.dirty; actions.append(resume); }
     host.append(actions); if (state.dirty) host.append(el('p', 'Save or discard your edits before using immediate rule controls.', 'small-note'));

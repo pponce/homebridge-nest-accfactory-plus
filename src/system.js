@@ -978,15 +978,16 @@ export default class NestAccfactory {
   }
 
   async #set(uuid, nest_google_device_uuid, values, origin) {
+    let manualTargetRequests;
     if (
       !origin?.automation &&
       values &&
       [
         'target_temperature', 'target_temperature_low', 'target_temperature_high', 'hvac_mode',
-        'eco_mode', 'temperature_sensor', 'native_sensor_control',
+        'eco_mode', 'temperature_sensor', 'native_sensor_control', 'temperature_lock',
       ].some((key) => Object.hasOwn(values, key))
     ) {
-      await this.automation?.manualThermostat(nest_google_device_uuid);
+      manualTargetRequests = await this.automation?.manualThermostat(nest_google_device_uuid, values);
     }
     const previous = this.climateWrites.get(nest_google_device_uuid) ?? Promise.resolve();
     const operation = previous
@@ -1001,7 +1002,16 @@ export default class NestAccfactory {
       });
     this.climateWrites.set(nest_google_device_uuid, operation);
     try {
-      return await operation;
+      const result = await operation;
+      if (manualTargetRequests?.length) {
+        await this.automation?.manualThermostatResult?.(manualTargetRequests, true);
+      }
+      return result;
+    } catch (error) {
+      if (manualTargetRequests?.length) {
+        await this.automation?.manualThermostatResult?.(manualTargetRequests, false);
+      }
+      throw error;
     } finally {
       if (this.climateWrites.get(nest_google_device_uuid) === operation) {
         this.climateWrites.delete(nest_google_device_uuid);

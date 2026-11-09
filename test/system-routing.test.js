@@ -30,19 +30,38 @@ let traits = {
   },
   device_info: { typeName: 'google.resource.SpencerResource', pairerId: { resourceId: 'STRUCTURE_HOME' } },
 };
-test('native thermostat commands pause software control before reaching the cloud', async (context) => {
+test('native thermostat commands report manual intent and its result around the cloud write', async (context) => {
   const flow = await platformHarness(context, { value: traits });
   const manual = [];
+  const results = [];
+  const token = [{ id: 'fixture' }];
   flow.platform.automation = {
-    manualThermostat: async (id) => {
-      manual.push(id);
+    manualThermostat: async (id, values) => {
+      manual.push({ id, values });
       assert.equal(flow.commands.length, 0);
+      return token;
     },
+    manualThermostatResult: async (requests, accepted) => results.push({ requests, accepted }),
     stop: async () => {},
   };
   await flow.device.set({ uuid: 'DEVICE_TEST', target_temperature_low: 21 });
-  assert.deepEqual(manual, ['DEVICE_TEST']);
+  assert.deepEqual(manual, [{ id: 'DEVICE_TEST', values: { uuid: 'DEVICE_TEST', target_temperature_low: 21 } }]);
+  assert.deepEqual(results, [{ requests: token, accepted: true }]);
   assert.equal(flow.commands.length, 1);
+});
+
+test('failed native thermostat writes report rejection to manual target tracking', async (context) => {
+  const flow = await platformHarness(context, { value: traits });
+  const token = [{ id: 'fixture' }];
+  const results = [];
+  flow.platform.automation = {
+    manualThermostat: async () => token,
+    manualThermostatResult: async (requests, accepted) => results.push({ requests, accepted }),
+    stop: async () => {},
+  };
+  flow.connection.grpcTransport.command = async () => { throw new Error('Fixture cloud unavailable'); };
+  await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', target_temperature_low: 21 }));
+  assert.deepEqual(results, [{ requests: token, accepted: false }]);
 });
 for (let [values, label, expected] of [
   [{ hvac_mode: 'off' }, 'target_temperature_settings', { enabled: { value: false } }],
