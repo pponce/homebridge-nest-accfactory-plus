@@ -32,7 +32,27 @@ if name == 'git':
     sys.exit(0)
 if name == 'curl':
     destination = pathlib.Path(args[args.index('-o') + 1])
-    shutil.copyfile(root / destination.name, destination)
+    url = next(arg for arg in args if arg.startswith('https://'))
+    fallback = scenario in ['fallback-archive', 'fallback-checksum', 'download-failure', 'invalid-release', 'api-json']
+    if url.startswith('https://github.com/') and fallback:
+        if scenario != 'fallback-checksum' or url.endswith('/SHA256SUMS'):
+            destination.write_text('incomplete download')
+            sys.exit(22)
+    if '/releases/tags/' in url:
+        version = os.environ['PUBLISH_VERSION']
+        tag = 'v' + version if scenario != 'invalid-release' else 'v0.0.0'
+        destination.write_text(json.dumps({'tag_name': tag, 'draft': False, 'assets': [
+            {'id': 101, 'name': 'homebridge-nest-climate-cntrl-' + version + '.tgz', 'state': 'uploaded'},
+            {'id': 102, 'name': 'SHA256SUMS', 'state': 'uploaded'}]}))
+        sys.exit(0)
+    if '/releases/assets/' in url:
+        assert 'Accept: application/octet-stream' in args and '-fsSL' in args
+        if scenario == 'download-failure': sys.exit(22)
+        if scenario == 'api-json':
+            destination.write_text('{"message":"metadata instead of archive"}')
+            sys.exit(0)
+    filename = destination.name.removesuffix('.download')
+    shutil.copyfile(root / filename, destination)
     sys.exit(0)
 if name == 'sleep': sys.exit(0)
 if name == 'npm':
@@ -107,12 +127,16 @@ def run_case(scenario):
                                 env=env, text=True, capture_output=True, timeout=45)
         calls = [json.loads(line) for line in (root / 'calls.jsonl').read_text().splitlines()]
         publishes = [call for call in calls if call[0] == 'npm' and call[3] == 'publish']
-        expected = 'SUCCESS' if scenario in ['success', 'existing', 'artifacts'] else 'PENDING' if scenario == 'pending' else 'FAILED'
+        expected = 'SUCCESS' if scenario in ['success', 'existing', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 'PENDING' if scenario == 'pending' else 'FAILED'
         assert 'END: ' + expected in result.stdout, (scenario, result.stdout, result.stderr)
-        assert len(publishes) == (1 if scenario in ['success', 'publish-failure', 'artifacts'] else 0), (scenario, publishes)
+        assert len(publishes) == (1 if scenario in ['success', 'publish-failure', 'artifacts', 'fallback-archive', 'fallback-checksum'] else 0), (scenario, publishes)
         if scenario in ['dirty', 'diverged']:
             assert not any(call[0] in ['curl', 'npm'] for call in calls), (scenario, calls)
-        if scenario == 'checksum': assert not any(call[0] == 'npm' for call in calls)
+        if scenario in ['checksum', 'download-failure', 'invalid-release', 'api-json']:
+            assert not any(call[0] == 'npm' for call in calls)
+        if scenario in ['fallback-archive', 'fallback-checksum']:
+            assert any('/releases/assets/' in arg for call in calls if call[0] == 'curl' for arg in call)
+            assert 'Trying the GitHub asset API' in result.stdout
         reports = list(release.glob('publish-result-*.json'))
         if scenario not in ['dirty', 'diverged']:
             assert reports and json.loads(reports[0].read_text())['homebridgeChanged'] is False
@@ -128,7 +152,8 @@ def run_case(scenario):
         print(scenario + ': passed')
 
 
-for case in ['success', 'existing', 'pending', 'dirty', 'diverged', 'checksum', 'mismatch', 'registry-failure', 'publish-failure', 'artifacts']:
+for case in ['success', 'existing', 'pending', 'dirty', 'diverged', 'checksum', 'mismatch', 'registry-failure', 'publish-failure', 'artifacts',
+             'fallback-archive', 'fallback-checksum', 'download-failure', 'invalid-release', 'api-json']:
     run_case(case)
 
 # Real Git must reject an upstream file that would overwrite an ignored local artifact.
@@ -155,4 +180,5 @@ with tempfile.TemporaryDirectory(prefix='publish-ignore-fixture-') as temp:
     result = git('merge', '--ff-only', '--no-overwrite-ignore', 'incoming', check=False)
     assert result.returncode != 0 and target.read_text() == 'retained local content'
     print('ignored artifact collision: passed')
+
 

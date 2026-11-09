@@ -4,10 +4,39 @@
   nest_publish_head=''
   nest_publish_umask=$(umask)
   umask 077
+  nest_download_release_asset() {
+    local package="$1" version="$2" asset="$3" destination="$4"
+    local release_url="https://github.com/pponce/$package/releases/download/v$version"
+    local api="https://api.github.com/repos/pponce/$package" asset_id
+    printf 'Downloading %s...\n' "$asset"
+    if curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 --proto '=https' --tlsv1.2 \
+      "$release_url/$asset" -o "$destination.download"; then
+      mv "$destination.download" "$destination" || return 1
+      return 0
+    fi
+    printf '%s\n' 'Release download failed. Trying the GitHub asset API...'
+    curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 --proto '=https' --tlsv1.2 \
+      -H 'Accept: application/vnd.github+json' \
+      "$api/releases/tags/v$version" -o "$destination.release.json" || return 1
+    asset_id=$(node - "$destination.release.json" "$version" "$asset" <<'NODE'
+const fs = require('node:fs');
+const release = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+const assets = Array.isArray(release.assets) ? release.assets.filter(asset => asset.name === process.argv[4]) : [];
+if (release.tag_name !== 'v' + process.argv[3] || release.draft !== false || assets.length !== 1 ||
+    !Number.isSafeInteger(assets[0].id) || assets[0].id <= 0 || assets[0].state !== 'uploaded') {
+  throw new Error('GitHub did not report the expected published release asset.');
+}
+console.log(assets[0].id);
+NODE
+    ) || return 1
+    curl -fsSL --retry 2 --connect-timeout 15 --max-time 60 --proto '=https' --tlsv1.2 \
+      -H 'Accept: application/octet-stream' \
+      "$api/releases/assets/$asset_id" -o "$destination.download" || return 1
+    mv "$destination.download" "$destination" || return 1
+  }
   nest_publish_beta() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
     local package='homebridge-nest-climate-cntrl' version='0.5.0-beta.12'
-    local release_url="https://github.com/pponce/$package/releases/download/v$version"
     local release_dir="$project/maintenance/releases/v$version"
     local asset origin branch worktree_status ignored tool attempt tag_value
     for tool in git curl node npm tar sha256sum; do
@@ -63,7 +92,7 @@ NODE
     chmod 700 "$release_dir" || return 1
     nest_publish_report="$release_dir/publish-result-$(date -u +%Y%m%dT%H%M%SZ).json"
     for asset in "$package-$version.tgz" SHA256SUMS; do
-      curl -fsSL --retry 3 --max-time 60 "$release_url/$asset" -o "$release_dir/$asset" || return 1
+      nest_download_release_asset "$package" "$version" "$asset" "$release_dir/$asset" || return 1
     done
     node - "$release_dir" "$package" "$version" <<'NODE'
 const fs = require('node:fs');
@@ -156,7 +185,8 @@ NODE
     *) printf '%s\n' '=== Nest Climate Cntrl checkout + beta publish END: FAILED — review the message above ===' ;;
   esac
   umask "$nest_publish_umask"
-  unset -f nest_publish_beta
+  unset -f nest_publish_beta nest_download_release_asset
   unset nest_publish_report nest_publish_head nest_publish_result nest_publish_umask nest_publish_copy_host
 }
+
 
