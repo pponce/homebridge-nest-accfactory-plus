@@ -332,3 +332,54 @@ test('sensor and presence readings clear their reconnect flag without needing an
   assert.equal(f.dashboard.devices.get('H').needsUpdate, false);
   assert.equal(f.dashboard.devices.get('T').needsUpdate, true);
 });
+
+test('web Nest temperature commands validate modes, limits, capability and stale requests before dispatch', async () => {
+  const calls = [];
+  const accounts = [{ id: 'A', authorised: true, observing: true }];
+  const dashboard = new ClimateDashboard('/unused-web-target', { accounts: () => accounts,
+    command: async (...args) => {
+      calls.push(args);
+      assert.equal(args[2].guard(), true);
+    } });
+  const base = { nest_google_device_uuid: 'device', online: true, eco_mode: false, hvac_mode: 'heat',
+    target_temperature_low: 21, target_temperature_high: 25, can_heat: true, can_cool: true, temperature_lock: false };
+  dashboard.update('T', 'Thermostat', base, 'A');
+  const request = (values) => ({ serial: 'T', expected: dashboard.temperatureTarget('T').expected, values });
+  await dashboard.setTemperatureTarget(request({ target_temperature_low: 22 }));
+  assert.deepEqual(calls[0][1], { target_temperature_low: 22 });
+  assert.equal(calls[0][2].automation, undefined, 'direct targets retain native manual-change semantics');
+  for (const values of [{ target_temperature_low: 33 }, { target_temperature_low: '22' },
+    { target_temperature_low: 22, hvac_mode: 'off' }, { wrong: 22 }, [], null]) {
+    await assert.rejects(dashboard.setTemperatureTarget(request(values)), { status: 400 });
+  }
+  const stale = request({ target_temperature_low: 23 });
+  dashboard.update('T', 'Thermostat', { target_temperature_low: 22 }, 'A');
+  assert.equal(calls[0][2].guard(), false, 'queued commands recheck the original target');
+  await assert.rejects(dashboard.setTemperatureTarget(stale), { status: 409 });
+  for (const change of [{ online: false }, { eco_mode: true }, { eco_mode: null }, { hvac_mode: 'off' },
+    { temperature_lock: true }, { can_heat: false }]) {
+    dashboard.update('T', 'Thermostat', { ...base, ...change }, 'A');
+    assert.equal(dashboard.temperatureTarget('T').available, false);
+    await assert.rejects(dashboard.setTemperatureTarget(stale), { status: 409 });
+  }
+  dashboard.update('T', 'Thermostat', { ...base, hvac_mode: 'cool' }, 'A');
+  await dashboard.setTemperatureTarget(request({ target_temperature_high: 26 }));
+  assert.deepEqual(calls.at(-1)[1], { target_temperature_high: 26 });
+  dashboard.update('T', 'Thermostat', { hvac_mode: 'range' }, 'A');
+  await assert.rejects(dashboard.setTemperatureTarget(request({
+    target_temperature_low: 24.5, target_temperature_high: 25,
+  })), { status: 400 });
+  await dashboard.setTemperatureTarget(request({ target_temperature_low: 22, target_temperature_high: 25 }));
+  assert.deepEqual(calls.at(-1)[1], { target_temperature_low: 22, target_temperature_high: 25 });
+  dashboard.command = async () => {
+    throw new Error('Nest rejected fixture');
+  };
+  await assert.rejects(dashboard.setTemperatureTarget(request({ target_temperature_low: 22, target_temperature_high: 25 })), /rejected/);
+  assert.equal(dashboard.busy, false);
+  dashboard.busy = true;
+  await assert.rejects(dashboard.setTemperatureTarget(request({ target_temperature_low: 22, target_temperature_high: 25 })), /in progress/);
+  dashboard.busy = false;
+  accounts[0].observing = false;
+  assert.equal(dashboard.temperatureTarget('T').available, false);
+  assert.equal(dashboard.temperatureTarget('missing').available, false);
+});

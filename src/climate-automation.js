@@ -640,8 +640,15 @@ export class ClimateAutomation {
   }
 
   homeKitRoom(serial) {
-    if (this.stopping || this.error || !this.deviceOptions?.some((option) =>
+    if (!this.deviceOptions?.some((option) =>
       option.serialNumber.toUpperCase() === serial.toUpperCase() && option.homeKitRoomTemperature === true)) {
+      return null;
+    }
+    return this.roomControl(serial);
+  }
+
+  roomControl(serial) {
+    if (this.stopping || this.error) {
       return null;
     }
     const candidates = [...this.states.values()].filter((state) =>
@@ -651,7 +658,7 @@ export class ClimateAutomation {
         !['active', 'interval', 'updating'].includes(this.temperatureControlStatus(state))) {
       return null;
     }
-    const live = this.dashboard.snapshot();
+    const live = { devices: [...this.dashboard.devices.values()], accounts: this.dashboard.accounts(), generatedAt: this.now() };
     const device = live.devices.find((entry) => entry.serial === serial);
     const account = live.accounts.find((entry) => entry.id === device?.account);
     if (!device || !account?.authorised || !account.observing || device.needsUpdate || device.data.online !== true ||
@@ -677,6 +684,10 @@ export class ClimateAutomation {
   }
 
   setHomeKitRoomTarget(deviceId, request) {
+    return this.setRoomTarget(deviceId, request, true);
+  }
+
+  setRoomTarget(deviceId, request, homeKit = false, permitted = () => true) {
     return this.serialize(async () => {
       const envelope = await this.config.snapshot();
       const state = this.states.get(request?.ruleId);
@@ -684,8 +695,8 @@ export class ClimateAutomation {
       const saved = envelope.config.rules.temperature.find((rule) => rule.id === request?.ruleId);
       const enabled = envelope.config.devices.some((option) =>
         option.serialNumber.toUpperCase() === serial?.toUpperCase() && option.homeKitRoomTemperature === true);
-      if (envelope.rulesError || !enabled || JSON.stringify(saved) !== JSON.stringify(state?.rule) ||
-          !this.homeKitRoom(serial) || this.dashboard.devices.get(serial)?.id !== deviceId ||
+      if (envelope.rulesError || (homeKit && !enabled) || !permitted() || JSON.stringify(saved) !== JSON.stringify(state?.rule) ||
+          !this.roomControl(serial) || this.dashboard.devices.get(serial)?.id !== deviceId ||
           !request || Object.keys(request).some((key) => !['ruleId', 'value'].includes(key)) || !validTarget(request.value)) {
         throw new Error('The room-temperature rule is unavailable. Refresh the thermostat before changing its target.');
       }
@@ -702,7 +713,7 @@ export class ClimateAutomation {
         throw error;
       }
       await this.evaluate();
-      if (!this.homeKitRoom(serial)) {
+      if (!this.roomControl(serial)) {
         throw new Error('Room control became unavailable. Review the rule before changing its target.');
       }
     }).finally(() => this.onState?.());

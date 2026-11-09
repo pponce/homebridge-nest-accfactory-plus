@@ -2,7 +2,7 @@ name: Standalone climate dashboard
 
 on:
   push:
-    branches: [feature/standalone-dashboard]
+    branches: [feature/standalone-dashboard, feature/dashboard-temperature-control]
   pull_request:
     paths:
       - 'src/web-dashboard*.js'
@@ -62,7 +62,7 @@ jobs:
           name: standalone-dashboard-screenshots
           path: ${{ runner.temp }}/climate-dashboard-review
   visual-review:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/standalone-dashboard'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/feature/standalone-dashboard' || github.ref == 'refs/heads/feature/dashboard-temperature-control')
     needs: browser
     runs-on: ubuntu-latest
     concurrency:

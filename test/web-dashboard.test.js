@@ -1030,3 +1030,30 @@ test('per-thermostat HomeKit room view defaults off and saves without a restart 
   assert.equal(off.config.devices[0].homeKitRoomTemperature, false);
   assert.equal(off.restartRequired, false);
 });
+
+test('temperature edits require an authenticated session, matching origin and CSRF token', async (t) => {
+  const state = await fixture(t);
+  const commands = [];
+  state.dashboard.setTemperatureTarget = async (payload) => {
+    commands.push(payload);
+    return { accepted: true, source: 'room' };
+  };
+  const server = new WebDashboard({ ...state, platformConfig: state.block });
+  t.after(() => server.stop());
+  await server.auth.setup({ username: 'admin', password: 'test-password' });
+  const login = await call(server, '/api/login', { method: 'POST', body: { username: 'admin', password: 'test-password' } });
+  const request = { method: 'POST', cookie: login.headers['set-cookie'].split(';')[0], csrf: login.data.csrfToken,
+    body: { serial: 'T', expected: 'revision', values: { value: 22 } } };
+  assert.equal((await call(server, '/api/temperature-target', { ...request, cookie: undefined })).status, 401);
+  assert.equal((await call(server, '/api/temperature-target', { ...request, csrf: undefined })).status, 403);
+  assert.equal((await call(server, '/api/temperature-target', { ...request, origin: 'https://other.local' })).status, 403);
+  assert.equal(commands.length, 0);
+  assert.equal((await call(server, '/api/temperature-target', request)).data.accepted, true);
+  assert.deepEqual(commands, [request.body]);
+  state.dashboard.setTemperatureTarget = async () => {
+    const error = new Error('Temperature control changed.');
+    error.status = 409;
+    throw error;
+  };
+  assert.equal((await call(server, '/api/temperature-target', request)).status, 409);
+});

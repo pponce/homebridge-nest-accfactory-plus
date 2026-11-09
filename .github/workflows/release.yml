@@ -113,9 +113,18 @@ jobs:
       - name: Prepare release helpers and checksums
         run: |
           cp scripts/migration-preflight.mjs nest-climate-migration-preflight.mjs
-          cp maintenance/update-checkout-and-publish-beta.sh update-checkout-and-publish-beta.sh
-          cp maintenance/install-execution-beta.sh install-execution-beta.sh
-          sha256sum "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh install-execution-beta.sh > SHA256SUMS
+          if [[ "$VERSION" == *-* ]]; then
+            publisher=update-checkout-and-publish-beta.sh
+            installer=install-execution-beta.sh
+          else
+            publisher=update-checkout-and-publish-release.sh
+            installer=install-release.sh
+          fi
+          cp "maintenance/$publisher" "$publisher"
+          cp "maintenance/$installer" "$installer"
+          echo "PUBLISHER=$publisher" >> "$GITHUB_ENV"
+          echo "INSTALLER=$installer" >> "$GITHUB_ENV"
+          sha256sum "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs "$publisher" "$installer" > SHA256SUMS
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -124,9 +133,9 @@ jobs:
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "Release already exists; leaving it unchanged."
           else
-            flags=()
-            if [[ "$VERSION" == *-* ]]; then flags+=(--prerelease --latest=false); fi
-            gh release create "v$VERSION" "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs update-checkout-and-publish-beta.sh install-execution-beta.sh SHA256SUMS \
+            flags=(--latest)
+            if [[ "$VERSION" == *-* ]]; then flags=(--prerelease --latest=false); fi
+            gh release create "v$VERSION" "homebridge-nest-climate-cntrl-$VERSION.tgz" nest-climate-migration-preflight.mjs "$PUBLISHER" "$INSTALLER" SHA256SUMS \
               --target "$GITHUB_SHA" --title "Nest Climate Cntrl v$VERSION" \
               --notes-file RELEASE_NOTES.md "${flags[@]}"
           fi

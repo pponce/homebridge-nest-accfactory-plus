@@ -108,7 +108,7 @@ export async function inspectInstallation(
     generatedAt: new Date().toISOString(),
     nodeVersion: process.version,
     targetPackage: 'homebridge-nest-climate-cntrl',
-    targetVersion: '0.5.0-beta.1',
+    targetVersion: '0.5.0',
     platforms: [],
     installedPackages: [],
     nextStep:

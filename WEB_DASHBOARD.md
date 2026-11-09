@@ -2,7 +2,7 @@
 
 The optional standalone dashboard gives Nest Climate Cntrl its own web address using direct HTTP, direct HTTPS, or HTTPS through a local reverse proxy. Use a computer, tablet, or phone to see thermostat status, choose supported controls, inspect sensors, and run climate automation rules.
 
-The dashboard and execution engine are under beta testing. Each rule is disabled by default. Enable and save individual rules to run bounded heating control, room-fan actions or combined occupancy sensing.
+Each climate rule is disabled by default. Enable and save individual rules to run bounded heating control, room-fan actions or combined occupancy sensing.
 
 Start with [web access](#enable-web-access), then try a [temperature group](#temperature-group-example), [room-fan rule](#room-fan-example), or [Home/Away rule](#homeaway-example). For a proxy deployment, see [HTTPS through a reverse proxy](#https-through-a-reverse-proxy).
 
@@ -389,3 +389,21 @@ Use **Save changes** for climate configuration. It checks the saved revision bef
 Open **Connection & advanced setup** to edit account credentials, web-server settings or advanced schema fields, including while the bridge is unavailable. This form uses Homebridge’s Save button. Save or discard climate edits before opening it. Returning to climate controls discards unsaved form edits and reloads saved configuration. If the saved configuration changes while the form is open, reopen setup before saving. Raw advanced rule temperatures use Celsius; the graphical editors use your chosen display unit.
 
 A reported built-in Nest sensor can guide a temperature rule even when Nest omits its room-sensor scheduling mode or empty paired-sensor list. These missing fields still prevent automatic changes to native sensor schedules. A rule combining official Nest room sensors with Homebridge sensors requires confirmed native sensor setup.
+
+## Change temperature from a thermostat card
+
+In the standalone dashboard's **Overview**, click a thermostat's target temperature. An editor opens inside the card with **− / +** buttons, a numeric field, **Apply** and **Cancel**. The buttons adjust by 1°F or 0.5°C, according to the dashboard's temperature units. Typed values must remain within the displayed limits.
+
+| Controller | Editable target | Effect |
+| --- | --- | --- |
+| Active climate temperature rule | Desired room temperature | Retains the selected sensor group and its minimum adjustment interval. The adjusted Nest target remains visible underneath. |
+| Native Nest control | Nest target | Sends a target for the current heating or cooling mode. Heat • Cool exposes both limits. |
+| Paused climate temperature rule | Nest target | Changes Nest directly and leaves the rule paused. |
+
+A room-target edit is absolute and does not invoke **Pause after a manual Nest target change**. It follows the existing manual room-target policy, including the next usable Nest schedule boundary. The change applies to the running desired temperature; the saved baseline in Climate rules remains separate. A successful save does not mean Nest must change immediately: the rule retains its limits and update interval.
+
+A direct Nest command displays the requested target while checking feedback every two seconds for up to 30 seconds. If Nest rejects it or confirmation times out, the card shows the last reported target with an explanation. **Stop waiting** dismisses the check; it cannot recall a command already sent. Late feedback appears on the next refresh. Commands are never repeated automatically.
+
+The editor checks current connectivity, Eco, temperature lock, mode, capability and target limits. A waiting or restoring rule must establish its controller before editing. If the target, controller or mode changes during an edit, cancel and reopen the editor to review the current setting. Background refresh preserves unsent values. **Cancel** and Escape close an unsent edit without changing the thermostat.
+
+Temperature action editing is exclusive to the standalone web dashboard. The Homebridge configuration interface retains the informational thermostat overview and the climate rule configuration fields.

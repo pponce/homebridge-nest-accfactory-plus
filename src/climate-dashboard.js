@@ -39,6 +39,7 @@ const FIELDS = [
   'ecoSwitch',
   'fanPresetSwitches',
   'can_heat',
+  'can_cool',
   'temperature_lock',
 ];
 const DAY = 86400000;
@@ -211,11 +212,103 @@ export class ClimateDashboard {
       lastCommand: this.lastCommand,
       devices: [...this.devices.values()].map((device) => ({
         ...device,
+        temperatureTarget: device.type === 'Thermostat' ? this.temperatureTarget(device.serial) : undefined,
         runtime: device.type === 'Thermostat' ? this.ledger.summary(device.serial) : undefined,
       })),
       runtimeTimezone: 'UTC',
       automation: this.automation?.snapshot(),
     };
+  }
+
+  temperatureTarget(serial) {
+    const device = this.devices.get(serial);
+    const data = device?.data ?? {};
+    const account = this.accounts().find((entry) => entry.id === device?.account);
+    const unavailable = (reason) => ({ available: false, reason });
+    if (device?.type !== 'Thermostat' || !device.id || !account?.authorised || !account.observing ||
+        device.needsUpdate || data.online !== true) {
+      return unavailable('Reconnect to change the temperature.');
+    }
+    if (data.eco_mode !== false) {
+      return unavailable(data.eco_mode ? 'Turn Eco off to change the temperature.' : 'Waiting for Nest to report Eco status.');
+    }
+    if (data.temperature_lock === true) {
+      return unavailable('Unlock the thermostat in Nest to change its temperature.');
+    }
+    if (!['heat', 'cool', 'range', 'heatcool'].includes(data.hvac_mode)) {
+      return unavailable('Choose Heat, Cool or Heat • Cool in Nest to change the temperature.');
+    }
+    const automation = this.automation?.snapshot();
+    if (automation && (automation.available === false || automation.error)) {
+      return unavailable('Refresh to confirm which temperature controller is active.');
+    }
+    const rules = (automation?.rules ?? []).filter((rule) => rule.kind === 'temperature' && rule.thermostatId === serial);
+    const room = this.automation?.roomControl?.(serial);
+    if (!room && rules.some((rule) => rule.temperatureControl === 'restoring' || (rule.enabled && !rule.paused))) {
+      return unavailable('The temperature rule is waiting for feedback. Review Climate rules before changing its target.');
+    }
+    const fields = room ? [{ key: 'value', label: 'Desired room temperature', value: room.desiredTemperature }] :
+        ['range', 'heatcool'].includes(data.hvac_mode) ? [
+          { key: 'target_temperature_low', label: 'Heat to', value: data.target_temperature_low },
+          { key: 'target_temperature_high', label: 'Cool to', value: data.target_temperature_high },
+        ] : [{ key: data.hvac_mode === 'heat' ? 'target_temperature_low' : 'target_temperature_high',
+          label: data.hvac_mode === 'heat' ? 'Heat to' : 'Cool to',
+          value: (data.hvac_mode === 'heat' ? data.target_temperature_low : data.target_temperature_high) ?? data.target_temperature }];
+    if (fields.some((field) => !Number.isFinite(field.value)) ||
+        (fields.some((field) => field.key === 'target_temperature_low') && data.can_heat === false) ||
+        (fields.some((field) => field.key === 'target_temperature_high') && data.can_cool === false)) {
+      return unavailable('Waiting for a supported Nest target temperature.');
+    }
+    const rule = rules.find((entry) => entry.id === room?.ruleId);
+    const model = { available: true, source: room ? 'room' : 'nest', mode: data.hvac_mode,
+      ruleId: rule?.id, ruleName: rule?.name, fields, minimum: 9, maximum: 32, minimumGap: fields.length === 2 ? 1.5 : 0,
+      note: room ? 'The selected sensors stay active. Nest adjusts within the rule’s limits and update interval.' :
+        rules.some((entry) => entry.enabled && entry.paused) ?
+          'The climate rule is paused. This changes Nest directly and leaves the rule paused.' :
+          'This changes the target on Nest.' };
+    // Reject stale edits without treating ordinary room readings or compensation feedback as edits.
+    model.expected = crypto.createHash('sha256').update(JSON.stringify([device.id, model,
+      room ? this.automation.states?.get(room.ruleId)?.rule : null])).digest('hex');
+    return model;
+  }
+
+  async setTemperatureTarget(payload) {
+    const model = this.temperatureTarget(payload?.serial);
+    const conflict = () => {
+      const error = new Error('Temperature control changed. Refresh and review the target before applying it.');
+      error.status = 409;
+      return error;
+    };
+    if (!payload || Object.keys(payload).some((key) => !['serial', 'expected', 'values'].includes(key)) ||
+        !model.available || typeof payload.expected !== 'string' || payload.expected !== model.expected) {
+      throw conflict();
+    }
+    const values = payload.values;
+    if (!values || typeof values !== 'object' || Array.isArray(values) ||
+        Object.keys(values).length !== model.fields.length || model.fields.some((field) =>
+      !Number.isFinite(values[field.key]) || values[field.key] < model.minimum || values[field.key] > model.maximum) ||
+        (model.fields.length === 2 && values.target_temperature_high - values.target_temperature_low < model.minimumGap - 1e-8)) {
+      const error = new Error('Enter temperatures within the displayed limits and keep the heating target below the cooling target.');
+      error.status = 400;
+      throw error;
+    }
+    if (this.busy) {
+      throw new Error('Another climate command is in progress.');
+    }
+    const ready = () => this.temperatureTarget(payload.serial).expected === payload.expected;
+    this.busy = true;
+    try {
+      const id = this.devices.get(payload.serial).id;
+      if (model.source === 'room') {
+        await this.automation.setRoomTarget(id, { ruleId: model.ruleId, value: values.value }, false, ready);
+      } else {
+        await this.command(id, values, { guard: ready });
+      }
+      return { accepted: true, source: model.source, message: model.source === 'room' ?
+        'Desired room temperature saved. The rule keeps its update interval.' : 'Waiting for Nest confirmation.' };
+    } finally {
+      this.busy = false;
+    }
   }
 
   async setAutomationTarget(serial, value, expected, permitted = () => true) {

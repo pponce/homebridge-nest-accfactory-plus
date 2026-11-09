@@ -2,21 +2,21 @@
 
 The package and repository are `homebridge-nest-climate-cntrl`. Platform alias: `NestClimateCntrl`.
 
-The current climate release target is `0.5.0-beta.21`. Publish it with the npm `beta` tag. Do not label it `latest`.
+The current climate release target is `0.5.0`. Publish it with the npm `latest` tag. This is a stable GitHub release.
 
 ## GitHub release
 
-Update package.json and package-lock.json, write the exact version section in PRERELEASE_NOTES.md, and set `.github/release-version` to that version. The marker triggers release validation on main. The release workflow checks all six supported Node/Homebridge combinations, embedded and standalone dashboard behavior and a production-only tarball installation before creating a prerelease.
+Update package.json and package-lock.json, write the exact version section in CHANGELOG.md (PRERELEASE_NOTES.md for prereleases), and set `.github/release-version` to that version. The marker triggers release validation on main. The release workflow checks all six supported Node/Homebridge combinations, embedded and standalone dashboard behavior and a production-only tarball installation before creating the GitHub release.
 
-Release assets include the tested npm tarball, a read-only migration preflight, a checkout-update/publication helper, an execution-beta installer, and SHA256SUMS. Release notes describe the current feature scope and link to the setup guide. Accfactory/Plus migration remains a fresh cutover under MIGRATION.md; existing Climate installations update normally.
+Release assets include the tested npm tarball, a read-only migration preflight, a checkout-update/publication helper, a release installer, and SHA256SUMS. Release notes describe the current feature scope and link to the setup guide. Accfactory/Plus migration remains a fresh cutover under MIGRATION.md; existing Climate installations update normally.
 
 ## npm
 
-The first publication requires the maintainer's authenticated npm account. Do not put npm credentials in a chat, repository or script. Use the checked release tarball with `npm publish --ignore-scripts --access public --tag beta`.
+The first publication requires the maintainer's authenticated npm account. Do not put npm credentials in a chat, repository or script. Use the checked release tarball with `npm publish --ignore-scripts --access public --tag latest`.
 
-After explicit publication approval, run the current `maintenance/update-checkout-and-publish-beta.sh` from the existing project checkout. It fast-forwards a clean local `main`, updates submodules, downloads and verifies the tested GitHub tarball, and prints the npm login/authorization URL when needed. Open that URL in a browser on your own computer; the SSH terminal waits for approval without asking Enter to launch a browser. The helper uses npm’s per-command `--browser=false` option and does not change global npm settings. It does not stop Homebridge, install the plugin, alter accessory caches or create backups. A private publication-result report includes a command for copying it to a Mac. Registry propagation is retried; accepted uploads are not republished.
+After explicit publication approval, run the current `maintenance/update-checkout-and-publish-release.sh` from the existing project checkout. It fast-forwards a clean local `main`, updates submodules, downloads and verifies the tested GitHub tarball, and prints the npm login/authorization URL when needed. Open that URL in a browser on your own computer; the SSH terminal waits for approval without asking Enter to launch a browser. The helper uses npm’s per-command `--browser=false` option and does not change global npm settings. It does not stop Homebridge, install the plugin, alter accessory caches or create backups. A private publication-result report includes a command for copying it to a Mac. Registry propagation is retried; accepted uploads are not republished.
 
-Pass `--github-release` to handle both release steps. If the published GitHub beta and its package assets are ready, the helper reuses them. Otherwise it starts `release.yml` on `main` using an authenticated GitHub CLI and waits for the validated release before attempting npm publication. If GitHub CLI authentication is unavailable, it prints the workflow URL for starting the release manually. An unavailable or invalid GitHub release prevents npm publication. The version must already be prepared on `main`; the helper does not invent or bump a version.
+Pass `--github-release` to handle both release steps. If the published GitHub release and its package assets are ready, the helper reuses them. Otherwise it starts `release.yml` on `main` using an authenticated GitHub CLI and waits for the validated release before attempting npm publication. If GitHub CLI authentication is unavailable, it prints the workflow URL for starting the release manually. An unavailable or invalid GitHub release prevents npm publication. The version must already be prepared on `main`; the helper does not invent or bump a version.
 
 After the package exists, configure trusted publishing in npm's package settings:
 

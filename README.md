@@ -6,20 +6,20 @@ Bring Nest thermostats, room temperatures and climate controls into Apple Home, 
 
 Use temperatures from the rooms that matter, coordinate Homebridge room fans, and combine multiple presence sensors into a separate Climate Home/Away accessory.
 
-**Public beta:** this version is still being tested on real equipment. Install the `beta` release and report issues with your thermostat model and Homebridge version.
+**Stable release:** install `homebridge-nest-climate-cntrl` from npm. Climate rules are optional and disabled until you enable and save them.
 
 **Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and pairing.** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Recreate affected Apple Home room assignments, scenes and automations; follow the [cutover instructions](MIGRATION.md). Existing Climate Cntrl installations can update normally.
 
 ## What's included
 
-| Feature | What you can do in this beta |
+| Feature | What you can do |
 | --- | --- |
 | **Visual setup and admin dashboard** | Configure accounts and accessories in Homebridge. Open a separate web dashboard with sign-in, thermostat status, sensor search, settings and guided rule editors. |
 | **Temperature groups with Nest and other sensors** | Use one sensor or average associated Nest sensors, other Homebridge temperature sensors, or both. Enable bounded Nest target adjustments to follow the group's desired temperature in **Heat mode**. |
 | **Homebridge ceiling and room fans** | Run fans above a room-temperature threshold or during Nest heating/cooling activity. For fans with speed control, increase airflow with the temperature above a comfort target, bounded by your speed cap. Give overlapping rules different priorities; manual changes suspend automation for that fan. |
 | **Heating response & tuning** | Choose the heating type, observe local heating cycles, and review evidence and confidence for each rule’s interval and adjustment recommendations. Apply each suggestion explicitly in Settings. |
 | **Home/Away from multiple signals** | Combine Nest Home/Away, motion and occupancy using any/all logic, motion holds and an Away delay. Publish a separate read-only Apple Home occupancy sensor, with timed dashboard overrides. |
-| **Live Nest controls** | Use supported Eco controls, select a native Nest temperature source, and run the thermostat's HVAC blower with timed actions. |
+| **Live Nest controls** | Edit the desired room or Nest target directly on a web thermostat card, use Eco controls, inspect the native temperature source, and run the HVAC blower with timed actions. |
 | **Schedules and runtime** | Inspect reported weekly setpoints, the next planned change and observed heating/cooling totals with a weekly chart. |
 
 **Execution is opt-in for each rule.** Review the inputs, select **Enable automatic execution**, and **Save changes**. Disabled rules remain drafts. The dashboard shows execution status, reasons for waiting or pausing, and immediate pause/resume controls. Previously active temperature and fan rules continue after restart once current readings and equipment checks pass. Deliberately paused rules stay paused. Enable **Pause after bridge restart** in Settings to require Resume instead. See the [first-rule walkthroughs](WEB_DASHBOARD.md#try-your-first-rules).
@@ -62,6 +62,12 @@ For example, keep a motion detection positive for **10 minutes**, then require *
 
 The combined sensor does not change Google's Home/Away or Eco settings. You can use its occupancy state in your own Apple Home automations. Existing native Nest Home/Away remains available separately. [Create and test a presence rule](WEB_DASHBOARD.md#homeaway-example).
 
+### Adjust temperatures from the web dashboard
+
+Click the target temperature on a thermostat card to open its inline editor. Use **− / +**, or enter a temperature, then choose **Apply**. **Cancel** closes an unsent edit.
+
+An active climate rule edits **Desired room temperature** and retains its selected sensors. The smaller **Nest target** shows the compensated setting sent to the thermostat. Native control and paused rules edit Nest directly; a paused rule stays paused. Heat • Cool mode offers separate heating and cooling targets. Temperature action editing is available only in the standalone dashboard. [Temperature controls](WEB_DASHBOARD.md#change-temperature-from-a-thermostat-card).
+
 ### Admin interface and visual configuration
 
 Choose **Celsius or Fahrenheit** under **Settings → Your dashboard → Temperature units**, or **Dashboard preferences** in the Homebridge plugin UI. Readings, targets and rule limits use your choice; existing rules retain their temperatures. See [temperature units](WEB_DASHBOARD.md#choose-temperature-units).
@@ -94,7 +100,7 @@ Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0
 ## Get started
 
 1. Use Homebridge **1.11.4+ or 2.4.0+** with Node **22 or 24**. Node **26** requires Homebridge **2.4.0+**.
-2. Install **`homebridge-nest-climate-cntrl@beta`** through Homebridge's plugin installer. A child bridge is recommended for a new installation.
+2. Install **`homebridge-nest-climate-cntrl`** through Homebridge's plugin installer. A child bridge is recommended for a new installation.
 3. Open **Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup**, add your account and save.
 4. Restart the plugin's bridge, then select the optional Apple Home features you want.
 
@@ -118,6 +124,6 @@ On iPhone, open the address in Safari and choose **Share → Add to Home Screen*
 
 ## Help and credits
 
-[Report a beta issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues) · [Release notes](https://github.com/pponce/homebridge-nest-climate-cntrl/releases) · [Migration](MIGRATION.md)
+[Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues) · [Release notes](https://github.com/pponce/homebridge-nest-climate-cntrl/releases) · [Migration](MIGRATION.md)
 
 Maintained by [pponce](https://github.com/pponce), based on [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) by n0rt0nthec4t and its contributors. Apache-2.0 licensed. Not affiliated with Google or Apple.
