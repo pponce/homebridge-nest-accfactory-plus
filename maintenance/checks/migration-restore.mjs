@@ -54,7 +54,7 @@ function identityMap(bridge) {
 try {
   for (const folder of [path.join(storage, 'accessories'), path.join(storage, 'persist'), path.join(project, '.git')]) fs.mkdirSync(folder, { recursive: true });
   const config = { platforms: [{ platform: 'NestAccfactory', _bridge: { username, pin: '111-22-333', port: 40000 },
-    accounts: [{ type: 'google', refreshToken: 'fixture-only' }] }] };
+    accounts: [{ name: 'Fixture', type: 'google', authMethod: 'refreshToken', refreshToken: 'fixture-only' }] }] };
   fs.writeFileSync(path.join(storage, 'config.json'), JSON.stringify(config));
   const serials = [];
   const serialized = [services.Thermostat, services.Thermostat, services.SmokeSensor, services.SmokeSensor,
@@ -82,10 +82,9 @@ try {
   applySnapshot(createSnapshot(plan, project));
 
   const api = new HomebridgeAPI();
-  const platform = Object.create(Platform.prototype);
-  platform.api = api;
-  platform.log = { info() {}, warn() {} };
-  platform.cachedAccessories = [];
+  const migratedConfig = JSON.parse(fs.readFileSync(path.join(storage, 'config.json'))).platforms[0];
+  const platform = new Platform({ info() {}, warn() {}, error() {}, debug() {} }, migratedConfig, api);
+  assert.equal(platform.dashboard, undefined, 'Cache restoration must not launch the climate runtime');
   const migratedBridge = makeBridge(api, PLUGIN_NAME, 'NestClimateCntrl', (accessory) => platform.configureAccessory(accessory));
   await migratedBridge.loadCachedPlatformAccessoriesFromDisk();
   migratedBridge.restoreCachedPlatformAccessories();
