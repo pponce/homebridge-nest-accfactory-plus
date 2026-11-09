@@ -287,7 +287,17 @@ test('schedule time zone changes apply to the rule engine without requiring a br
 
 test('dashboard unit preference persists without changing rules, credentials or requiring restart', async (t) => {
   const state = await fixture(t);
-  const rule = { id: 'room', name: 'Room', kind: 'temperature', thermostatId: 'THERMO', sourceIds: ['nest:T'], targetIds: [], desiredTemperature: 21, maximumOffset: 1.5, enabled: true };
+  const rule = {
+    id: 'room',
+    name: 'Room',
+    kind: 'temperature',
+    thermostatId: 'THERMO',
+    sourceIds: ['nest:T'],
+    targetIds: [],
+    desiredTemperature: 21,
+    maximumOffset: 1.5,
+    enabled: true,
+  };
   state.block.climateRuleDrafts = { temperature: [rule], fans: [], occupancy: [] };
   await fs.writeFile(state.configPath, JSON.stringify(state.root));
   const store = new WebDashboardConfig(state.configPath, state.block);
