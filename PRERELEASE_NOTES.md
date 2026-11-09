@@ -1,3 +1,18 @@
+## v0.5.0-beta.18
+
+**Confirmed Eco feedback and temperature groups using Nest’s built-in sensor.**
+
+- Eco controls immediately show the requested setting with a pending indicator. The dashboard checks Nest’s reported state every two seconds for up to 30 seconds. Failed or unconfirmed changes show the last reported setting with a dismissible explanation; commands are never repeated automatically.
+- A positively reported built-in Nest sensor can guide a temperature group when Nest omits its paired-sensor list. Groups can combine that reading with other Homebridge temperature sensors without requiring official Nest room sensors.
+- Waiting temperature rules identify their actual unmet requirement. Heat mode is required; the thermostat can be idle while the rule is active.
+- Native sensor setup still requires fully validated settings. Missing, conflicting or unsupported sensor selections do not authorize heating control or sensor-setting changes.
+
+After updating, reload the dashboard and review and **Resume** enabled temperature/fan rules after the bridge restart. Expand **Temperature controlled by** to check the active rule and its status. Set the group’s desired temperature in **Climate rules**; manual Nest target changes and schedule boundaries still pause the rule in this beta.
+
+See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.18/WEB_DASHBOARD.md).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.17
 
 **Read-only temperature controller information for every thermostat.**

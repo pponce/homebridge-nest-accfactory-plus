@@ -13,7 +13,7 @@ Repository: `pponce/homebridge-nest-climate-cntrl`. Base: `main` at `4f2fb3bcc2e
 
 ## Validation
 
-115 focused tests passed locally, including the idle built-in plus Homebridge group. JavaScript syntax and whitespace checks passed. Browser validation uses the repository's GitHub workflow because this environment cannot launch Chromium. Physical hardware verification remains pending.
+115 focused tests passed locally, including the idle built-in plus Homebridge group. JavaScript syntax and whitespace checks passed. GitHub Test run 42656537057 and dashboard run 42656536991 passed on c87623f8bbd75cf0c833c70bff6cca9aade3732d, including all six Node/Homebridge combinations, lint, coverage, builds, migration, production package checks and browser suites. All 23 publisher and 14 installer scenarios passed locally. Physical hardware verification remains pending.
 
 ## Decisions and next steps
 
@@ -24,7 +24,8 @@ Objective: finish Eco command feedback and built-in sensor validation, then publ
 Repository/branch: pponce/homebridge-nest-climate-cntrl, fix/eco-sensor-feedback -> main.
 Completed: optimistic Eco display; 2-second confirmation reads and 30-second timeout; independent thermostat feedback; precise waiting reasons; omitted paired list no longer blocks a positively confirmed built-in source.
 Local checks: 115 focused tests passed; syntax/diff checks passed.
-Pending: GitHub CI/browser validation, merge, beta.18 release workflow, pinned npm publisher, physical installation verification.
+GitHub validation: Test 42656537057 and dashboard 42656536991 passed. Merge commit: ecf9f9d92a981e509f5e739f7607c50234596e62.
+Pending: beta.18 release workflow, pinned npm publisher and physical installation verification.
 Important: sensor configuration writes remain strict; unknown/ambiguous sensor state remains blocked; no automatic command retries or fabricated cancellation; no assistant-run npm publication.
 Next: inspect CI, resolve failures, merge, release, verify artifacts and provide the complete SSH-safe publishing block.
 ```

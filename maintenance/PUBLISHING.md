@@ -2,7 +2,7 @@
 
 The package and repository are `homebridge-nest-climate-cntrl`. Platform alias: `NestClimateCntrl`.
 
-The current climate release target is `0.5.0-beta.17`. Publish it with the npm `beta` tag. Do not label it `latest`.
+The current climate release target is `0.5.0-beta.18`. Publish it with the npm `beta` tag. Do not label it `latest`.
 
 ## GitHub release
 
