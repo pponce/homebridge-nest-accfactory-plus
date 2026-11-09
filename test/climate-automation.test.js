@@ -104,8 +104,7 @@ async function fixture(t, initial = { temperature: [temperatureRule] }) {
       const source = external.find((entry) => entry.id === id);
       if (typeof expected === 'boolean') {
         assert.equal(source.running, expected);
-      }
-      else {
+      } else {
         assert.deepEqual(fanState(source), expected);
       }
       if (options.guard) {
@@ -750,8 +749,7 @@ test('speed control restores a previously running fan within the cap after pause
     assert.equal(f.source('fan').speed, 25);
     if (baseline === 60) {
       await f.engine.control({ id: 'fans', action: 'pause' });
-    }
-    else {
+    } else {
       f.source('room').available = false;
       await f.engine.tick();
     }
@@ -848,4 +846,20 @@ test('changing between speed and on/off modes releases old ownership before a di
   assert.equal(f.source('fan').running, false);
   assert.equal(f.engine.leases.size, 0);
   assert.equal(f.rule('fans').paused, false);
+});
+
+test('an owned previously running fan stops when no restoration speed fits a reduced cap', async (t) => {
+  const f = await fixture(t, {});
+  f.source('fan').running = true;
+  f.source('fan').speed = 75;
+  f.source('fan').speedCapabilities = speedCapabilities({ perms: ['pr', 'pw'], minStep: 25 });
+  f.rules({ fans: [speedRule] });
+  fahrenheitRoom(f, 74);
+  await f.engine.tick();
+  await f.engine.tick();
+  f.rules({ fans: [{ ...speedRule, minimumSpeed: 1, maximumSpeed: 20 }] });
+  await f.engine.tick();
+  assert.equal(f.source('fan').running, false);
+  await f.engine.tick();
+  assert.equal(f.engine.leases.size, 0);
 });

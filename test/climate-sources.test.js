@@ -42,8 +42,7 @@ async function fixture(t, speedProperties) {
         const command = JSON.parse(options.body).characteristics[0];
         if (command.iid === 22) {
           speedValue = command.value;
-        }
-        else {
+        } else {
           fanValue = command.value;
         }
         return {

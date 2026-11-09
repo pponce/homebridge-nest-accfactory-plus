@@ -601,7 +601,7 @@ function renderRuleEditor() {
     const fields = el('div', undefined, 'form-grid'); inputField(fields, 'Motion hold (minutes)', rule.holdMinutes ?? 10, (value) => { rule.holdMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); inputField(fields, 'Delay before Away (minutes)', rule.awayDelayMinutes ?? 20, (value) => { rule.awayDelayMinutes = value; }, { type: 'number', min: 0, max: 1440, step: 1 }); behavior.append(fields);
   } else {
     const outputs = editorSection(host, '01', 'Choose your room fans', 'These are ceiling or room fans exposed by Homebridge. Nest’s HVAC blower has its own controls on Overview.'); picker(outputs, rule, 'targetIds', ['fan']);
-    const behavior = editorSection(host, '02', 'Choose when the fans run', 'Use temperature or Nest heating/cooling activity. Manual speed or power changes pause automatic control. Fans provide cooling comfort through airflow; the comfort target does not change a thermostat.');
+    const behavior = editorSection(host, '02', 'Choose when the fans run', 'Use temperature or Nest heating/cooling activity. Manual power changes pause any fan rule; speed changes also pause temperature-based speed rules. Fans provide cooling comfort through airflow; the comfort target does not change a thermostat.');
     inputField(behavior, 'Run condition', rule.action || 'temperature', (value) => {
       rule.action = value;
       if (value === speedAction) {
