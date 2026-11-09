@@ -1,5 +1,7 @@
 # Climate execution engine checkpoint
 
+For the beta.7 dashboard unit preference and its release checks, see [TEMPERATURE_UNITS_HANDOFF.md](TEMPERATURE_UNITS_HANDOFF.md).
+
 Updated: 2026-11-09. Beta.6 GitHub prerelease published; physical hardware trials pending.
 
 ## Objective and repository
