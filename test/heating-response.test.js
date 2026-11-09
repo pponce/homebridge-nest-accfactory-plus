@@ -16,8 +16,19 @@ async function fixture(t) {
   let now = epoch;
   const history = new HeatingResponse({ directory, now: () => now });
   await history.start();
-  const rule = { id: 'rooms', name: 'Rooms', kind: 'temperature', thermostatId: 'T', sourceIds: ['a', 'b'],
-    targetIds: [], aggregation: 'average', desiredTemperature: 21, maximumOffset: 1.5, minimumIntervalMinutes: 5, enabled: false };
+  const rule = {
+    id: 'rooms',
+    name: 'Rooms',
+    kind: 'temperature',
+    thermostatId: 'T',
+    sourceIds: ['a', 'b'],
+    targetIds: [],
+    aggregation: 'average',
+    desiredTemperature: 21,
+    maximumOffset: 1.5,
+    minimumIntervalMinutes: 5,
+    enabled: false,
+  };
   const options = { serialNumber: 'T', heatingType: 'forcedAir', heatingResponseEnabled: true, scheduleTimeZone: 'UTC' };
   const sample = (time, room, heating, extra = {}) => {
     now = time;
@@ -40,8 +51,17 @@ async function fixture(t) {
       cycle(epoch + d * DAY + 2 * 60 * MINUTE, offset);
     }
   };
-  return { history, directory, rule, options, sample, cycle, train, now: () => now,
-    view: () => history.snapshot([rule], [options]).rules[0] };
+  return {
+    history,
+    directory,
+    rule,
+    options,
+    sample,
+    cycle,
+    train,
+    now: () => now,
+    view: () => history.snapshot([rule], [options]).rules[0],
+  };
 }
 
 test('starting guidance is provisional, needs a known type and never changes the saved rule', async (t) => {
@@ -164,8 +184,17 @@ test('coast must settle and cycles need measured warming near the desired temper
   record.active = { start: f.now() - 13 * 60 * MINUTE, setpoint: 22 };
   f.sample(f.now() + MINUTE, 21, true);
   assert.match(record.status, /too long/);
-  record.active = { start: f.now() - 4 * 60 * MINUTE, stop: f.now() - 181 * MINUTE, room: 20, stopRoom: 21,
-    peak: 21, peakAt: f.now(), rate: 0.1, setpoint: 22, offsets: [] };
+  record.active = {
+    start: f.now() - 4 * 60 * MINUTE,
+    stop: f.now() - 181 * MINUTE,
+    room: 20,
+    stopRoom: 21,
+    peak: 21,
+    peakAt: f.now(),
+    rate: 0.1,
+    setpoint: 22,
+    offsets: [],
+  };
   f.sample(f.now() + MINUTE, 21, false);
   assert.match(record.status, /three hours/);
 });
@@ -246,8 +275,16 @@ test('Apply saves only the requested rule limits with optimistic concurrency and
   const f = await fixture(t);
   const file = path.join(f.directory, 'config.json');
   const other = { ...f.rule, id: 'other', name: 'Other', thermostatId: 'OTHER' };
-  const root = { platforms: [{ platform: 'NestClimateCntrl', untouched: 'keep', devices: [f.options],
-    climateRuleDrafts: { temperature: [f.rule, other], fans: [], occupancy: [] } }] };
+  const root = {
+    platforms: [
+      {
+        platform: 'NestClimateCntrl',
+        untouched: 'keep',
+        devices: [f.options],
+        climateRuleDrafts: { temperature: [f.rule, other], fans: [], occupancy: [] },
+      },
+    ],
+  };
   await fs.writeFile(file, JSON.stringify(root));
   const config = new WebDashboardConfig(file, root.platforms[0]);
   const engine = new ClimateAutomation({ directory: f.directory, dashboard: {}, config, now: f.now });
@@ -260,7 +297,9 @@ test('Apply saves only the requested rule limits with optimistic concurrency and
   assert.deepEqual(saved.config.rules.temperature[1], other);
   assert.equal(JSON.parse(await fs.readFile(file, 'utf8')).platforms[0].untouched, 'keep');
   await assert.rejects(engine.applyHeatingRecommendation(payload), { status: 409 });
-  await assert.rejects(engine.applyHeatingRecommendation({ ...payload, revision: saved.revision, recommendationId: 'old' }), { status: 409 });
+  await assert.rejects(engine.applyHeatingRecommendation({ ...payload, revision: saved.revision, recommendationId: 'old' }), {
+    status: 409,
+  });
   await assert.rejects(engine.applyHeatingRecommendation({ ...payload, revision: saved.revision, extra: true }), { status: 400 });
   await assert.rejects(engine.applyHeatingRecommendation({ ...payload, revision: saved.revision, stage: 'learned' }), { status: 409 });
   f.train();
@@ -286,11 +325,12 @@ test('heating settings are validated, preserved and applied without a bridge res
   assert.equal(view.config.devices[0].heatingType, 'forcedAir');
   assert.equal(view.config.devices[0].heatingResponseEnabled, true);
   for (const invalid of [{ heatingType: 'steam' }, { heatingResponseEnabled: 'true' }]) {
-    await assert.rejects(config.save({ revision: view.revision, config: { devices: [{ serialNumber: 'T', ...invalid }] } }), { status: 400 });
+    await assert.rejects(config.save({ revision: view.revision, config: { devices: [{ serialNumber: 'T', ...invalid }] } }), {
+      status: 400,
+    });
   }
   assert.equal(JSON.parse(await fs.readFile(file, 'utf8')).platforms[0].devices[0].custom, 'keep');
 });
-
 
 test('radiant response that begins after heating stops is measured through the settled peak', async (t) => {
   const f = await fixture(t);

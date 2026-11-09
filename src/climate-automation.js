@@ -308,9 +308,15 @@ export class ClimateAutomation {
       }
     }
     if (
-      this.rules.some((rule) => (rule.enabled || (rule.kind === 'temperature' &&
-        this.deviceOptions.some((device) => device.serialNumber.toUpperCase() === rule.thermostatId?.toUpperCase() &&
-          device.heatingResponseEnabled))) && [...rule.sourceIds, ...rule.targetIds].some((id) => !id.startsWith('nest:'))) ||
+      this.rules.some(
+        (rule) =>
+          (rule.enabled ||
+            (rule.kind === 'temperature' &&
+              this.deviceOptions.some(
+                (device) => device.serialNumber.toUpperCase() === rule.thermostatId?.toUpperCase() && device.heatingResponseEnabled,
+              ))) &&
+          [...rule.sourceIds, ...rule.targetIds].some((id) => !id.startsWith('nest:')),
+      ) ||
       [...this.leases.values()].some((lease) => lease.kind === 'fan')
     ) {
       try {
@@ -379,16 +385,30 @@ export class ClimateAutomation {
 
   async observeHeating() {
     const rules = this.rules.filter((rule) => rule.kind === 'temperature');
-    const readings = new Map(rules.map((rule) => {
-      const device = this.device(rule.thermostatId);
-      const data = device?.data ?? {};
-      const room = this.temperatureInputs(rule);
-      return [rule.id, {
-        valid: this.connected(device) && room !== null && data.hvac_mode === 'heat' && data.eco_mode === false &&
-          data.active_rcs_sensor === '' && ['heating', 'off'].includes(data.hvac_state) && data.can_heat !== false,
-        room, physical: data.physical_temperature, target: target(device), heating: data.hvac_state === 'heating',
-      }];
-    }));
+    const readings = new Map(
+      rules.map((rule) => {
+        const device = this.device(rule.thermostatId);
+        const data = device?.data ?? {};
+        const room = this.temperatureInputs(rule);
+        return [
+          rule.id,
+          {
+            valid:
+              this.connected(device) &&
+              room !== null &&
+              data.hvac_mode === 'heat' &&
+              data.eco_mode === false &&
+              data.active_rcs_sensor === '' &&
+              ['heating', 'off'].includes(data.hvac_state) &&
+              data.can_heat !== false,
+            room,
+            physical: data.physical_temperature,
+            target: target(device),
+            heating: data.hvac_state === 'heating',
+          },
+        ];
+      }),
+    );
     try {
       this.heatingResponse.observe(rules, this.deviceOptions, readings);
       await this.heatingResponse.persist();
@@ -409,18 +429,26 @@ export class ClimateAutomation {
 
   applyHeatingRecommendation(payload) {
     return this.serialize(async () => {
-      if (this.stopping || !payload || Object.keys(payload).some((key) => !['id', 'stage', 'recommendationId', 'revision'].includes(key)) ||
-        !['starting', 'learned'].includes(payload.stage)) {
+      if (
+        this.stopping ||
+        !payload ||
+        Object.keys(payload).some((key) => !['id', 'stage', 'recommendationId', 'revision'].includes(key)) ||
+        !['starting', 'learned'].includes(payload.stage)
+      ) {
         throw new DashboardConfigError('Choose a current heating recommendation.');
       }
       const envelope = await this.config.snapshot();
       if (envelope.rulesError || envelope.revision !== payload.revision) {
         throw new DashboardConfigError('Settings changed. Reload the recommendations before applying.', 409);
       }
-      const recommendation = this.heatingResponse.snapshot(envelope.config.rules.temperature, envelope.config.devices)
+      const recommendation = this.heatingResponse
+        .snapshot(envelope.config.rules.temperature, envelope.config.devices)
         .rules.find((rule) => rule.id === payload.id)?.[payload.stage];
-      if (!recommendation || recommendation.id !== payload.recommendationId ||
-        (payload.stage === 'learned' && this.heatingResponse.error)) {
+      if (
+        !recommendation ||
+        recommendation.id !== payload.recommendationId ||
+        (payload.stage === 'learned' && this.heatingResponse.error)
+      ) {
         throw new DashboardConfigError('This recommendation is no longer available. Refresh and review the latest evidence.', 409);
       }
       const rules = structuredClone(envelope.config.rules);

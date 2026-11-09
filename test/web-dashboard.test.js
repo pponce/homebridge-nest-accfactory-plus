@@ -915,7 +915,6 @@ test('HTTPS reverse proxy carries secure sessions, actions, configuration and lo
   assert.equal((await request('/api/rules/command', { method: 'POST', headers, body: { id: 'rooms', action: 'resume' } })).status, 401);
 });
 
-
 test('heating recommendations use authenticated reads and CSRF-protected explicit Apply', async (t) => {
   const state = await fixture(t);
   const server = new WebDashboard({ ...state, platformConfig: state.block });
@@ -929,8 +928,14 @@ test('heating recommendations use authenticated reads and CSRF-protected explici
   let reads = 0;
   let applies = 0;
   state.dashboard.automation = {
-    heatingRecommendations: async () => { reads++; return { rules: [] }; },
-    applyHeatingRecommendation: async (payload) => { applies++; return { applied: payload.id }; },
+    heatingRecommendations: async () => {
+      reads++;
+      return { rules: [] };
+    },
+    applyHeatingRecommendation: async (payload) => {
+      applies++;
+      return { applied: payload.id };
+    },
   };
   assert.deepEqual((await call(server, '/api/heating-response', { cookie })).data.rules, []);
   assert.equal(reads, 1);

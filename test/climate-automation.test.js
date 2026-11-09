@@ -524,7 +524,6 @@ test('enabled-rule validation rejects conflicting owners and incomplete rules bu
   assert.throws(() => validateRuleDrafts({ fans: [{ ...fanRule, targetIds: [] }] }), /at least one/);
 });
 
-
 test('local observation reads disabled-rule sensors without commands and discards unavailable input', async (t) => {
   const f = await fixture(t, { temperature: [{ ...temperatureRule, enabled: false }] });
   f.devices.push({ serialNumber: 'T', heatingType: 'radiantFloor', heatingResponseEnabled: true });

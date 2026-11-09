@@ -13,7 +13,7 @@ export const HEATING_PROFILES = Object.freeze({
   radiators: { label: 'Radiators', minimumIntervalMinutes: 20, maximumOffset: 0.75, settleMinutes: 10 },
   radiantFloor: { label: 'In-floor radiant', minimumIntervalMinutes: 30, maximumOffset: 0.5, settleMinutes: 20 },
 });
-const profileFor = (type) => Object.hasOwn(HEATING_PROFILES, type) ? HEATING_PROFILES[type] : undefined;
+const profileFor = (type) => (Object.hasOwn(HEATING_PROFILES, type) ? HEATING_PROFILES[type] : undefined);
 const digest = (value) => crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const median = (values) => {
   const ordered = values.filter(Number.isFinite).sort((a, b) => a - b);
@@ -22,17 +22,37 @@ const median = (values) => {
 };
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const optionFor = (rule, devices) => devices.find((device) => device.serialNumber.toUpperCase() === rule.thermostatId?.toUpperCase()) ?? {};
-const fingerprint = (rule, options) => digest([
-  rule.thermostatId, [...new Set(rule.sourceIds)].sort(), rule.aggregation ?? 'average', rule.desiredTemperature,
-  options.heatingType, options.scheduleTimeZone ?? '',
-]);
-const validSample = (sample) => Array.isArray(sample) && sample.length === 5 && sample.every(Number.isFinite) &&
-  sample[0] > 0 && Math.abs(sample[1]) <= 100 && Math.abs(sample[2]) <= 100 && sample[3] >= 9 && sample[3] <= 32 &&
+const fingerprint = (rule, options) =>
+  digest([
+    rule.thermostatId,
+    [...new Set(rule.sourceIds)].sort(),
+    rule.aggregation ?? 'average',
+    rule.desiredTemperature,
+    options.heatingType,
+    options.scheduleTimeZone ?? '',
+  ]);
+const validSample = (sample) =>
+  Array.isArray(sample) &&
+  sample.length === 5 &&
+  sample.every(Number.isFinite) &&
+  sample[0] > 0 &&
+  Math.abs(sample[1]) <= 100 &&
+  Math.abs(sample[2]) <= 100 &&
+  sample[3] >= 9 &&
+  sample[3] <= 32 &&
   [0, 1].includes(sample[4]);
 const cycleFields = ['start', 'end', 'delay', 'rate', 'coastMinutes', 'coastRise', 'offset', 'overshoot'];
-const validCycle = (cycle) => cycle && cycleFields.every((key) => Number.isFinite(cycle[key])) &&
-  cycle.end >= cycle.start && cycle.end - cycle.start <= DAY && cycle.delay >= 0 && cycle.rate > 0 &&
-  cycle.coastMinutes >= 0 && cycle.coastRise >= 0 && Math.abs(cycle.offset) <= 200 && cycle.overshoot >= 0;
+const validCycle = (cycle) =>
+  cycle &&
+  cycleFields.every((key) => Number.isFinite(cycle[key])) &&
+  cycle.end >= cycle.start &&
+  cycle.end - cycle.start <= DAY &&
+  cycle.delay >= 0 &&
+  cycle.rate > 0 &&
+  cycle.coastMinutes >= 0 &&
+  cycle.coastRise >= 0 &&
+  Math.abs(cycle.offset) <= 200 &&
+  cycle.overshoot >= 0;
 
 export class HeatingResponse {
   constructor({ directory, now = Date.now }) {
@@ -56,14 +76,26 @@ export class HeatingResponse {
       }
       const now = this.now();
       for (const record of data.records) {
-        if (!record || !/^[a-zA-Z0-9_-]{1,80}$/.test(record.id) || this.records.has(record.id) ||
-          !/^[a-f0-9]{64}$/.test(record.signature) || !Number.isFinite(record.since) || record.since > now ||
-          !Array.isArray(record.samples) || record.samples.length > SAMPLE_LIMIT || !record.samples.every(validSample) ||
-          !Array.isArray(record.cycles) || record.cycles.length > CYCLE_LIMIT || !record.cycles.every(validCycle)) {
+        if (
+          !record ||
+          !/^[a-zA-Z0-9_-]{1,80}$/.test(record.id) ||
+          this.records.has(record.id) ||
+          !/^[a-f0-9]{64}$/.test(record.signature) ||
+          !Number.isFinite(record.since) ||
+          record.since > now ||
+          !Array.isArray(record.samples) ||
+          record.samples.length > SAMPLE_LIMIT ||
+          !record.samples.every(validSample) ||
+          !Array.isArray(record.cycles) ||
+          record.cycles.length > CYCLE_LIMIT ||
+          !record.cycles.every(validCycle)
+        ) {
           throw new Error('Invalid heating history');
         }
         this.records.set(record.id, {
-          id: record.id, signature: record.signature, since: record.since,
+          id: record.id,
+          signature: record.signature,
+          since: record.since,
           samples: record.samples.filter((sample) => sample[0] >= now - 2 * DAY && sample[0] <= now),
           cycles: record.cycles.filter((cycle) => cycle.end >= now - 30 * DAY && cycle.end <= now),
           // A partial cycle never crosses a restart or a missing observation.
@@ -82,15 +114,24 @@ export class HeatingResponse {
     const wanted = new Set();
     for (const rule of rules) {
       const options = optionFor(rule, devices);
-      if (!options.heatingResponseEnabled || !profileFor(options.heatingType) || !rule.sourceIds.length ||
-        !Number.isFinite(rule.desiredTemperature)) {
+      if (
+        !options.heatingResponseEnabled ||
+        !profileFor(options.heatingType) ||
+        !rule.sourceIds.length ||
+        !Number.isFinite(rule.desiredTemperature)
+      ) {
         continue;
       }
       wanted.add(rule.id);
       const signature = fingerprint(rule, options);
       if (this.records.get(rule.id)?.signature !== signature) {
         this.records.set(rule.id, {
-          id: rule.id, signature, since: this.now(), samples: [], cycles: [], status: 'Waiting for a complete heating cycle.',
+          id: rule.id,
+          signature,
+          since: this.now(),
+          samples: [],
+          cycles: [],
+          status: 'Waiting for a complete heating cycle.',
         });
         this.dirty = true;
         this.resetPending = true;
@@ -210,9 +251,14 @@ export class HeatingResponse {
     const rate = (active.peak - active.room) / ((active.peakAt - active.start) / MINUTE);
     if (Number.isFinite(active.delay) && rate > 0 && active.stop - active.start >= 2 * MINUTE && active.offsets.length >= 3) {
       record.cycles.push({
-        start: active.start, end: time, delay: active.delay, rate,
-        coastMinutes: (active.peakAt - active.stop) / MINUTE, coastRise: Math.max(0, active.peak - active.stopRoom),
-        offset: median(active.offsets), overshoot: Math.max(0, active.maxRoom - desired),
+        start: active.start,
+        end: time,
+        delay: active.delay,
+        rate,
+        coastMinutes: (active.peakAt - active.stop) / MINUTE,
+        coastRise: Math.max(0, active.peak - active.stopRoom),
+        offset: median(active.offsets),
+        overshoot: Math.max(0, active.maxRoom - desired),
       });
       record.cycles = record.cycles.slice(-CYCLE_LIMIT);
       record.status = 'Complete heating cycle recorded.';
@@ -238,7 +284,10 @@ export class HeatingResponse {
     const days = new Set(dates).size;
     const span = cycles.length > 1 ? (cycles.at(-1).start - cycles[0].start) / DAY : 0;
     const evidence = {
-      cycles: cycles.length, days, spanDays: span, since: record?.since ?? null,
+      cycles: cycles.length,
+      days,
+      spanDays: span,
+      since: record?.since ?? null,
       responseDelayMinutes: median(cycles.map((cycle) => cycle.delay)),
       warmingRateCPerHour: median(cycles.map((cycle) => cycle.rate * 60)),
       coastMinutes: median(cycles.map((cycle) => cycle.coastMinutes)),
@@ -246,10 +295,14 @@ export class HeatingResponse {
       nestMinusRoomC: median(cycles.map((cycle) => cycle.offset)),
       overshootC: median(cycles.map((cycle) => cycle.overshoot)),
     };
-    const starting = profile ? {
-      minimumIntervalMinutes: profile.minimumIntervalMinutes, maximumOffset: profile.maximumOffset,
-      confidence: 'Provisional', reason: 'Starting guidance for ' + profile.label.toLowerCase() + '; not learned from this home.',
-    } : null;
+    const starting = profile
+      ? {
+          minimumIntervalMinutes: profile.minimumIntervalMinutes,
+          maximumOffset: profile.maximumOffset,
+          confidence: 'Provisional',
+          reason: 'Starting guidance for ' + profile.label.toLowerCase() + '; not learned from this home.',
+        }
+      : null;
     let learned = null;
     let reason = 'Choose a heating type and enable local observation to learn from this rule’s rooms.';
     if (profile && options.heatingResponseEnabled) {
@@ -265,9 +318,11 @@ export class HeatingResponse {
           const interval = clamp(Math.ceil(rawInterval / 5) * 5, profile.minimumIntervalMinutes / 2, 60);
           const offsetLimit = clamp(Math.abs(offset) + 0.25 - evidence.overshootC, 0.5, Math.min(1.5, profile.maximumOffset + 0.5));
           learned = {
-            minimumIntervalMinutes: Math.ceil(interval), maximumOffset: Math.round(offsetLimit * 4) / 4,
+            minimumIntervalMinutes: Math.ceil(interval),
+            maximumOffset: Math.round(offsetLimit * 4) / 4,
             confidence: cycles.length >= 12 && days >= 5 && span >= 4 && spread <= 0.25 ? 'Higher' : 'Moderate',
-            reason: 'Interval uses response delay, time to warm 0.25°C and continued warming after shutoff. ' +
+            reason:
+              'Interval uses response delay, time to warm 0.25°C and continued warming after shutoff. ' +
               'The adjustment limit uses the persistent room-to-Nest difference, reduced for observed overshoot.',
             limitReached: rawInterval > 60,
           };
@@ -275,15 +330,25 @@ export class HeatingResponse {
         }
       }
     }
-    for (const [stage, recommendation] of [['starting', starting], ['learned', learned]]) {
+    for (const [stage, recommendation] of [
+      ['starting', starting],
+      ['learned', learned],
+    ]) {
       if (recommendation) {
         recommendation.id = digest([rule.id, fingerprint(rule, options), stage, recommendation, stage === 'learned' ? evidence : null]);
       }
     }
     return {
-      id: rule.id, name: rule.name, thermostatId: rule.thermostatId, collecting: options.heatingResponseEnabled === true,
+      id: rule.id,
+      name: rule.name,
+      thermostatId: rule.thermostatId,
+      collecting: options.heatingResponseEnabled === true,
       current: { minimumIntervalMinutes: rule.minimumIntervalMinutes ?? 5, maximumOffset: rule.maximumOffset ?? 1.5 },
-      starting, learned, evidence, reason, status: record?.status ?? 'Observation is off.',
+      starting,
+      learned,
+      evidence,
+      reason,
+      status: record?.status ?? 'Observation is off.',
     };
   }
 
@@ -298,8 +363,10 @@ export class HeatingResponse {
     const temporary = this.file + '.' + crypto.randomUUID() + '.tmp';
     let handle;
     try {
-      const bytes = JSON.stringify({ version: 1, records: [...this.records.values()].map(({ id, signature, since, samples, cycles }) =>
-        ({ id, signature, since, samples, cycles })) });
+      const bytes = JSON.stringify({
+        version: 1,
+        records: [...this.records.values()].map(({ id, signature, since, samples, cycles }) => ({ id, signature, since, samples, cycles })),
+      });
       if (Buffer.byteLength(bytes) > FILE_LIMIT) {
         throw new Error('Heating history exceeds its storage limit');
       }
