@@ -88,6 +88,7 @@ export async function checkTemperatureEditor(browser, base, output) {
     assert.match(await page.locator('.target-feedback').innerText(), /Waiting for Nest/);
     await refresh(); assert.match(await edit().innerText(), /25.0°C/);
     heat = 25; await page.clock.runFor(2100);
+    await page.locator('.target-feedback').waitFor({ state: 'detached' });
     assert.equal(await page.locator('.target-feedback').count(), 0);
     stage = 'rejected command';
     reject = true; await edit().click(); await form().getByLabel('Heat to (°C)', { exact: true }).fill('26'); await apply();
@@ -108,7 +109,7 @@ export async function checkTemperatureEditor(browser, base, output) {
     drop = true; await edit().click(); await form().getByLabel('Heat to (°C)', { exact: true }).fill('27');
     await form().getByRole('button', { name: 'Apply', exact: true }).click();
     await page.getByText(/Connection interrupted/).waitFor(); drop = false; heat = 27;
-    await page.clock.runFor(2100); assert.equal(await page.locator('.target-feedback').count(), 0);
+    await page.clock.runFor(2100); await page.locator('.target-feedback').waitFor({ state: 'detached' });
     stage = 'range validation';
     mode = 'range'; heat = 21; cool = 25; await refresh(); await edit().click();
     await form().getByLabel('Heat to (°C)', { exact: true }).fill('24.5');

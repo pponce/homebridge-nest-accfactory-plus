@@ -1,0 +1,17 @@
+# Dashboard temperature editor and stable 0.5.0
+
+Objective: allow inline temperature adjustments from the standalone web dashboard and publish a stable GitHub 0.5.0 release, followed by a user-run npm publication script for the latest channel.
+
+Repository: pponce/homebridge-nest-climate-cntrl. Branch: feature/dashboard-temperature-control. PR: #19. Base main: d52e75f24aa6041b4903759e68e7a2326115205e (beta.21). Keep all project work in this checkout; maintenance notes belong here.
+
+Implementation: standalone thermostat cards offer an inline numeric editor with plus/minus, Apply, Cancel and Escape. Active rules edit their absolute desired room target using the same durable runtime path as Apple Home, independent of the per-thermostat HomeKit projection setting. Native or paused-rule control edits the physical Nest target; paused rules remain paused. The editor is absent in the embedded Homebridge Settings view. Heat, Cool and Heat • Cool targets, C/F conversion, mobile and dark layouts are covered.
+
+Validation: backend checks current controller, mode, Eco, lock, connectivity, supported capabilities and numeric limits. An opaque expected-state token rejects stale edits and is rechecked before queued native commands. Room writes also check current persisted rule configuration. Unconfirmed or restoring rules cannot silently fall through to native target editing. The browser preserves edits during polling, displays pending requests optimistically, waits at most 30 seconds and never resends automatically. Stop waiting dismisses confirmation only; it does not undo a sent command. Room writes retain source selections and minimum write interval and survive restart. Existing HomeKit opt-in semantics remain intact.
+
+Release preparation: package/version marker 0.5.0, publishConfig latest, consolidated CHANGELOG.md, current README/Migration/dashboard docs, stable installer and stable publisher. The release workflow chooses beta or stable assets by version, marks stable releases latest and keeps all matrix/browser/package/helper gates. No npm publish is performed by the agent.
+
+Local evidence: 121 focused runtime/API tests pass, including room-target persistence, paused/restoring transitions, invalid values, C/F conversion foundations, modes/capability checks and authentication/CSRF. All 23 publisher and 14 installer scenarios pass using mocked remote commands. Browser launch is unavailable in this local sandbox due to socket restrictions; GitHub browser jobs provide the actual execution and screenshots. Physical thermostat operation is not hardware-verified.
+
+Current checkpoint: PR #19 checks running on 05a84d8b616eacf2b7b3ae6759f09270324a0cf3. Earlier checks identified new lint warnings and missing browser-fixture endpoints, which were corrected without weakening checks. Runtime/API tests remain passing. A small target-display fallback enhancement is pending the next branch commit.
+
+Next steps: finish browser and matrix validation; inspect mobile/desktop screenshots from review/temperature-control; merge main; wait for stable GitHub release and verify tag and asset hashes; commit the exact-revision npm wrapper; deliver the full SSH-safe block. The wrapper must use latest, print START/END even on failure, never close the user's shell, and print browser authorization links. After user publication, update the existing Climate installation normally and verify inline desired-temperature changes on real hardware.

@@ -575,7 +575,9 @@ function renderThermostats() {
     current.append(document.createTextNode(actual), el('span', '°' + scale));
     current.setAttribute('aria-label', 'Current temperature ' + formatTemp(data.current_temperature));
     const target = el('div', undefined, 'temperature-target');
-    const targetText = data.hvac_mode === 'range' || data.hvac_mode === 'heatcool' ? formatTemp(data.target_temperature_low) + '–' + formatTemp(data.target_temperature_high) : formatTemp(data.target_temperature);
+    const nativeTarget = data.hvac_mode === 'heat' ? data.target_temperature_low ?? data.target_temperature :
+      data.hvac_mode === 'cool' ? data.target_temperature_high ?? data.target_temperature : data.target_temperature;
+    const targetText = data.hvac_mode === 'range' || data.hvac_mode === 'heatcool' ? formatTemp(data.target_temperature_low) + '–' + formatTemp(data.target_temperature_high) : formatTemp(nativeTarget);
     if (host) target.append(el('strong', targetText), document.createTextNode('Nest target · ' + (data.hvac_mode || 'Unknown mode')));
     else renderTarget(device, target, targetText);
     row.append(current, target);
