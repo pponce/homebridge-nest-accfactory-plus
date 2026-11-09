@@ -124,6 +124,14 @@ export class ClimateAutomation {
     this.sensorSetup = new TemperatureSensorSetup(this);
   }
 
+  notifyState() {
+    try {
+      this.onState?.();
+    } catch {
+      this.log?.warn?.('Climate status could not be refreshed in Apple Home. Automatic control will continue.');
+    }
+  }
+
   async start({ schedule = true } = {}) {
     await fs.mkdir(this.directory, { recursive: true, mode: 0o700 });
     try {
@@ -335,7 +343,7 @@ export class ClimateAutomation {
       })
       .finally(() => {
         this.pending = undefined;
-        this.onState?.();
+        this.notifyState();
       });
     return this.pending;
   }
@@ -716,7 +724,7 @@ export class ClimateAutomation {
       if (!this.roomControl(serial)) {
         throw new Error('Room control became unavailable. Review the rule before changing its target.');
       }
-    }).finally(() => this.onState?.());
+    }).finally(() => this.notifyState());
   }
 
   pause(state, reason) {
@@ -1313,7 +1321,7 @@ export class ClimateAutomation {
           }
         }
       });
-      this.onState?.();
+      this.notifyState();
     }
     return requests;
   }
@@ -1341,7 +1349,7 @@ export class ClimateAutomation {
           }
         }
       });
-      this.onState?.();
+      this.notifyState();
     }
   }
 
@@ -1407,12 +1415,12 @@ export class ClimateAutomation {
       await this.persist();
       await this.evaluate();
       return this.snapshot();
-    }).finally(() => this.onState?.());
+    }).finally(() => this.notifyState());
   }
 
   async stop() {
     this.stopping = true;
-    this.onState?.();
+    this.notifyState();
     clearInterval(this.timer);
     await this.queue;
     try {

@@ -28,6 +28,19 @@ test('dashboard units convert absolute temperatures separately from gaps and pre
 });
 
 const start = Date.parse('2026-11-06T23:59:30Z');
+test('unexpected request handler errors return a failure without rejecting into the HTTP event loop', async (t) => {
+  const f = await fixture(t);
+  const warnings = [];
+  f.dashboard.log = { warn: (message) => warnings.push(message) };
+  t.mock.method(f.dashboard, 'handle', async () => { throw new Error('SENSITIVE-FIXTURE'); });
+  const response = await fetch('http://127.0.0.1:' + f.dashboard.server.address().port + '/status');
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {});
+  assert.equal(warnings.length, 1);
+  assert.ok(!warnings[0].includes('SENSITIVE-FIXTURE'));
+  assert.equal(f.dashboard.server.listening, true);
+});
+
 test('runtime prunes old days and periodic sampling persists observed time', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const f = await fixture(t);

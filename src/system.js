@@ -103,6 +103,9 @@ export default class NestAccfactory {
   #trackedDevices = new Map(); // Devices we've created, keyed by serial number
   #deviceModules = undefined; // No loaded device support modules to start
   #supportDumpWriter = undefined; // Diagnostic writer and aliases, created only when enabled
+  #starting;
+  #shutdown;
+  #stopping = false;
 
   constructor(log, config, api) {
     this.log = log;
@@ -136,29 +139,56 @@ export default class NestAccfactory {
     this?.log?.debug?.('Node.js: v%s', process.versions.node);
 
     // Perform validation on the configuration passed into us and set defaults if not present
-    this.config = processConfig(config, this.log, this.api, { video: false });
+    try {
+      this.config = processConfig(config, this.log, this.api, { video: false });
+    } catch {
+      this.log?.error?.('Nest Climate Cntrl configuration could not be loaded. Check the plugin Settings. The plugin is inactive.');
+      return;
+    }
+    if (!this.config) {
+      return;
+    }
 
-    api?.on?.('didFinishLaunching', async () => {
-      // We got notified that Homebridge has finished loading
-
-      // Load device support modules from the plugins folder if not already done
-      this.#deviceModules = await loadDeviceModules(this.log, 'plugins', [
-        'thermostat.js',
-        'tempsensor.js',
-        'heatlink.js',
-        'homeaway.js',
-        'protect.js',
-      ]);
-
-      // Build runtime connection state now that cached accessories have been restored
-      // and device modules are ready to receive cloud updates.
-      this.#connections = this.#createConnections();
-
-      // The setup dashboard remains available before a cloud account has been configured.
-      if (this.#connections.size === 0) {
-        this?.log?.error?.('No active connections have been specified in the JSON configuration. Please review');
+    // Homebridge events do not consume rejected promises. Each lifecycle operation handles its own failures.
+    api?.on?.('didFinishLaunching', () => {
+      if (this.#stopping) {
+        return Promise.resolve();
       }
+      this.#starting ??= this.#start().catch(async () => {
+        this.log?.error?.('Nest Climate Cntrl could not start. Check the plugin configuration and storage permissions, then restart the bridge.');
+        await this.#stop();
+      });
+      return this.#starting;
+    });
+    api?.on?.('shutdown', () => {
+      this.#stopping = true;
+      this.#shutdown ??= (async () => {
+        await this.#starting;
+        await this.#stop();
+      })();
+      return this.#shutdown;
+    });
+  }
 
+  async #start() {
+    // Building account entries performs no I/O. Do not create listeners, files, timers or devices without a usable account.
+    this.#connections = this.#createConnections();
+    if (this.#connections.size === 0) {
+      this.log?.error?.('No active connections are configured. Add a Nest or Google account in Connection & advanced setup, then restart the bridge. The plugin is inactive.');
+      return;
+    }
+    this.#deviceModules = await loadDeviceModules(this.log, 'plugins', [
+      'thermostat.js',
+      'tempsensor.js',
+      'heatlink.js',
+      'homeaway.js',
+      'protect.js',
+    ]);
+    if (this.#stopping) {
+      return;
+    }
+
+    try {
       if (typeof this.api?.user?.storagePath === 'function') {
         this.dashboard = new ClimateDashboard(this.api.user.storagePath(), {
           accounts: () =>
@@ -173,10 +203,9 @@ export default class NestAccfactory {
           command: (id, values, origin) => this.#set(this.#rawData?.[id]?.connection, id, values, origin),
           log: this.log,
         });
-        try {
-          await this.dashboard.start();
-        } catch {
-          this.log.warn('Climate dashboard unavailable; thermostat integration will continue.');
+        await this.dashboard.start();
+        if (this.#stopping) {
+          return;
         }
         if (typeof this.api?.user?.configPath === 'function') {
           this.webDashboard = new WebDashboard({
@@ -188,6 +217,9 @@ export default class NestAccfactory {
           });
           this.dashboard.webDashboard = this.webDashboard;
           await this.webDashboard.start();
+          if (this.#stopping) {
+            return;
+          }
           this.automation = new ClimateAutomation({
             directory: this.webDashboard.directory,
             dashboard: this.dashboard,
@@ -200,39 +232,64 @@ export default class NestAccfactory {
             presence: new ClimatePresence(this.api, this.presenceAccessories, this.config?._bridge?.username ?? 'main'),
             log: this.log,
           });
-          try {
-            await this.automation.start();
-          } catch {
-            this.log.warn('Climate automation could not start. Native thermostat controls remain available.');
-          }
+          await this.automation.start();
         }
       }
 
-      // Start connection lifecycle per configured account.
+    } catch {
+      this.log?.warn?.('Climate dashboard and automation could not start. Check the plugin storage and dashboard settings. Native thermostat controls remain available.');
+      await this.#stopClimateServices();
+    }
+
+    if (!this.#stopping) {
       for (let [uuid] of this.#connections.entries()) {
-        this.#connections.start(uuid);
+        await this.#connections.start(uuid);
       }
-    });
+    }
+  }
 
-    api?.on?.('shutdown', async () => {
-      // We got notified that Homebridge is shutting down
-      // Perform cleanup of internal state
-      await this.automation?.stop();
-      await this.webDashboard?.stop();
-      await this.dashboard?.stop();
-      this.#connections?.shutdown?.();
+  async #stopClimateServices() {
+    for (const [name, service] of [
+      ['automation', this.automation], ['web dashboard', this.webDashboard], ['configuration dashboard', this.dashboard],
+    ]) {
+      try {
+        await service?.stop();
+      } catch {
+        this.log?.warn?.('Climate %s could not finish shutdown. Check equipment state and the plugin storage permissions.', name);
+      }
+    }
+    this.automation = undefined;
+    this.webDashboard = undefined;
+    this.dashboard = undefined;
+  }
 
-      // Cleanup internal data
-      this.#trackedDevices.clear();
-      this.#rawData = {};
-      this.#supportDumpWriter = undefined;
-      this.#connections = undefined;
-      this.#deviceModules?.clear?.();
-      this.cachedAccessories = [];
-    });
+  async #stop() {
+    await this.#stopClimateServices();
+    try {
+      await this.#connections?.shutdown?.();
+    } catch {
+      this.log?.warn?.('Nest connections could not finish shutdown.');
+    }
+    this.#trackedDevices.clear();
+    this.#rawData = {};
+    this.#supportDumpWriter = undefined;
+    this.#connections = undefined;
+    this.#deviceModules?.clear?.();
+    this.cachedAccessories = [];
   }
 
   configureAccessory(accessory) {
+    if (!this.config) {
+      return;
+    }
+    try {
+      this.#restoreAccessory(accessory);
+    } catch {
+      this.log?.warn?.('A cached Nest accessory could not be restored. Check the accessory configuration and restart the bridge.');
+    }
+  }
+
+  #restoreAccessory(accessory) {
     if (accessory?.context?.climatePresence === true) {
       this.presenceAccessories.push(accessory);
       return;

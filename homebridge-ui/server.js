@@ -9,9 +9,15 @@ class ClimateUi extends HomebridgePluginUiServer {
   constructor() {
     super();
     this.onRequest('/plugin-config', async () => {
-      const bytes = await fs.readFile(this.homebridgeConfigPath, 'utf8');
-      return { revision: crypto.createHash('sha256').update(bytes).digest('hex'),
-        blocks: JSON.parse(bytes).platforms.filter((block) => block.platform?.split('.').at(-1) === 'NestClimateCntrl') };
+      try {
+        const bytes = await fs.readFile(this.homebridgeConfigPath, 'utf8');
+        const platforms = JSON.parse(bytes)?.platforms;
+        return { revision: crypto.createHash('sha256').update(bytes).digest('hex'),
+          blocks: (Array.isArray(platforms) ? platforms : [])
+            .filter((block) => typeof block?.platform === 'string' && block.platform.split('.').at(-1) === 'NestClimateCntrl') };
+      } catch {
+        throw new RequestError('Homebridge configuration could not be read. Check its format and file permissions.', { status: 503 });
+      }
     });
     this.onRequest('/climate', (payload) => {
       const routes = { '/status': ['GET'], '/config': ['GET', 'PUT'], '/sources': ['GET'],
