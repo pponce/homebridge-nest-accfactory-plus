@@ -1,3 +1,19 @@
+## v0.5.0-beta.20
+
+**The full climate interface in Homebridge, with automatic restart recovery.**
+
+- Homebridge plugin Settings and the standalone dashboard share Overview, Sensors & fans, Climate rules and Settings, including field help, fan priority, heating recommendations and every climate option. Standalone web access can remain disabled.
+- Use **Save changes** for climate configuration. **Connection & advanced setup** uses Homebridge’s Save button for accounts and network settings. Climate saves reject stale revisions; the interface keeps Enabled and runtime Active, Waiting or Paused status distinct.
+- Previously active temperature and fan rules continue after restart once current readings and equipment checks pass. Desired room temperatures, update intervals and manual-change policies are retained. Deliberate pauses, manual fan overrides and ambiguous command outcomes remain protected.
+- **Pause after bridge restart** is available in Settings and defaults off. Turn it on to require Resume after every restart.
+- A positively reported built-in Nest sensor can guide heating when Nest omits its room-sensor scheduling mode and paired-sensor list. Native sensor schedule changes still require complete validated feedback. Official temperature and presence sensors recover availability when their readings return after reconnection.
+
+After updating, reload the interface. Review rule execution status; use **Resume** for any rule already paused. A thermostat can be idle while a temperature rule is active. No accessory re-pairing is required.
+
+See the [dashboard guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/v0.5.0-beta.20/WEB_DASHBOARD.md#homebridge-configuration-interface).
+
+[Support development](https://github.com/sponsors/pponce) · [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues)
+
 ## v0.5.0-beta.19
 
 **Keep room groups active through target changes, with optional room temperatures in Apple Home.**
