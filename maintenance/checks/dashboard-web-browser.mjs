@@ -226,7 +226,7 @@ try {
   await page.getByLabel('Current temperature 70.7°F', { exact: true }).waitFor();
   assert.match(await page.locator('#schedule-preview').innerText(), /69.8°F/);
   await page.getByRole('link', { name: 'Sensors & fans', exact: true }).click();
-  await page.getByText('68.2°F', { exact: true }).waitFor();
+  await page.locator('#source-list').getByText('68.2°F', { exact: true }).waitFor();
   await page.getByRole('link', { name: 'Climate rules', exact: false }).click();
   await page.getByRole('tab', { name: 'Temperature', exact: false }).click();
   assert.equal(await page.getByLabel('Desired room temperature (°F)', { exact: true }).inputValue(), '71.6');
