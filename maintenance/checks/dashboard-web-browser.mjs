@@ -182,7 +182,7 @@ try {
   await capture('rules-desktop.png');
   assert.equal(commands.length, 0, 'Rule previews must never call live commands');
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Saved. Enabled rules run automatically; disabled rules remain drafts.', { exact: true }).waitFor();
+  await page.getByText('Saved. Check execution status for running rules and any required setup. Disabled rules remain drafts.', { exact: true }).waitFor();
   assert.equal(saves.length, 1);
   assert.equal(saves[0].config.rules.temperature[0].desiredTemperature, 22);
   assert.equal(saves[0].config.rules.temperature[0].enabled, false);
