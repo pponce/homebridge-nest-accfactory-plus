@@ -2228,18 +2228,6 @@ const THERMOSTAT_FIELD_MAP = {
     },
   },
 
-  active_rcs_sensor: {
-    google: {
-      fields: ['remote_comfort_sensing_settings'],
-      translate: ({ raw }) =>
-        raw?.value?.remote_comfort_sensing_settings?.activeRcsSelection?.activeRcsSensor !== undefined
-          ? raw.value.remote_comfort_sensing_settings.activeRcsSelection.activeRcsSensor.resourceId
-          : raw?.value?.remote_comfort_sensing_settings?.activeRcsSelection?.rcsSourceType === 'RCS_SOURCE_TYPE_BACKPLATE'
-            ? ''
-            : undefined,
-    },
-  },
-
   linked_rcs_sensors: {
     google: {
       fields: ['remote_comfort_sensing_settings'],
@@ -2377,7 +2365,12 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
         // Apply thermostat-specific post-map adjustments
         if (typeof mappedResult?.data === 'object' && mappedResult.data?.constructor === Object) {
-          mappedResult.data.native_sensor_control = sensorControlState(rawData[object_key]?.value?.remote_comfort_sensing_settings);
+          const native = sensorControlState(rawData[object_key]?.value?.remote_comfort_sensing_settings);
+          mappedResult.data.native_sensor_control = native;
+          // The generic translator drops empty strings, but an empty selection means the built-in sensor.
+          // Derive it from the validated selection and explicitly clear it when feedback becomes unknown.
+          mappedResult.data.active_rcs_sensor = native.selection.source === 'thermostat' ? '' :
+            native.selection.source === 'remote' ? native.selection.sensorId : undefined;
           Object.assign(mappedResult.data, reportedScheduleTimeZone(rawData, object_key));
           mappedResult.data.physical_temperature = mappedResult.data.current_temperature;
           // If an active remote temperature sensor is selected, use its temperature as the thermostat current temperature

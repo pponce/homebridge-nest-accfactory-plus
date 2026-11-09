@@ -5,7 +5,7 @@ import { ClimateAccess } from '../homebridge-ui/climate-access.js';
 import { HeatingResponse } from './heating-response.js';
 import { DashboardConfigError } from './web-dashboard-config.js';
 import { sensorSources, presenceSources } from '../homebridge-ui/public/sensor-preview.js';
-import { scheduleTimeZone } from '../homebridge-ui/public/climate-utils.js';
+import { scheduleTimeZone, selectedNestSensor } from '../homebridge-ui/public/climate-utils.js';
 import { normalizeFanRule } from '../homebridge-ui/public/fan-speed.js';
 import { runFanSpeed, releaseFanSpeed, validSpeedLease, prepareFanRules, handoffFanLease } from './fan-speed-control.js';
 import { TemperatureSensorSetup, nativeSensorAllowsHeating } from './temperature-sensor-setup.js';
@@ -896,7 +896,8 @@ export class ClimateAutomation {
     }
     const requirements = [];
     if (device.data.hvac_mode !== 'heat') {
-      requirements.push('Select Heat mode on Nest.');
+      requirements.push(device.data.hvac_mode === undefined ?
+        'Waiting for Nest to report its operating mode.' : 'Select Heat mode on Nest.');
     }
     if (device.data.eco_mode !== false) {
       requirements.push(device.data.eco_mode === true ?
@@ -904,7 +905,7 @@ export class ClimateAutomation {
     }
     if (!nativeSensorAllowsHeating(device.data)) {
       let reason = 'Waiting for Nest to confirm its built-in temperature sensor.';
-      if (device.data.active_rcs_sensor) {
+      if (selectedNestSensor(device.data) || device.data.active_rcs_sensor) {
         reason = 'Select the built-in Nest temperature sensor.';
       } else if (device.data.native_sensor_control?.reason) {
         reason = 'Nest sensor feedback: ' + device.data.native_sensor_control.reason;
@@ -919,10 +920,10 @@ export class ClimateAutomation {
     }
     if (requirements.length) {
       const unknown = device.data.hvac_mode === undefined || device.data.eco_mode === undefined ||
-        device.data.active_rcs_sensor === undefined;
+        selectedNestSensor(device.data) === null;
       if (state.recovering && unknown) {
         state.phase = 'waiting';
-        state.reason = 'Waiting for Nest mode, Eco and active-sensor feedback after restart.';
+        state.reason = requirements.join(' ');
         return;
       }
       if (lease || state.controlStarted) {
