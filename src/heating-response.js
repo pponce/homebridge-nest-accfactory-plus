@@ -248,6 +248,10 @@ export class HeatingResponse {
     if (time - active.stop < profile.settleMinutes * MINUTE || time - active.peakAt < 10 * MINUTE) {
       return;
     }
+    if (active.delay === undefined || active.offsets.length < 3) {
+      record.status = 'Waiting for measurable room response after heating stops.';
+      return;
+    }
     const rate = (active.peak - active.room) / ((active.peakAt - active.start) / MINUTE);
     if (Number.isFinite(active.delay) && rate > 0 && active.stop - active.start >= 2 * MINUTE && active.offsets.length >= 3) {
       record.cycles.push({
@@ -272,7 +276,7 @@ export class HeatingResponse {
     const profile = profileFor(options.heatingType);
     const stored = this.records.get(rule.id);
     const record = stored?.signature === fingerprint(rule, options) ? stored : null;
-    const cycles = (record?.cycles ?? []).filter((cycle) => cycle.end >= this.now() - 30 * DAY);
+    const cycles = (record?.cycles ?? []).filter((cycle) => cycle.end >= this.now() - 30 * DAY && cycle.end <= this.now());
     const zone = options.scheduleTimeZone || 'UTC';
     let dates;
     try {

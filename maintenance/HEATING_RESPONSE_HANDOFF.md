@@ -17,7 +17,7 @@ Add thermostat heating-type settings, bounded local response history and per-tem
 
 ## Validation
 
-- 70 local tests pass across observation, rule execution, external sources, config and dashboard API suites. Checks cover multi-day qualification, sensor resets, interruptions, post-shutoff radiant response, persistence/retention/failures, disabled-rule collection, optimistic Apply conflicts and session/CSRF boundaries.
+- 90 local tests pass across observation, rule execution, external sources, config and dashboard API suites. Checks cover multi-day qualification, sensor resets, interruptions, post-shutoff radiant response, persistence/retention/failures, disabled-rule collection, optimistic Apply conflicts and session/CSRF boundaries.
 - Chromium cannot start in this environment because its process-singleton socket is prohibited. The real-server browser fixture is included in the existing GitHub browser runner.
 - npm dependency downloads are blocked in this environment. The existing GitHub validation workflow runs formatting, the six Node/Homebridge combinations, package/coverage checks, migration and browser fixtures on the feature branch before promotion to main.
 
@@ -25,5 +25,5 @@ Add thermostat heating-type settings, bounded local response history and per-tem
 
 - Collecting observations never automatically applies guidance. Applying starting/learned recommendations is a separate, explicit per-rule action.
 - Confidence is observational, not statistical or proof of causality. Numeric presets and recommendation formulas are documented in `WEB_DASHBOARD.md`.
-- Review GitHub validation and browser artifacts, resolve failures, then promote the tested commit to main.
+- All six compatibility configurations passed on the initial feature revision. Browser fixtures were updated for the recommendations API; the dedicated heating fixture is checking the real authenticated UI/API. Review the final GitHub validation and screenshots before promotion to main.
 - No npm publication or new release is requested by this feature task. Installed-system observation still needs multiple days of real heating cycles after a future install.

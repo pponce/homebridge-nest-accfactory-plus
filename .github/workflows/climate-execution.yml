@@ -93,6 +93,8 @@ jobs:
 
 
   dashboard-browser:
+    permissions:
+      contents: write
     needs: format
     runs-on: ubuntu-latest
     steps:
@@ -121,3 +123,11 @@ jobs:
         with:
           name: dashboard-browser-review
           path: ${{ runner.temp }}/climate-dashboard-review
+
+      - name: Publish heating fixture screenshots for visual review
+        if: github.ref == 'refs/heads/feature/heating-response' && steps.browser.outcome == 'success'
+        run: node maintenance/checks/publish-dashboard-review.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_SHA: ${{ needs.format.outputs.revision }}
+          REVIEW_OUTPUT_DIR: ${{ runner.temp }}/climate-dashboard-review

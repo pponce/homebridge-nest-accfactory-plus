@@ -5,12 +5,14 @@ import path from 'node:path';
 const repository = process.env.GITHUB_REPOSITORY;
 const source = process.env.GITHUB_SHA;
 const token = process.env.GITHUB_TOKEN;
-if (repository !== 'pponce/homebridge-nest-climate-cntrl' || process.env.GITHUB_REF !== 'refs/heads/feature/standalone-dashboard' ||
+const heating = process.env.GITHUB_REF === 'refs/heads/feature/heating-response';
+if (repository !== 'pponce/homebridge-nest-climate-cntrl' || (!heating && process.env.GITHUB_REF !== 'refs/heads/feature/standalone-dashboard') ||
   process.env.GITHUB_EVENT_NAME !== 'push' || !/^[a-f0-9]{40}$/.test(source ?? '') || !token || !process.env.REVIEW_OUTPUT_DIR) {
-  throw new Error('Visual review publication is restricted to the standalone-dashboard push workflow.');
+  throw new Error('Visual review publication is restricted to the dashboard and heating-response push workflows.');
 }
-const branch = 'review/standalone-dashboard';
-const names = ['login-desktop.png', 'overview-desktop.png', 'rules-desktop.png', 'overview-mobile.png', 'sources-mobile.png',
+const sourceBranch = heating ? 'feature/heating-response' : 'feature/standalone-dashboard';
+const branch = heating ? 'review/heating-response' : 'review/standalone-dashboard';
+const names = heating ? ['heating-response-desktop.png', 'heating-response-mobile.png'] : ['login-desktop.png', 'overview-desktop.png', 'rules-desktop.png', 'overview-mobile.png', 'sources-mobile.png',
   'rules-mobile.png', 'settings-mobile.png', 'overview-mobile-dark.png'];
 
 async function request(route, body, optional = false) {
@@ -37,8 +39,8 @@ for (const name of names) {
   // Text companions allow repository tools that only read UTF-8 to retrieve the exact review image.
   tree.push({ path: name + '.base64', mode: '100644', type: 'blob', content: bytes.toString('base64') + '\n' });
 }
-const report = { sourceCommit: source, sourceBranch: 'feature/standalone-dashboard', fixtureDataOnly: true,
-  checks: ['desktop and 360px layout', 'CSP', 'draft rules never send live commands', 'configuration revision conflicts',
+const report = { sourceCommit: source, sourceBranch, fixtureDataOnly: true,
+  checks: heating ? ['real dashboard API', 'explicit per-rule Apply', 'Fahrenheit differences', 'input focus', 'desktop and 390px layout', 'no equipment commands'] : ['desktop and 360px layout', 'CSP', 'draft rules never send live commands', 'configuration revision conflicts',
     'offline controls', 'dark mode', 'iOS icon dimensions'], screenshots: names };
 tree.push({ path: 'report.json', mode: '100644', type: 'blob', content: JSON.stringify(report, null, 2) + '\n' });
 tree.push({ path: 'README.md', mode: '100644', type: 'blob', content: '# Climate dashboard visual review\n\n' +
