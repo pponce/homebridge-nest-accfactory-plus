@@ -154,16 +154,29 @@ Nest Climate Cntrl is a fork of **[Nest Accfactory](https://github.com/n0rt0nthe
 
 The climate rule engine, cross-plugin sensor and fan coordination, combined presence rules, heating-response tools, and climate dashboard are additions maintained in this fork. Maintenance and support for Nest Climate Cntrl are provided here.
 
-| Project | Contribution used here | License |
-| --- | --- | --- |
-| [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) | Underlying Nest/Google integration and HomeKit device implementations | Apache-2.0 |
-| [HomeKitDevice](https://github.com/n0rt0nthec4t/HomeKitDevice) by n0rt0nthec4t | Shared accessory lifecycle, identity, services and messaging | Apache-2.0 |
-| [HomeKitHistory](https://github.com/n0rt0nthec4t/HomeKitHistory) by n0rt0nthec4t | Accessory history and Eve-compatible features | Apache-2.0 |
-| [fetchWrapper](https://github.com/n0rt0nthec4t/fetchWrapper) by n0rt0nthec4t | HTTP request handling, timeouts and retries | Apache-2.0 |
-| [fakegato-history](https://github.com/simont77/fakegato-history) and [homebridge-lib](https://github.com/ebaauw/homebridge-lib) | Eve protocol research and type references acknowledged by HomeKitHistory | MIT / Apache-2.0 |
-| [Google APIs](https://github.com/googleapis/googleapis/tree/master/google/rpc) | Included Google RPC protocol definitions | Apache-2.0 |
+Support links below use funding options published by the projects or their maintainers.
 
-The shared libraries are included at pinned source revisions. Their author credits and license texts are preserved in the distributed plugin. HomeKitDevice uses the APIs provided by [Homebridge](https://github.com/homebridge/homebridge) and [HAP-NodeJS](https://github.com/homebridge/HAP-NodeJS), running on [Node.js](https://github.com/nodejs/node). The plugin also uses [plugin-ui-utils](https://github.com/homebridge/plugin-ui-utils), [protobuf.js](https://github.com/protobufjs/protobuf.js), [Chalk](https://github.com/chalk/chalk), and [bonjour-service](https://github.com/onlxltd/bonjour-service); installed dependencies retain their own licenses and notices.
+| Project | Contribution used here | License | Support |
+| --- | --- | --- | --- |
+| [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) | Underlying Nest/Google integration and HomeKit device implementations | Apache-2.0 | [Sponsor Mark](https://github.com/sponsors/n0rt0nthec4t) · [Buy Me a Coffee](https://www.buymeacoffee.com/n0rt0nthec4t) |
+| [HomeKitDevice](https://github.com/n0rt0nthec4t/HomeKitDevice) by n0rt0nthec4t | Shared accessory lifecycle, identity, services and messaging | Apache-2.0 | [Sponsor Mark](https://github.com/sponsors/n0rt0nthec4t) · [Buy Me a Coffee](https://www.buymeacoffee.com/n0rt0nthec4t) |
+| [HomeKitHistory](https://github.com/n0rt0nthec4t/HomeKitHistory) by n0rt0nthec4t | Accessory history and Eve-compatible features | Apache-2.0 | [Sponsor Mark](https://github.com/sponsors/n0rt0nthec4t) · [Buy Me a Coffee](https://www.buymeacoffee.com/n0rt0nthec4t) |
+| [fetchWrapper](https://github.com/n0rt0nthec4t/fetchWrapper) by n0rt0nthec4t | HTTP request handling, timeouts and retries | Apache-2.0 | [Sponsor Mark](https://github.com/sponsors/n0rt0nthec4t) · [Buy Me a Coffee](https://www.buymeacoffee.com/n0rt0nthec4t) |
+| [fakegato-history](https://github.com/simont77/fakegato-history) | Eve protocol research acknowledged by HomeKitHistory | MIT | — |
+| [homebridge-lib](https://github.com/ebaauw/homebridge-lib) | Eve type references acknowledged by HomeKitHistory | Apache-2.0 | [GitHub Sponsors](https://github.com/sponsors/ebaauw) · [PayPal](https://www.paypal.me/ebaauw/EUR) |
+| [Google APIs](https://github.com/googleapis/googleapis/tree/master/google/rpc) | Included Google RPC protocol definitions | Apache-2.0 | — |
+
+The shared libraries are included at pinned source revisions. Their author credits and license texts are preserved in the distributed plugin. The runtime and installed dependencies below retain their own licenses and notices.
+
+| Project | Contribution used here | Support |
+| --- | --- | --- |
+| [Homebridge](https://github.com/homebridge/homebridge) | Plugin runtime and accessory APIs | [GitHub Sponsors](https://github.com/sponsors/Supereg) |
+| [HAP-NodeJS](https://github.com/homebridge/HAP-NodeJS) | HomeKit protocol and accessory APIs used through Homebridge and HomeKitDevice | [GitHub Sponsors](https://github.com/sponsors/Supereg) · [PayPal](https://paypal.me/Supereg) |
+| [Node.js](https://github.com/nodejs/node) | JavaScript runtime and standard library | [Contributor sponsorship links](https://github.com/nodejs/node#collaborators) |
+| [plugin-ui-utils](https://github.com/homebridge/plugin-ui-utils) | Homebridge configuration interface integration | — |
+| [protobuf.js](https://github.com/protobufjs/protobuf.js) | Protocol Buffers encoding and decoding | [GitHub Sponsors](https://github.com/sponsors/dcodeIO) |
+| [Chalk](https://github.com/chalk/chalk) | Terminal log formatting | [Sponsor](https://github.com/chalk/chalk?sponsor=1) |
+| [bonjour-service](https://github.com/onlxltd/bonjour-service) | Local service discovery | — |
 
 See [LICENSE](LICENSE), [NOTICE](NOTICE), and [third-party notices](THIRD_PARTY_NOTICES.md) for attribution and license details. Not affiliated with Google or Apple.
 
