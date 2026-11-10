@@ -918,7 +918,7 @@ test('a reported time-zone change starts fresh heating evidence without writing 
 
 test('enabled-rule validation rejects conflicting owners and incomplete rules but preserves disabled drafts', () => {
   assert.equal(validateRuleDrafts({ temperature: [{ id: 'draft', name: 'Draft', kind: 'temperature' }] }).temperature[0].enabled, false);
-  assert.throws(() => validateRuleDrafts({ temperature: [temperatureRule, { ...temperatureRule, id: 'second' }] }), /one enabled/);
+  assert.throws(() => validateRuleDrafts({ temperature: [temperatureRule, { ...temperatureRule, id: 'second' }] }), /different priorities/);
   assert.throws(() => validateRuleDrafts({ fans: [fanRule, { ...fanRule, id: 'second' }] }), /different priorities/);
   assert.throws(() => validateRuleDrafts({ temperature: [{ ...temperatureRule, aggregation: 'single' }] }), /exactly one/);
   assert.throws(() => validateRuleDrafts({ temperature: [{ ...temperatureRule, desiredTemperature: 5 }] }), /9 and 32/);
@@ -1694,4 +1694,154 @@ test('web editor rejects changed controllers, waits and disk failures without fa
   f.engine.persist = persist;
   assert.equal(f.rule('rooms').desiredTemperature, 21);
   assert.equal(f.dashboard.busy, false);
+});
+
+const windowAt = (start, end) => ({ days: [0, 1, 2, 3, 4, 5, 6], start, end, timeZone: 'UTC' });
+const windowRules = () => [
+  { ...temperatureRule, id: 'night', name: 'Night', priority: 2, window: windowAt('22:00', '10:05') },
+  { ...temperatureRule, id: 'day', name: 'Day', priority: 1, sourceIds: ['room'], window: windowAt('10:05', '22:00') },
+];
+
+test('scheduled temperature groups hand off the original lease and manual room target without an intermediate write', async (t) => {
+  const f = await fixture(t, { temperature: windowRules() });
+  await f.engine.evaluate();
+  assert.equal(f.rule('day').phase, 'scheduled');
+  assert.equal(f.rule('day').nextWindowStart, f.now() + 5 * minute);
+  await f.engine.setRoomTarget('thermostat', { ruleId: 'night', value: 22 });
+  const baseline = f.engine.leases.get('temperature:T').baseline;
+  const writes = f.commands.length;
+  f.advance(5 * minute);
+  await f.engine.evaluate();
+  assert.equal(f.rule('night').phase, 'scheduled');
+  assert.equal(f.rule('day').desiredTemperature, 22);
+  assert.equal(f.rule('day').targetSource, 'manual');
+  assert.equal(f.engine.leases.get('temperature:T').owner, 'day');
+  assert.equal(f.engine.leases.get('temperature:T').baseline, baseline);
+  assert.ok(f.commands.length <= writes + 1);
+  assert.equal(f.commands.slice(writes).some((command) => command.target_temperature_low === baseline), false);
+  await f.engine.evaluate();
+  assert.equal(f.engine.roomControl('T').ruleId, 'day');
+});
+
+test('temperature priority reserves unavailable higher groups and respects intervals across handoffs', async (t) => {
+  const rules = windowRules();
+  rules[0].window = windowAt('10:01', '22:00');
+  rules[0].minimumIntervalMinutes = 1;
+  delete rules[1].window;
+  rules[1].minimumIntervalMinutes = 10;
+  const f = await fixture(t, { temperature: rules });
+  await f.engine.evaluate();
+  f.advance(minute);
+  f.source('room').temperature = 23;
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, 1, 'new shorter interval cannot bypass the previous write interval');
+  assert.equal(f.rule('night').temperatureControl, 'interval');
+  assert.equal(f.rule('day').phase, 'standby');
+  f.source('room').stale = true;
+  await f.engine.evaluate();
+  assert.equal(f.rule('night').phase, 'waiting');
+  assert.equal(f.rule('day').phase, 'standby');
+  assert.equal(f.engine.roomControl('T'), null);
+});
+
+test('manual pause applies to all thermostat groups across boundaries and Resume clears it', async (t) => {
+  const rules = windowRules(); rules[0].manualTargetBehavior = 'pause';
+  const f = await fixture(t, { temperature: rules });
+  await f.engine.evaluate();
+  const writes = f.commands.length;
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 24 }, 'A');
+  f.advance(5 * minute);
+  await f.engine.evaluate();
+  assert.equal(f.rule('night').paused, true);
+  assert.equal(f.rule('day').paused, true);
+  assert.equal(f.commands.length, writes);
+  await f.engine.control({ id: 'day', action: 'resume' });
+  assert.equal(f.rule('night').paused, false);
+  assert.equal(f.rule('day').paused, false);
+  assert.notEqual(f.rule('day').phase, 'standby');
+});
+
+test('physical target changes at a group boundary follow the outgoing desired temperature', async (t) => {
+  const rules = windowRules(); rules[1].desiredTemperature = 19;
+  const f = await fixture(t, { temperature: rules });
+  await f.engine.evaluate();
+  const before = f.dashboard.devices.get('T').data.target_temperature_low;
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: before + 1 }, 'A');
+  f.advance(5 * minute);
+  await f.engine.evaluate();
+  assert.equal(f.rule('day').desiredTemperature, 22);
+  assert.equal(f.rule('day').paused, false);
+  assert.equal(f.rule('day').targetSource, 'manual');
+});
+
+test('a window ending without a successor restores only owned targets and stays scheduled', async (t) => {
+  const f = await fixture(t, { temperature: [windowRules()[0]] });
+  await f.engine.evaluate();
+  f.advance(5 * minute);
+  await f.engine.evaluate();
+  assert.equal(f.commands.at(-1).target_temperature_low, 19);
+  await f.engine.evaluate();
+  assert.equal(f.engine.leases.size, 0);
+  assert.equal(f.rule('night').phase, 'scheduled');
+  const writes = f.commands.length;
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 20 }, 'A');
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, writes);
+});
+
+test('pending Nest feedback transfers across a window without a duplicate command or changed baseline', async (t) => {
+  const rules = windowRules(); rules[0].enabled = false; rules[1].enabled = false;
+  const f = await fixture(t, { temperature: rules });
+  f.advance(4 * minute); f.noAck();
+  rules.forEach((rule) => { rule.enabled = true; }); f.rules({ temperature: rules });
+  await f.engine.evaluate();
+  f.advance(minute);
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.engine.leases.get('temperature:T').owner, 'day');
+  assert.equal(f.rule('day').temperatureControl, 'updating');
+  const expected = f.engine.leases.get('temperature:T').expected;
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: expected }, 'A');
+  await f.engine.evaluate();
+  assert.equal(f.rule('day').paused, false);
+});
+
+test('restart selects the current window and retains a room override and thermostat-wide pause', async (t) => {
+  const f = await fixture(t, { temperature: windowRules() });
+  await f.engine.evaluate();
+  await f.engine.setRoomTarget('thermostat', { ruleId: 'night', value: 22 });
+  await f.engine.stop();
+  f.advance(5 * minute);
+  const restarted = new ClimateAutomation({ directory: f.directory, dashboard: f.dashboard, config: f.config,
+    accessFactory: () => f.access, now: f.now });
+  t.after(() => restarted.stop());
+  await restarted.start({ schedule: false });
+  assert.equal(restarted.states.get('day').roomTarget.value, 22);
+  assert.equal(restarted.states.get('night').phase, 'scheduled');
+  assert.equal(restarted.states.get('day').paused, false);
+  await restarted.control({ id: 'day', action: 'pause' });
+  assert.equal(restarted.states.get('night').paused, true);
+});
+
+test('fan windows hand off without a power cycle, restore at closing, and allow manual use outside windows', async (t) => {
+  const rules = [
+    { ...fanRule, id: 'evening', priority: 2, window: windowAt('09:00', '10:01') },
+    { ...fanRule, id: 'morning', priority: 1, window: windowAt('10:01', '10:03') },
+  ];
+  const f = await fixture(t, { fans: rules });
+  f.source('room').temperature = 26;
+  await f.engine.evaluate(); await f.engine.evaluate();
+  assert.equal(f.source('fan').running, true);
+  f.advance(minute); await f.engine.evaluate();
+  assert.equal(f.rule('evening').phase, 'scheduled');
+  assert.equal(f.engine.leases.get('fan:fan').owner, 'morning');
+  assert.deepEqual(f.fanCommands, [{ id: 'fan', running: true }]);
+  f.advance(2 * minute); await f.engine.evaluate(); await f.engine.evaluate();
+  assert.equal(f.source('fan').running, false);
+  f.source('fan').running = true;
+  await f.engine.evaluate();
+  assert.equal(f.engine.fanOverrides.size, 0);
+  f.advance(23 * 60 * minute);
+  await f.engine.evaluate();
+  assert.equal(f.engine.fanOverrides.size, 0);
 });

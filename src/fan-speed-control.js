@@ -35,19 +35,23 @@ export function prepareFanRules(engine) {
     }
     const current = { running: source.running, speed: source.speedAvailable ? source.speed : undefined };
     const before = engine.fanObservations.get(id);
-    const watched = states.some((state) => state.rule.enabled && !state.paused && state.rule.targetIds.includes(id));
+    const watched = states.some((state) => state.rule.enabled && !state.paused && state.windowStatus?.active !== false && state.rule.targetIds.includes(id));
     if (watched && !engine.leases.has('fan:' + id) && before &&
         (before.running !== current.running || (Number.isFinite(before.speed) && Number.isFinite(current.speed) &&
           Math.abs(before.speed - current.speed) >= 0.001))) {
       engine.manualFan(id, 'The fan changed outside automatic control. Resume this fan when ready.');
     }
-    engine.fanObservations.set(id, current);
+    if (watched) {
+      engine.fanObservations.set(id, current);
+    } else {
+      engine.fanObservations.delete(id);
+    }
   }
   const winners = new Map();
   for (const state of states.sort((a, b) => b.rule.priority - a.rule.priority)) {
     state.fanTargets = [];
     state.fanSpeeds = [];
-    if (!state.rule.enabled || state.paused) {
+    if (!state.rule.enabled || state.paused || state.windowStatus?.active === false) {
       continue;
     }
     const rule = state.rule;
@@ -76,7 +80,7 @@ export function prepareFanRules(engine) {
         delete state.fanSpeedObserved?.[id];
       }
       const selected = !engine.fanOverrides.has(id) && (winner === state ||
-        (!winner && !state.paused && state.rule.enabled && engine.leases.get('fan:' + id)?.owner === state.rule.id));
+        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false && engine.leases.get('fan:' + id)?.owner === state.rule.id));
       if (selected) {
         state.fanTargets.push(id);
         if (lastWrites.has(id)) {
@@ -163,7 +167,7 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
   const options = {
     minimum: 1,
     maximum: lease.maximum,
-    guard: () => restoring || (!engine.stopping && !state.paused),
+    guard: () => restoring || engine.windowPermits(state),
   };
   try {
     if (speedStep) {

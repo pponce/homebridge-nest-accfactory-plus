@@ -596,3 +596,9 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
 #connection-form details { margin-top: 16px; }
 #connection-form .field > span { display: block; margin-bottom: 8px; font-weight: 600; }
 #connection-form .field > small { display: block; margin: 8px 0 12px; color: var(--muted); }
+
+.window-days { border: 0; padding: 0; margin: 1.25rem 0; min-width: 0; }
+.window-days legend { font-weight: 600; margin-bottom: .75rem; }
+.window-day-choices { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: .75rem; }
+.window-day-choices label { display: flex; align-items: center; gap: .4rem; padding: .6rem; border: 1px solid var(--border); border-radius: .65rem; }
+.window-day-choices input { width: 1.1rem; height: 1.1rem; margin: 0; }

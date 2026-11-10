@@ -32,6 +32,7 @@ const assets = new Map([
   ['/shared/connection-page.js', ['public/connection-page.js', 'text/javascript; charset=utf-8']],
   ['/shared/connection-config.js', ['public/connection-config.js', 'text/javascript; charset=utf-8']],
   ['/shared/fan-speed.js', ['public/fan-speed.js', 'text/javascript; charset=utf-8']],
+  ['/shared/rule-window.js', ['public/rule-window.js', 'text/javascript; charset=utf-8']],
 ]);
 const hostname = (value) =>
   typeof value === 'string' &&

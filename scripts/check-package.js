@@ -38,6 +38,8 @@ try {
     'homebridge-ui/public/web-dashboard-setup.js',
     'homebridge-ui/public/climate-utils.js',
     'homebridge-ui/public/time-zone-picker.js',
+    'homebridge-ui/public/rule-window.js',
+    'homebridge-ui/public/climate/shared/rule-window.js',
     'dist/schedule-time-zone.js',
     'dist/child-bridge-restart.js',
     'homebridge-ui/dashboard/index.html',

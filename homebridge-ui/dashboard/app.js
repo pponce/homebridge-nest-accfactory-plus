@@ -1,5 +1,6 @@
+import { windowDays, windowError, windowSummary, ruleWindow } from '/shared/rule-window.js';
 import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
-import { mountTimeZonePicker } from '/shared/time-zone-picker.js';
+import { mountTimeZonePicker, timeZoneChoices } from '/shared/time-zone-picker.js';
 import { mountConnectionPage } from '/shared/connection-page.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
 import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed } from '/shared/fan-speed.js';
@@ -960,10 +961,10 @@ $('dashboard-url').closest('.panel').append(accountActions);
 
 function rules(kind = state.ruleKind) { return state.config?.rules?.[ruleKey[kind]] || []; }
 function selectedRule() { return rules().find((rule) => rule.id === state.ruleId); }
-function orderedFanRules() { return [...rules('fan')].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)); }
+function orderedFanRules() { return [...rules()].sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0)); }
 function setFanRuleOrder(items) {
   // Preserve the runtime's numeric priority contract while presenting positions in the UI.
-  state.config.rules.fans = items;
+  state.config.rules[ruleKey[state.ruleKind]] = items;
   items.forEach((rule, index) => { rule.priority = items.length - index; });
 }
 function moveFanRule(id, index, focus = 'handle') {
@@ -1005,7 +1006,7 @@ function scrollFanDrag() {
   showFanDrop(); fanDrag.frame = requestAnimationFrame(scrollFanDrag);
 }
 function startFanDrag(event, rule, handle) {
-  if (event.button !== 0 || !event.isPrimary || state.saving || state.restarting || rules('fan').length < 2) return;
+  if (event.button !== 0 || !event.isPrimary || state.saving || state.restarting || rules().length < 2) return;
   cancelFanDrag();
   fanDrag = { id: rule.id, pointerId: event.pointerId, handle, startY: event.clientY, y: event.clientY, moving: false };
   handle.setPointerCapture(event.pointerId);
@@ -1057,7 +1058,7 @@ function newRule() {
   if (state.ruleKind === 'temperature') { rule.aggregation = 'average'; rule.desiredTemperature = 21; rule.manualTargetBehavior = 'follow'; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
   else if (state.ruleKind === 'presence') { rule.logic = 'any'; rule.holdMinutes = 10; rule.awayDelayMinutes = 20; const home = sources().find((source) => source.provider === 'nest' && source.kind === 'occupancy'); if (home) rule.sourceIds = [home.id]; }
   else { rule.targetIds = []; rule.action = 'temperature'; rule.speedMode = 'last'; rule.priority = 0; rule.threshold = 24; rule.hysteresis = 1; if (thermostats()[0]) rule.thermostatId = thermostats()[0].serial; }
-  const fanItems = state.ruleKind === 'fan' ? orderedFanRules() : null;
+  const fanItems = state.ruleKind !== 'presence' ? orderedFanRules() : null;
   ((state.config.rules ??= {})[ruleKey[state.ruleKind]] ??= []).push(rule);
   if (fanItems) setFanRuleOrder([...fanItems, rule]);
   state.ruleId = rule.id; markDirty(); renderRules();
@@ -1082,7 +1083,7 @@ function renderRules() {
   document.querySelectorAll('[data-kind]').forEach((tab) => { const active = tab.dataset.kind === state.ruleKind; tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1; });
   document.querySelectorAll('[data-count]').forEach((node) => { node.textContent = rules(node.dataset.count).length; });
   $('rule-list-title').textContent = { temperature: 'Temperature groups', presence: 'Presence rules', fan: 'Fan rules' }[state.ruleKind];
-  const isFan = state.ruleKind === 'fan';
+  const isFan = state.ruleKind !== 'presence';
   const items = isFan ? orderedFanRules() : rules(); if (!items.some((rule) => rule.id === state.ruleId)) state.ruleId = items[0]?.id || null;
   $('rule-order-help').hidden = !isFan || !items.length;
   $('rule-order-status').textContent = '';
@@ -1091,6 +1092,7 @@ function renderRules() {
   for (const [index, rule] of items.entries()) {
     const item = button('', () => { state.ruleId = rule.id; renderRules(); }, 'rule-item');
     item.append(el('strong', rule.name), el('small', (rule.sourceIds?.length || 0) + ' inputs · ' + (rule.enabled ? 'Enabled' : 'Disabled')));
+    if (rule.kind !== 'presence') item.append(el('small', windowSummary(rule.window)));
     const runtime = el('small'); runtime.dataset.ruleStatus = rule.id; item.append(runtime);
     item.setAttribute('aria-pressed', String(rule.id === state.ruleId));
     $('rule-list').append(isFan ? fanRuleRow(rule, index, items.length, item) : item);
@@ -1206,7 +1208,7 @@ function renderRuleEditor() {
     const row = active?.closest('.fan-rule-row');
     if (row) {
       const position = orderedFanRules().findIndex((entry) => entry.id === rule.id) + 1;
-      row.querySelector('.rule-drag-handle').setAttribute('aria-label', 'Reorder ' + value + ', position ' + position + ' of ' + rules('fan').length);
+      row.querySelector('.rule-drag-handle').setAttribute('aria-label', 'Reorder ' + value + ', position ' + position + ' of ' + rules().length);
       for (const [direction, label] of [['up', 'Move up'], ['down', 'Move down']]) row.querySelector('[data-reorder="' + direction + '"]').setAttribute('aria-label', label + ': ' + value);
     }
   });
@@ -1217,7 +1219,7 @@ function renderRuleEditor() {
     const inputs = editorSection(host, '02', 'Choose your temperature sources', 'Only selected readings count toward the room average. Include the controlled thermostat here if you want its temperature counted; you can also use only other room sensors. Automatic control requires Heat mode, Eco off and Nest’s built-in control sensor.');
     ruleInputField(inputs, 'Combine readings', rule.aggregation || 'average', (value) => { rule.aggregation = value; }, { choices: [['average', 'Equal average of selected sensors'], ['single', 'One selected sensor']] }); picker(inputs, rule, 'sourceIds', ['temperature']);
     const limits = editorSection(host, '03', 'Limit thermostat adjustments', 'The desired room temperature stays separate from Nest’s adjusted target. Choose how manual Nest target changes affect the group. A confirmed scheduled target becomes the new room target. If Homebridge stops or loses its connection, Nest may retain the last bounded target.');
-    toggle(limits, 'Pause after a manual Nest target change', 'Off keeps the selected sensor group active and adjusts its desired room temperature by the same increase or decrease. On pauses the rule until you Resume it.', rule.manualTargetBehavior === 'pause', (value) => { rule.manualTargetBehavior = value ? 'pause' : 'follow'; }, () => ruleFieldHelp('Pause after a manual Nest target change', rule));
+    toggle(limits, 'Pause after a manual Nest target change', 'Off keeps the selected sensor group active and adjusts its desired room temperature by the same increase or decrease. On pauses all temperature groups for this thermostat until you Resume automatic control.', rule.manualTargetBehavior === 'pause', (value) => { rule.manualTargetBehavior = value ? 'pause' : 'follow'; }, () => ruleFieldHelp('Pause after a manual Nest target change', rule));
     const tuningLink = el('a', 'Review heating response & tuning in Settings', 'small-note'); tuningLink.href = '#settings'; limits.append(tuningLink);
     temperatureField(limits, 'Maximum target adjustment', rule.maximumOffset ?? 1.5, (value) => { rule.maximumOffset = value; }, { min: 0, max: 3, difference: true });
     ruleInputField(limits, 'Minimum update interval (minutes)', rule.minimumIntervalMinutes ?? 5, (value) => { rule.minimumIntervalMinutes = value; }, { type: 'number', min: 1, max: 60, step: 1 });
@@ -1280,10 +1282,11 @@ function renderRuleEditor() {
     const priority = editorSection(host, rule.action === 'temperature' || rule.speedMode === 'curve' ? '05' : '04', 'Set rule priority', 'Drag fan rules up or down in the list. The top matching enabled rule controls each fan. Use the move buttons or the drag handle’s arrow keys to reorder, then Save changes to apply.');
     const position = orderedFanRules().findIndex((entry) => entry.id === rule.id) + 1;
     priority.append(fieldHelpLabel('Rule priority', () => ruleFieldHelp('Rule priority', rule)));
-    priority.append(pill('Position ' + position + ' of ' + rules('fan').length + (position === 1 ? ' · Highest priority' : '')));
+    priority.append(pill('Position ' + position + ' of ' + rules().length + (position === 1 ? ' · Highest priority' : '')));
     priority.append(el('p', 'Example, from top to bottom: room too warm with a speed curve; active cooling at a fixed speed; active heating at a quieter speed. Disabled rules keep their position but do not compete for control. A higher-priority rule with missing readings reserves the fan until readings return. Manual fan changes suspend every rule for that fan until you Resume it.', 'small-note'));
     priority.append(el('p', 'When no rule calls for the fan, automation restores its original state within the last controlling speed limit. A handoff between matching rules keeps the fan running. Normal changes share a one-minute interval across rules.', 'small-note'));
   }
+  if (rule.kind !== 'presence') renderRuleWindow(host, rule);
   const runtime = el('div', undefined, 'preview-box'); runtime.id = 'rule-runtime'; runtime.setAttribute('role', 'status'); host.append(runtime);
   const preview = el('div', undefined, 'preview-box'); preview.id = 'rule-preview'; preview.setAttribute('role', 'status'); host.append(preview);
   const footer = el('div', undefined, 'editor-footer'); footer.append(el('span', 'Save changes to apply this rule’s configuration.', 'small-note'), button('Delete rule', async () => {
@@ -1292,6 +1295,51 @@ function renderRuleEditor() {
     ($('rule-editor').querySelector('input') || $('new-rule')).focus();
   }, 'button danger')); host.append(footer); renderRulePreview();
 }
+function renderRuleWindow(host, rule) {
+  const section = editorSection(host, 'Time', 'When to run', 'Always allows this rule all day, every day. A scheduled window limits when it can compete for control. The highest eligible rule in the list wins.');
+  inputField(section, 'When to run', rule.window ? 'scheduled' : 'always', (value) => {
+    if (value === 'always') delete rule.window;
+    else {
+      const device = thermostats().find((entry) => entry.serial === rule.thermostatId) || thermostats()[0];
+      const zone = device && scheduleTimeZone(deviceOptions(device.serial), device.data);
+      rule.window = { days: [0, 1, 2, 3, 4, 5, 6], start: '22:00', end: '06:00',
+        timeZone: zone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
+    }
+    renderRules();
+  }, { choices: [['always', 'Always · all day, every day'], ['scheduled', 'Scheduled window']] });
+  if (rule.window) {
+    const days = el('fieldset', undefined, 'window-days'); days.append(el('legend', 'Start days'));
+    const presets = el('div', undefined, 'timer-buttons');
+    for (const [label, selected] of [['Every day', [0, 1, 2, 3, 4, 5, 6]], ['Weekdays', [0, 1, 2, 3, 4]], ['Weekends', [5, 6]]]) {
+      presets.append(button(label, () => { rule.window.days = selected; markDirty(); renderRuleEditor(); }, 'button secondary'));
+    }
+    days.append(presets);
+    const choices = el('div', undefined, 'window-day-choices');
+    windowDays.forEach((name, index) => {
+      const label = el('label'); const check = el('input'); check.type = 'checkbox'; check.checked = rule.window.days.includes(index);
+      check.setAttribute('aria-label', 'Start on ' + name);
+      check.addEventListener('change', () => {
+        rule.window.days = check.checked ? [...rule.window.days, index].sort((a, b) => a - b) : rule.window.days.filter((day) => day !== index);
+        markDirty(); renderRulePreview();
+      });
+      label.append(check, document.createTextNode(name)); choices.append(label);
+    });
+    days.append(choices); section.append(days);
+    const fields = el('div', undefined, 'form-grid');
+    for (const [title, key] of [['Start time', 'start'], ['End time', 'end']]) {
+      inputField(fields, title, rule.window[key], (value) => { rule.window[key] = value; }, { type: 'time' }).required = true;
+    }
+    inputField(fields, 'Window time zone', rule.window.timeZone, (value) => { rule.window.timeZone = value; },
+      { choices: timeZoneChoices(rule.window.timeZone) });
+    section.append(fields, el('p', 'An end time earlier than the start continues into the following day. Friday 10 PM–6 AM ends Saturday morning. Start is included; end is excluded. Named time zones follow daylight-saving changes.', 'small-note'));
+  }
+  if (rule.kind === 'temperature') {
+    section.append(el('p', 'Drag temperature groups to set priority. At a window change, the next group takes over without restoring an intermediate target. Manual room targets follow the thermostat across groups until the next confirmed Nest schedule target. Pausing temperature automation pauses all groups for this thermostat.', 'small-note'));
+  } else {
+    section.append(el('p', 'The run condition must also be met. When this window ends, the next matching rule takes over, or the fan returns to its original state within its speed limit.', 'small-note'));
+  }
+}
+
 async function ruleCommand(id, action) {
   if (state.dirty || state.saving || state.sensorSetupBusy) return;
   const current = state.status.automation?.rules?.find((entry) => entry.id === id);
@@ -1359,7 +1407,7 @@ function renderRuleRuntime(rule) {
   renderSensorSetup(host, rule.id, current?.sensorSetup);
   if (current?.enabled) {
     const actions = el('div', undefined, 'timer-buttons');
-    for (const [label, action] of [[current.paused ? 'Resume automatic control' : 'Pause rule', current.paused ? 'resume' : 'pause'], ...(rule.kind === 'presence' ? [['Force Home · 1 hour', 'home'], ['Force Away · 1 hour', 'away'], ['Resume automatic presence', 'resume']] : [])]) {
+    for (const [label, action] of [[current.paused ? 'Resume automatic control' : rule.kind === 'temperature' ? 'Pause thermostat automation' : 'Pause rule', current.paused ? 'resume' : 'pause'], ...(rule.kind === 'presence' ? [['Force Home · 1 hour', 'home'], ['Force Away · 1 hour', 'away'], ['Resume automatic presence', 'resume']] : [])]) {
       const item = button(label, () => ruleCommand(rule.id, action), 'button secondary'); item.disabled = state.dirty; actions.append(item);
     }
     if (rule.kind === 'temperature' && !current.paused && ['manual', 'schedule'].includes(current.targetSource)) {
@@ -1403,6 +1451,13 @@ function renderRulePreview() {
   renderRuleRuntime(rule);
   renderFanCurve(rule);
   host.replaceChildren(el('h4', 'Current signals · preview only'));
+  if (rule.kind !== 'presence') {
+    const schedule = ruleWindow(rule.window);
+    host.append(el('p', windowSummary(rule.window)));
+    if (schedule.error) host.append(el('p', windowError(rule.window), 'callout danger'));
+    else if (!schedule.active) host.append(el('p', 'Outside this window now. Next start: ' +
+      new Intl.DateTimeFormat(undefined, { timeZone: rule.window.timeZone, weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(schedule.nextStart) + '.'));
+  }
   const all = sources(); const chosen = [...new Set((rule.sourceIds || []).map((id) => all.find((source) => matchesSource(source, id))))];
   const fresh = (source) => source?.available && Number.isFinite(source.lastReadAt) && Date.now() - source.lastReadAt <= 90000 && source.lastReadAt <= Date.now() + 1000;
   let headline = 'Choose your inputs'; let detail = 'Select sources above to preview their current readings.';

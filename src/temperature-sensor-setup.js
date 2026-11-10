@@ -133,7 +133,7 @@ export class TemperatureSensorSetup {
   permits(rule) {
     const owner = this.leases.get(rule.thermostatId);
     if (
-      owner && (owner.ruleId !== rule.id || owner.phase !== 'held' ||
+      owner && (owner.phase !== 'held' ||
       this.device(rule.thermostatId)?.data.native_sensor_control?.signature !== owner.expected)
     ) {
       return false;

@@ -1,3 +1,4 @@
+import { ruleWindow, windowActive } from '../homebridge-ui/public/rule-window.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -281,6 +282,8 @@ export class ClimateAutomation {
         fanAssignments: state.fanAssignments,
         fanOverrides: state.rule.kind === 'fan' ? state.rule.targetIds.filter((id) => this.fanOverrides.has(id)) : undefined,
         priority: state.rule.priority,
+        window: state.rule.window,
+        nextWindowStart: state.windowStatus?.nextStart ?? null,
         desiredTemperature: desiredTarget(state),
         savedDesiredTemperature: state.rule.desiredTemperature,
         targetSource: state.roomTarget?.source ?? 'rule',
@@ -432,6 +435,7 @@ export class ClimateAutomation {
     this.presence?.sync(this.rules.filter((rule) => rule.kind === 'presence' && rule.enabled));
     // Persist configuration intent before permitting any side effects.
     await this.persist();
+    this.prepareWindows();
     prepareFanRules(this);
     for (const [key, lease] of this.leases) {
       if (lease.kind === 'fan') {
@@ -450,6 +454,8 @@ export class ClimateAutomation {
         owner?.rule.enabled &&
         owner.rule.kind === lease.kind &&
         !owner.paused &&
+        owner.windowStatus?.active !== false &&
+        (lease.kind !== 'temperature' || this.temperatureWinners.get(lease.targetId) === lease.owner) &&
         (lease.kind !== 'fan' || (!this.fanOverrides.has(lease.targetId) && (!fanWinner || fanWinner === lease.owner))) &&
         (lease.kind === 'temperature' ? owner.rule.thermostatId === lease.targetId : owner.rule.targetIds.includes(lease.targetId));
       if (!assigned || lease.restoring) {
@@ -472,6 +478,23 @@ export class ClimateAutomation {
           state.fault = true;
           this.presence?.update(state.rule, state);
         }
+        continue;
+      }
+      if (state.rule.kind !== 'presence' && !state.windowStatus.active) {
+        state.phase = state.windowStatus.error ? 'waiting' : 'scheduled';
+        state.temperatureControl = state.phase;
+        state.reason = state.windowStatus.error || 'Outside this rule’s time window.';
+        if (state.windowStatus.nextStart) {
+          state.reason += ' Next start: ' + new Intl.DateTimeFormat('en-US', { timeZone: state.rule.window.timeZone,
+            weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(state.windowStatus.nextStart) + '.';
+        }
+        state.demand = false;
+        continue;
+      }
+      if (state.rule.kind === 'temperature' && this.temperatureWinners.get(state.rule.thermostatId) !== state.rule.id) {
+        state.phase = 'standby';
+        state.temperatureControl = 'standby';
+        state.reason = 'A higher-priority temperature rule is selected for this thermostat.';
         continue;
       }
       try {
@@ -511,6 +534,84 @@ export class ClimateAutomation {
     await this.persist();
   }
 
+  prepareWindows() {
+    const states = [...this.states.values()];
+    for (const state of states) {
+      state.windowStatus = ruleWindow(state.rule.window, this.now());
+    }
+    this.temperatureWinners = new Map();
+    const temperatures = states.filter((state) => state.rule.kind === 'temperature');
+    for (const state of temperatures.sort((a, b) => (b.rule.priority ?? 0) - (a.rule.priority ?? 0))) {
+      const serial = state.rule.thermostatId;
+      const suspended = temperatures.find((entry) => entry.rule.thermostatId === serial && entry.thermostatPause);
+      if (suspended) {
+        state.paused = true;
+        state.thermostatPause = suspended.thermostatPause;
+        state.reason = suspended.thermostatPause;
+      }
+      if (!state.rule.enabled || state.paused || !state.windowStatus.active || this.temperatureWinners.has(serial)) {
+        continue;
+      }
+      this.temperatureWinners.set(serial, state.rule.id);
+      const key = 'temperature:' + serial;
+      const previous = temperatures.find((entry) => entry !== state && entry.rule.thermostatId === serial && entry.controlOwner) ??
+        (!state.controlOwner ? temperatures.find((entry) => entry !== state && entry.rule.thermostatId === serial &&
+          (this.leases.get(key)?.owner === entry.rule.id || entry.controlStarted)) : undefined);
+      if (previous && !previous.paused) {
+        const device = this.device(serial);
+        // Observe the outgoing group's feedback before changing groups. A manual change
+        // at a boundary belongs to its room target and manual-change policy.
+        if (previous.controlStarted && this.connected(device)) {
+          if (this.temperatureSchedule(previous, device, this.schedule(device, serial))) {
+            this.temperatureFeedback(previous, device, this.leases.get(key));
+          }
+        } else if (previous.roomTarget && this.connected(device) &&
+            previous.scheduleKey !== this.schedule(device, serial).position) {
+          delete previous.roomTarget;
+        }
+        if (previous.paused) {
+          continue;
+        }
+        const fields = ['controlStarted', 'roomTarget', 'manualTarget', 'scheduleTarget', 'referenceTarget',
+          'scheduleKey', 'scheduleSignature', 'scheduleDesired', 'scheduleZone', 'lastWriteAt', 'targetEpoch', 'recovering'];
+        for (const field of fields) {
+          if (previous[field] === undefined) {
+            delete state[field];
+          } else {
+            state[field] = previous[field];
+          }
+        }
+        state.handoffNotBefore = Math.max(previous.handoffNotBefore ?? 0,
+          (previous.lastWriteAt ?? 0) + (previous.rule.minimumIntervalMinutes ?? 5) * MINUTE);
+        previous.controlStarted = false;
+        previous.controlOwner = false;
+        delete previous.manualTarget;
+        delete previous.scheduleTarget;
+        delete previous.roomTarget;
+        const lease = this.leases.get(key);
+        if (lease?.restoring) {
+          state.controlStarted = false;
+        }
+        if (lease?.owner === previous.rule.id && !lease.restoring) {
+          lease.owner = state.rule.id;
+        }
+      }
+      state.controlOwner = true;
+    }
+  }
+
+  windowPermits(state) {
+    if (this.stopping || state.paused || !state.rule.enabled || !windowActive(state.rule.window, this.now())) {
+      return false;
+    }
+    if (state.rule.kind !== 'temperature') {
+      return true;
+    }
+    return ![...this.states.values()].some((other) => other !== state && other.rule.kind === 'temperature' &&
+      other.rule.thermostatId === state.rule.thermostatId && other.rule.enabled && !other.paused &&
+      (other.rule.priority ?? 0) > (state.rule.priority ?? 0) && windowActive(other.rule.window, this.now()));
+  }
+
   async observeHeating() {
     const rules = this.rules.filter((rule) => rule.kind === 'temperature').map((rule) => ({
       ...rule, desiredTemperature: desiredTarget(this.states.get(rule.id) ?? { rule }),
@@ -525,6 +626,7 @@ export class ClimateAutomation {
           {
             valid:
               this.connected(device) &&
+              (!rule.enabled || this.temperatureWinners.get(rule.thermostatId) === rule.id) &&
               !this.states.get(rule.id)?.manualTarget && !this.states.get(rule.id)?.scheduleTarget &&
               room !== null &&
               data.hvac_mode === 'heat' &&
@@ -661,7 +763,11 @@ export class ClimateAutomation {
     }
     const candidates = [...this.states.values()].filter((state) =>
       state.rule.kind === 'temperature' && state.rule.enabled && state.rule.thermostatId === serial);
-    const state = candidates.length === 1 ? candidates[0] : undefined;
+    const state = candidates.filter((entry) => !entry.paused && windowActive(entry.rule.window, this.now()))
+      .sort((a, b) => (b.rule.priority ?? 0) - (a.rule.priority ?? 0))[0];
+    if (!state?.controlOwner) {
+      return null;
+    }
     if (!state?.controlStarted || state.paused || state.manualTarget || state.scheduleTarget ||
         !['active', 'interval', 'updating'].includes(this.temperatureControlStatus(state))) {
       return null;
@@ -728,6 +834,16 @@ export class ClimateAutomation {
   }
 
   pause(state, reason) {
+    if (state.rule.kind === 'temperature') {
+      for (const candidate of this.states.values()) {
+        if (candidate.rule.kind === 'temperature' && candidate.rule.thermostatId === state.rule.thermostatId) {
+          candidate.paused = true;
+          candidate.thermostatPause = reason;
+          candidate.phase = 'paused';
+          candidate.reason = reason;
+        }
+      }
+    }
     state.paused = true;
     state.phase = 'paused';
     state.reason = reason;
@@ -1012,7 +1128,8 @@ export class ClimateAutomation {
     state.phase = 'active';
     state.temperatureControl = 'active';
     state.reason = 'Heating follows the selected room temperature within the configured adjustment limit.';
-    state.nextChangeAt = Number.isFinite(state.lastWriteAt) ? state.lastWriteAt + (rule.minimumIntervalMinutes ?? 5) * MINUTE : null;
+    state.nextChangeAt = Math.max(state.handoffNotBefore ?? 0,
+      Number.isFinite(state.lastWriteAt) ? state.lastWriteAt + (rule.minimumIntervalMinutes ?? 5) * MINUTE : 0) || null;
     if (equal(target(device), proposed)) {
       return;
     }
@@ -1031,12 +1148,12 @@ export class ClimateAutomation {
     this.leases.set(key, lease);
     const epoch = state.targetEpoch;
     await this.persist();
-    if (state.paused || state.manualTarget || state.targetEpoch !== epoch || this.stopping) {
+    if (!this.windowPermits(state) || state.manualTarget || state.targetEpoch !== epoch) {
       return;
     }
     await this.dashboard.setAutomationTarget(rule.thermostatId, proposed, lease.before, () => {
       const current = this.schedule(this.dashboard.devices.get(rule.thermostatId), rule.thermostatId);
-      return !state.paused && !state.manualTarget && state.targetEpoch === epoch && !this.stopping &&
+      return this.windowPermits(state) && !state.manualTarget && state.targetEpoch === epoch &&
         current.position === scheduleKey && current.signature === scheduleSignature && this.sensorSetup.permits(rule);
     });
     state.lastAction = { at: this.now(), value: proposed, message: 'Heating target accepted; awaiting device feedback.' };
@@ -1117,11 +1234,11 @@ export class ClimateAutomation {
       lease.pending = true;
       this.leases.set(key, lease);
       await this.persist();
-      if (state.paused || this.stopping) {
+      if (!this.windowPermits(state)) {
         return;
       }
       try {
-        await this.access.setFan(id, desired, lease.before);
+        await this.access.setFan(id, desired, lease.before, { guard: () => this.windowPermits(state) });
       } catch (error) {
         error.fanTargetId = id;
         throw error;
@@ -1275,7 +1392,7 @@ export class ClimateAutomation {
     const requests = [];
     for (const state of this.states.values()) {
       const device = this.dashboard.devices.get(state.rule.thermostatId);
-      if (state.rule.kind === 'temperature' && state.rule.enabled && device?.id === deviceId) {
+      if (state.rule.kind === 'temperature' && state.rule.enabled && state.controlOwner && device?.id === deviceId) {
         const requested = values?.target_temperature_low ?? values?.target_temperature;
         const onlyTarget = values && Object.keys(values).every((key) =>
           ['uuid', 'target_temperature', 'target_temperature_low'].includes(key));
@@ -1328,8 +1445,8 @@ export class ClimateAutomation {
 
   async manualThermostatResult(requests, accepted) {
     for (const request of requests ?? []) {
-      const state = this.states.get(request.id);
-      if (state?.manualTarget !== request.pending) {
+      const state = [...this.states.values()].find((entry) => entry.manualTarget === request.pending);
+      if (!state) {
         continue;
       }
       if (accepted) {
@@ -1376,7 +1493,11 @@ export class ClimateAutomation {
         if (state.rule.kind !== 'temperature' || state.manualTarget || state.scheduleTarget) {
           throw new DashboardConfigError('Select a temperature rule and wait for pending Nest target confirmation.');
         }
-        this.resetTemperatureTarget(state);
+        for (const candidate of this.states.values()) {
+          if (candidate.rule.kind === 'temperature' && candidate.rule.thermostatId === state.rule.thermostatId) {
+            this.resetTemperatureTarget(candidate);
+          }
+        }
         state.reason = 'Using the saved desired room temperature.';
       } else if (['home', 'away'].includes(payload.action)) {
         const minutes = payload.minutes ?? 60;
@@ -1386,6 +1507,19 @@ export class ClimateAutomation {
         state.override = { home: payload.action === 'home', until: this.now() + minutes * MINUTE };
         state.paused = false;
       } else {
+        if (state.rule.kind === 'temperature') {
+          for (const candidate of this.states.values()) {
+            if (candidate.rule.kind === 'temperature' && candidate.rule.thermostatId === state.rule.thermostatId) {
+              candidate.paused = payload.action === 'pause';
+              if (candidate.paused) {
+                candidate.thermostatPause = 'Paused by you. Temperature automation is suspended. Resume any group for this thermostat to continue.';
+              } else {
+                delete candidate.thermostatPause;
+                this.resetTemperatureTarget(candidate);
+              }
+            }
+          }
+        }
         state.paused = payload.action === 'pause';
         state.reason = state.paused
           ? 'Paused by you. Owned equipment settings are restored when reachable.'
