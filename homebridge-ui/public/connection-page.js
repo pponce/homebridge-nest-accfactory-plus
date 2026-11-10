@@ -100,13 +100,13 @@ export function mountConnectionPage(root, { host, confirm }) {
   }
   async function load() {
     if (busy) return;
-    busy = true; if (current) render();
+    let loaded = false; busy = true; if (current) render();
     try {
       stageGeneration++; await host.clearDraft('accounts');
       current = await host.loadSetup(); draft = setupDraft(current.blocks[0]); accountStatus = current.webAccount || {};
       username = accountStatus.username || 'admin'; password = ''; dirty = false;
       if (!current.configured && !draft.accounts.length) draft.accounts.push({ name: '', type: 'google', authMethod: 'issueTokenCookie' });
-      say(''); webLive.replaceChildren(); render();
+      say(''); webLive.replaceChildren(); render(); loaded = true;
       const generation = ++loadGeneration;
       if (current.configured && host.webStatus) host.webStatus().then((status) => {
         if (generation !== loadGeneration || !status.available || !status.url) return;
@@ -118,7 +118,7 @@ export function mountConnectionPage(root, { host, confirm }) {
         } catch { /* Invalid runtime URLs are not displayed. */ }
       }).catch(() => { /* Account editing does not require a running bridge. */ });
     } catch { root.replaceChildren(node('p', 'Account settings could not be read. Refresh Homebridge and try again.', 'callout danger')); }
-    finally { busy = false; if (current) render(); }
+    finally { busy = false; if (loaded) render(); }
   }
   async function saveChanges(event) {
     event.preventDefault(); if (busy) return;
