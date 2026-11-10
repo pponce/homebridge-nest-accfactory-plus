@@ -1,4 +1,4 @@
-import { applySetup, configuredAccounts } from './connection-config.js';
+import { applySetup, configuredAccounts, setupDraft } from './connection-config.js';
 import { NativeSave } from './native-save.js';
 const hb = window.homebridge;
 const $ = (id) => document.getElementById(id);
@@ -31,7 +31,9 @@ window.climateHost = {
   stageSetup: (draft, revision) => nativeSave.stage('accounts', async () => {
     const current = await hb.request('/plugin-config');
     if (current.revision !== revision) throw new Error('Configuration changed elsewhere. Discard your edits to load the latest settings.');
-    return { revision, blocks: applySetup(current.blocks, draft), restartRequired: true };
+    const blocks = applySetup(current.blocks, draft);
+    const restartRequired = JSON.stringify(setupDraft(current.blocks[0])) !== JSON.stringify(draft);
+    return { revision, blocks, restartRequired };
   }),
   saveWebAccount: (payload) => hb.request('/setup/web-account', payload),
   async request(route, { method = 'GET', body } = {}) {

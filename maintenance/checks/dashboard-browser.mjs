@@ -275,6 +275,10 @@ try {
   assert.equal(await page.evaluate(() => JSON.stringify(window.savedBlocks).includes('fixture-password')), false);
   await page.reload();
   await navigate(page, 'Accounts & web access');
+  await page.getByLabel('Web password', { exact: true }).fill('fixture-replacement');
+  await page.getByRole('button', { name: 'Save web login', exact: true }).click();
+  await page.getByText('Web login saved. No bridge restart is needed.', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.outerSave), false);
   await page.evaluate(() => { window.configRevision = 'disk-conflict'; });
   await page.getByLabel('Account name', { exact: true }).fill('Edited account');
   await page.getByText('Configuration changed elsewhere.', { exact: false }).waitFor();

@@ -18,7 +18,11 @@ export function mountConnectionPage(root, { host, confirm }) {
       validateSetup(draft);
       if (loginNeedsSave()) throw new Error('Save your web login here, then use Homebridge’s Save button at the bottom to save the connection settings.');
       const result = await host.stageSetup(structuredClone(draft), current.revision);
-      if (result && generation === stageGeneration) say('Use Homebridge’s Save button at the bottom of this window, then follow its restart prompt. Your connection changes have not been saved yet.');
+      if (result && generation === stageGeneration) {
+        dirty = result.restartRequired;
+        say(result.restartRequired ? 'Use Homebridge’s Save button at the bottom of this window, then follow its restart prompt. Your connection changes have not been saved yet.' : 'No connection changes to save.');
+        if (!dirty) await host.clearDraft('accounts');
+      }
     } catch (error) { if (generation === stageGeneration) say(error.message); }
   }
   const changed = () => {
@@ -130,6 +134,7 @@ export function mountConnectionPage(root, { host, confirm }) {
       await host.saveWebAccount({ username, password, revision: current.revision, draft });
       accountStatus = { accountConfigured: true, username }; password = ''; dirty = true;
       await stage();
+      if (!dirty) say('Web login saved. No bridge restart is needed.');
     } catch (error) { say(error.message); }
     finally { busy = false; if (current) render(); }
   }
