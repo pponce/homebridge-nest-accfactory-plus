@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "ddea26f62d838b0e06531681c06ccf6f125ef31f",
+  "sourceCommit": "8c8ee562c61343b0c4305e7c3e8249df1a37e775",
   "sourceBranch": "feature/rule-time-windows",
   "fixtureDataOnly": true,
   "checks": [
