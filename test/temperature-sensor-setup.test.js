@@ -367,3 +367,23 @@ test('offline setup and changed thermostat assignments never gain another native
   assert.equal(f.status().canRestore, true);
   assert.equal(f.commands.length, 1);
 });
+
+test('temperature groups share a confirmed native hold and restoration pauses every group', async (t) => {
+  const f = await fixture(t);
+  await f.action('prepareSensors');
+  f.acknowledge();
+  await f.advance();
+  await f.advance();
+  const baseline = f.engine.leases.get('temperature:T').baseline;
+  f.rules.temperature[0].priority = 1;
+  f.rules.temperature.push({ ...rule(), id: 'next-group', priority: 2 });
+  await f.advance();
+  assert.equal(f.engine.sensorSetup.permits(f.rules.temperature[1]), true);
+  assert.equal(f.engine.leases.get('temperature:T').owner, 'next-group');
+  assert.equal(f.engine.leases.get('temperature:T').baseline, baseline);
+  assert.equal(f.commands.filter((entry) => entry.native_sensor_control).length, 1);
+  await f.action('restoreSensors');
+  assert.equal(f.engine.states.get('next-group').paused, true);
+  await f.advance();
+  assert.equal(f.commands.filter((entry) => entry.native_sensor_control).at(-1).native_sensor_control.action, 'restore');
+});

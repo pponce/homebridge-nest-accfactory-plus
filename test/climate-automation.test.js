@@ -1967,3 +1967,27 @@ test('a Nest command rejected by its final window guard preserves the successor 
   assert.equal(f.commands.length, 1);
   assert.equal(f.rule('day').paused, false);
 });
+
+test('cancelling a subsequent adjustment keeps the original restoration baseline through the handoff', async (t) => {
+  const rules = windowRules();
+  rules[0].window = windowAt('09:00', '10:06'); rules[1].window = windowAt('10:06', '22:00');
+  const f = await fixture(t, { temperature: rules });
+  await f.engine.evaluate();
+  f.advance(5 * minute);
+  f.source('room').temperature = 24;
+  const persist = f.engine.persist.bind(f.engine);
+  let crossed = false;
+  f.engine.persist = async () => {
+    await persist();
+    if (!crossed && f.engine.leases.get('temperature:T')?.pending) {
+      crossed = true;
+      f.advance(minute);
+    }
+  };
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.engine.leases.get('temperature:T').baseline, 19);
+  await f.engine.evaluate();
+  assert.equal(f.engine.leases.get('temperature:T').owner, 'day');
+  assert.equal(f.engine.leases.get('temperature:T').baseline, 19);
+});
