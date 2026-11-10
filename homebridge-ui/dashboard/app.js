@@ -267,9 +267,44 @@ function sources() {
   }));
 }
 const matchesSource = (source, id) => source.id === id || source.aliases?.includes(id);
+let nativeDraftGeneration = 0;
+let nativeDraftTimer;
+let nativeRestartRequired = false;
+async function stageNativeClimate() {
+  if (!host || !state.dirty) return false;
+  const generation = ++nativeDraftGeneration;
+  clearTimeout(nativeDraftTimer); host.invalidateDraft('climate');
+  $('save').disabled = true;
+  try {
+    const invalid = [...document.querySelectorAll('#page-settings input, #rule-editor input')].find((input) => !input.checkValidity());
+    if (invalid) throw new Error('Review the highlighted fields before saving.');
+    const result = await host.stageClimate({ revision: state.envelope.revision, config: structuredClone(state.config) });
+    if (!result || generation !== nativeDraftGeneration) return;
+    nativeRestartRequired = result.restartRequired;
+    $('save').hidden = nativeRestartRequired;
+    $('save').disabled = state.saving;
+    $('save-title').textContent = nativeRestartRequired ? 'Save with Homebridge' : 'You have unsaved changes';
+    $('save-detail').textContent = nativeRestartRequired
+      ? 'Use Homebridge’s Save button at the bottom of this window to save all these edits, then follow its restart prompt.'
+      : 'Use Save changes here. These settings apply without restarting.';
+    return nativeRestartRequired;
+  } catch (error) {
+    if (generation !== nativeDraftGeneration) return;
+    $('save-title').textContent = 'Review changes before saving';
+    $('save-detail').textContent = error.message;
+    $('save').hidden = false; $('save').disabled = true;
+    return undefined;
+  }
+}
 function markDirty() {
   state.dirty = true; $('save-bar').hidden = false; $('save-title').textContent = 'You have unsaved changes';
   $('save-detail').textContent = 'Saving applies enabled rules. Disabled rules remain drafts.'; $('save').disabled = state.saving;
+  if (host) {
+    notice(); clearTimeout(toastTimer); $('toast').hidden = true;
+    nativeDraftGeneration++; host.invalidateDraft('climate'); clearTimeout(nativeDraftTimer);
+    $('save').disabled = true; $('save-detail').textContent = 'Checking how to apply your changes…';
+    nativeDraftTimer = setTimeout(stageNativeClimate, 150);
+  }
   renderHeatingRecommendations();
   renderRestart();
   document.querySelectorAll('.sensor-setup button').forEach((control) => { control.disabled = true; });
@@ -353,6 +388,7 @@ function route(focus = true) {
     if (node.dataset.page === state.page) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current');
   });
   [$('page-eyebrow').textContent, $('page-title').textContent] = pageDetails[state.page];
+  if (state.page === 'accounts' && connectionPage && !connectionPage.hasEdits()) connectionPage.load();
   if (state.page === 'rules') renderRules();
   if (state.page === 'settings' && state.config) refreshHeating();
   if (focus) { $('page-title').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'auto' }); }
@@ -1503,6 +1539,7 @@ async function save() {
   if (invalid) { invalid.reportValidity(); return; }
   const curveError = (state.config.rules.fans || []).filter((rule) => rule.enabled).map((rule) => fanSpeedError(normalizeFanRule(rule))).find(Boolean);
   if (curveError) { notice(curveError, 'danger'); return; }
+  if (host && await stageNativeClimate() !== false) return;
   const sensorSetupCandidates = (state.config.rules.temperature || []).filter((rule) => {
     const previous = (state.envelope.config.rules.temperature || []).find((entry) => entry.id === rule.id);
     return rule.enabled && (!previous?.enabled || previous.thermostatId !== rule.thermostatId ||
@@ -1512,6 +1549,7 @@ async function save() {
   try {
     const envelope = await api('/config', { method: 'PUT', body: { revision: state.envelope.revision, config: state.config } });
     state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true;
+    if (host) await host.clearDraft('climate');
     state.restartMessage = '';
     notice(envelope.restartRequired ? 'Saved. Restart the child bridge to apply accessory settings.' : 'Saved. Check execution status for running rules and any required setup. Disabled rules remain drafts.');
     renderAll(); toast(envelope.restartRequired ? 'Setup saved · child-bridge restart required' : 'Rules saved');
@@ -1531,7 +1569,8 @@ $('save').addEventListener('click', save);
 $('discard').addEventListener('click', async () => {
   if (!state.dirty || state.saving || !await confirmAction('Discard unsaved changes?', 'Your edits will be removed and the latest saved setup will be loaded.', 'Discard changes')) return;
   $('discard').disabled = true; $('save').disabled = true;
-  try { const envelope = await api('/config'); state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; $('save-bar').hidden = true; notice(); renderAll(); $('page-title').focus(); }
+  nativeDraftGeneration++; clearTimeout(nativeDraftTimer);
+  try { if (host) await host.clearDraft('climate'); const envelope = await api('/config'); state.envelope = envelope; state.config = structuredClone(envelope.config); state.dirty = false; nativeRestartRequired = false; $('save').hidden = false; $('save-bar').hidden = true; notice(); renderAll(); $('page-title').focus(); }
   catch (error) { notice(error.message, 'danger'); }
   finally { $('discard').disabled = false; $('save').disabled = !state.dirty; }
 });
@@ -1544,13 +1583,14 @@ function renderRestart() {
   $('restart-detail').textContent = state.restartMessage || (state.dirty ? 'Save or discard your edits before restarting.' :
     restart?.available ? 'Restart this Nest child bridge to apply saved settings. The dashboard will briefly disconnect. Sign in again afterward and check rule status. Previously active rules continue after restart checks unless restart pausing is enabled.' :
       restart?.message || 'Restart this child bridge from Homebridge to apply saved settings, then check rule status.');
-  $('restart-child').hidden = !restart?.available;
+  if (host && state.envelope?.restartRequired) $('restart-detail').textContent = 'Restart this plugin’s child bridge from Homebridge to apply the saved settings.';
+  $('restart-child').hidden = Boolean(host) || !restart?.available;
   $('restart-child').disabled = state.restarting || state.dirty || state.saving || ['prepared', 'requested'].includes(restart?.phase);
   for (const section of document.querySelectorAll('[data-section]')) section.inert = state.restarting;
   $('sign-out').disabled = state.restarting;
 }
 async function restartChildBridge() {
-  if (state.restarting || state.dirty || state.saving || !state.envelope?.restart?.available) return;
+  if (host || state.restarting || state.dirty || state.saving || !state.envelope?.restart?.available) return;
   const before = state.envelope.web.instanceId;
   state.restarting = true; state.restartMessage = 'Requesting a restart of this Nest child bridge. Waiting for the dashboard to reconnect…'; renderRestart();
   try {
@@ -1596,12 +1636,10 @@ function renderAll() { renderLive(); renderSettings(); renderRules(); renderRest
 if (host) host.connect({
   hasEdits: () => state.dirty || state.saving,
   confirm: confirmAction,
-  reload: () => enterDashboard(),
+  restage: stageNativeClimate,
 });
 if (host) {
-  connectionPage = mountConnectionPage($('page-accounts'), { host, confirm: confirmAction, saved: async () => {
-    state.envelope = null; state.config = null; await enterDashboard();
-  } });
+  connectionPage = mountConnectionPage($('page-accounts'), { host, confirm: confirmAction });
   await connectionPage.load();
 }
 checkSession();

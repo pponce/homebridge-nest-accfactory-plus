@@ -67,7 +67,8 @@ function runtimeSignature(block) {
   const runtime = structuredClone(block);
   delete runtime.climateRuleDrafts;
   delete runtime.dashboardTemperatureUnit;
-  for (const device of Array.isArray(runtime.devices) ? runtime.devices : Object.values(runtime.devices ?? {})) {
+  runtime.devices = deviceRows(runtime.devices);
+  for (const device of runtime.devices) {
     if (object(device)) {
       delete device.scheduleTimeZone;
       delete device.heatingType;
@@ -75,6 +76,7 @@ function runtimeSignature(block) {
       delete device.homeKitRoomTemperature;
     }
   }
+  runtime.devices = runtime.devices.filter((device) => Object.keys(device).length > 1);
   runtime.name ??= 'Nest Climate Cntrl';
   runtime.options = { ...(object(runtime.options) ? runtime.options : {}), eveHistory: runtime.options?.eveHistory !== false };
   delete runtime.options.pauseOnRestart;
@@ -321,7 +323,7 @@ export class WebDashboardConfig {
     return operation;
   }
 
-  async performSave(payload) {
+  async prepare(payload) {
     this.beforeSave?.();
     keys(payload, ['revision', 'config']);
     keys(payload.config, ['name', 'temperatureUnit', 'options', 'devices', 'rules']);
@@ -424,6 +426,20 @@ export class WebDashboardConfig {
     if (patch.rules !== undefined) {
       state.block.climateRuleDrafts = validateRuleDrafts(patch.rules);
     }
+    return { state, restartRequired: !isDeepStrictEqual(runtimeBefore, runtimeSignature(state.block)) };
+  }
+
+  async stage(payload) {
+    const { state, restartRequired } = await this.prepare(payload);
+    return {
+      revision: state.revision,
+      restartRequired,
+      blocks: state.root.platforms.filter((entry) => entry?.platform?.split('.').at(-1) === 'NestClimateCntrl'),
+    };
+  }
+
+  async performSave(payload) {
+    const { state, restartRequired } = await this.prepare(payload);
     const temporary = this.file + '.climate-' + crypto.randomUUID() + '.tmp';
     let handle;
     try {
@@ -443,7 +459,7 @@ export class WebDashboardConfig {
       await handle?.close();
       await fs.rm(temporary, { force: true });
     }
-    this.restartRequired ||= !isDeepStrictEqual(runtimeBefore, runtimeSignature(state.block));
+    this.restartRequired ||= restartRequired;
     return this.snapshot();
   }
 }

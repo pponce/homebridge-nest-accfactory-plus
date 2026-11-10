@@ -131,6 +131,7 @@ test('child restart requires authentication, origin and CSRF, acknowledges befor
   assert.equal((await call(server, '/api/bridge/restart')).status, 401);
   assert.equal((await call(server, '/api/bridge/restart', { ...request, csrf: null })).status, 403);
   assert.equal((await call(server, '/api/bridge/restart', { ...request, origin: 'https://other.local' })).status, 403);
+  assert.equal((await call(server, '/api/config/stage', { ...request, body: { revision: view.revision, config: {} } })).status, 404);
   assert.equal(executed, 0);
   server.config.restartRequired = true;
   assert.equal((await call(server, '/api/config', { cookie })).data.restart.available, true);
@@ -281,6 +282,39 @@ test('dashboard saves preserve credentials, child identity, unknown fields and o
     store.save({ revision: saved.revision, config: { devices: [{ serialNumber: 'THERMO', scheduleTimeZone: 'bad/time-zone' }] } }),
   );
   assert.deepEqual(JSON.parse(await fs.readFile(state.configPath, 'utf8')), expected);
+});
+
+test('Homebridge staging validates and preserves full plugin blocks without writing or requesting a restart', async (t) => {
+  const state = await fixture(t);
+  const second = { ...state.block, _bridge: { username: 'AA:00:00:00:00:02' }, name: 'Other Nest bridge' };
+  state.root.platforms.push(second);
+  await fs.writeFile(state.configPath, JSON.stringify(state.root));
+  const original = await fs.readFile(state.configPath, 'utf8');
+  const store = new WebDashboardConfig(state.configPath, state.block);
+  const initial = await store.snapshot();
+  const config = structuredClone(initial.config);
+  config.devices[0].humiditySensor = true;
+  config.temperatureUnit = 'F';
+  const staged = await store.stage({ revision: initial.revision, config });
+  assert.equal(staged.restartRequired, true);
+  assert.equal(staged.blocks.length, 2);
+  assert.equal(staged.blocks[0].devices[0].humiditySensor, true);
+  assert.equal(staged.blocks[0].dashboardTemperatureUnit, 'F');
+  assert.deepEqual(staged.blocks[0].accounts, state.block.accounts);
+  assert.deepEqual(staged.blocks[0]._bridge, state.block._bridge);
+  assert.deepEqual(staged.blocks[1], second);
+  assert.equal(staged.blocks[0].devices[0].external, 'private-file.js');
+  assert.equal(await fs.readFile(state.configPath, 'utf8'), original);
+  assert.equal((await store.snapshot()).restartRequired, false);
+  delete config.devices[0].humiditySensor;
+  assert.equal((await store.stage({ revision: initial.revision, config })).restartRequired, false);
+  await assert.rejects(store.stage({ revision: 'stale', config }), { status: 409 });
+  await assert.rejects(store.stage({ revision: initial.revision, config: { devices: [{ serialNumber: 'UNKNOWN' }] } }));
+  state.block.devices = { THERMO: { ecoSwitch: false } };
+  await fs.writeFile(state.configPath, JSON.stringify(state.root));
+  const legacy = await store.snapshot();
+  legacy.config.devices[0].homeKitRoomTemperature = true;
+  assert.equal((await store.stage({ revision: legacy.revision, config: legacy.config })).restartRequired, false);
 });
 
 test('legacy object device overrides retain unedited settings and rules remain drafts without a restart', async (t) => {

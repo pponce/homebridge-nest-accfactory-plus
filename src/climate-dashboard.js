@@ -425,7 +425,7 @@ export class ClimateDashboard {
     }
     try {
       if (request.url.startsWith('/ui/') && this.webDashboard) {
-        await this.webDashboard.handleClimate(request, response, '/api/' + request.url.slice(4));
+        await this.webDashboard.handleClimate(request, response, '/api/' + request.url.slice(4), true);
         return;
       }
       if (request.method === 'GET' && request.url === '/status') {

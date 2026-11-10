@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import path from 'node:path';
-import { configuredAccounts } from './public/connection-config.js';
+import { applySetup, configuredAccounts } from './public/connection-config.js';
 
 export class ConnectionSetup {
   constructor(configPath, storagePath, forward, loadAuth = () => import('../dist/web-dashboard-auth.js')) {
@@ -39,14 +39,16 @@ export class ConnectionSetup {
   async provision(payload) {
     const current = await this.read();
     if (!payload || payload.revision !== current.revision) throw Object.assign(new Error('Configuration changed. Reload Accounts & web access before saving.'), { status: 409 });
-    if (current.blocks.length !== 1 || !current.configured) throw new Error('Save your Nest or Google account before creating a web login.');
+    if (current.blocks.length > 1) throw new Error('Select a single Climate platform before creating a web login.');
+    const blocks = payload.draft ? applySetup(current.blocks, payload.draft) : current.blocks;
+    if (blocks.length !== 1 || !configuredAccounts(blocks)) throw new Error('Configure your Nest or Google account before creating a web login.');
     const credentials = { username: payload.username, password: payload.password };
     const endpoint = path.join(this.storagePath, 'nest-climate', 'endpoint.json');
     let running = true;
     try { await fs.access(endpoint); } catch (error) { if (error.code !== 'ENOENT') throw error; running = false; }
     // Existing runtimes own credential rotation and session invalidation. Never bypass them on a failed request.
     if (running) return this.forward('/web/account', credentials);
-    const directory = this.directory(current.blocks[0]);
+    const directory = this.directory(blocks[0]);
     let exists = true;
     try { await fs.access(path.join(directory, 'web-account.json')); } catch (error) { if (error.code !== 'ENOENT') throw error; exists = false; }
     if (exists) throw new Error('Start the Nest bridge before changing an existing web login.');

@@ -333,6 +333,17 @@ test('Homebridge climate routes share configuration validation while standalone 
   assert.equal(response.status, 200);
   assert.equal(JSON.stringify(envelope).includes('PRIVATE-TOKEN'), false);
   assert.equal(envelope.config.options.pauseOnRestart, false);
+  const draft = { revision: envelope.revision, config: { name: 'Staged bridge' } };
+  assert.equal((await fetch(f.url + '/ui/config/stage', { method: 'POST' })).status, 403);
+  const stagedResponse = await fetch(f.url + '/ui/config/stage', {
+    method: 'POST', headers: { ...f.headers, 'Content-Type': 'application/json' }, body: JSON.stringify(draft),
+  });
+  const staged = await stagedResponse.json();
+  assert.equal(stagedResponse.status, 200);
+  assert.equal(staged.restartRequired, true);
+  assert.equal(staged.blocks[0].name, 'Staged bridge');
+  assert.equal(staged.blocks[0].accounts[0].refreshToken, 'PRIVATE-TOKEN');
+  assert.equal((await web.config.snapshot()).revision, envelope.revision);
   const save = () => fetch(f.url + '/ui/config', { method: 'PUT',
     headers: { ...f.headers, 'Content-Type': 'application/json' },
     body: JSON.stringify({ revision: envelope.revision, config: { options: { pauseOnRestart: true } } }),

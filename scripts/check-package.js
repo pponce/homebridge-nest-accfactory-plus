@@ -29,6 +29,7 @@ try {
     'homebridge-ui/bridge-discovery.js',
     'homebridge-ui/public/index.html',
     'homebridge-ui/public/index.js',
+    'homebridge-ui/public/native-save.js',
     'homebridge-ui/public/host.css',
     'homebridge-ui/public/climate/app.js',
     'homebridge-ui/public/climate/markup.js',

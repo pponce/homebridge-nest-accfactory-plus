@@ -1,8 +1,10 @@
-import { applySetup, configuredAccounts } from './connection-config.js';
+import { applySetup, configuredAccounts, setupDraft } from './connection-config.js';
+import { NativeSave } from './native-save.js';
 const hb = window.homebridge;
 const $ = (id) => document.getElementById(id);
-let climate;
+let climate; let connections;
 hb.hideSchemaForm(); hb.disableSaveButton();
+const nativeSave = new NativeSave(hb, () => hb.request('/plugin-config'));
 
 const loadSetup = async () => {
   const current = await hb.request('/plugin-config');
@@ -14,18 +16,25 @@ const loadSetup = async () => {
 window.climateHost = {
   initialConfigured: false,
   connect(controls) { climate = controls; },
+  connectSetup(controls) { connections = controls; },
   loadSetup,
   webStatus: () => hb.request('/web/status'),
-  async saveSetup(draft, revision) {
-    if (climate?.hasEdits()) throw new Error('Save or discard your climate edits before saving account settings.');
-    const current = await hb.request('/plugin-config');
-    if (current.revision !== revision) throw new Error('Configuration changed elsewhere. Your edits remain visible. Discard them to load the latest settings before saving.');
-    await hb.updatePluginConfig(applySetup(current.blocks, draft));
-    await hb.savePluginConfig();
-    const result = await loadSetup();
-    window.climateHost.initialConfigured = result.configured;
-    return result;
+  invalidateDraft: (owner) => nativeSave.invalidate(owner),
+  async clearDraft(owner) {
+    await nativeSave.clear(owner);
+    if (owner === 'accounts' && climate?.hasEdits()) await climate.restage();
+    if (owner === 'climate' && connections?.hasEdits()) await connections.restage();
   },
+  stageClimate: (payload) => nativeSave.stage('climate', () => hb.request('/climate', {
+    route: '/config/stage', method: 'POST', body: payload,
+  })),
+  stageSetup: (draft, revision) => nativeSave.stage('accounts', async () => {
+    const current = await hb.request('/plugin-config');
+    if (current.revision !== revision) throw new Error('Configuration changed elsewhere. Discard your edits to load the latest settings.');
+    const blocks = applySetup(current.blocks, draft);
+    const restartRequired = JSON.stringify(setupDraft(current.blocks[0])) !== JSON.stringify(draft);
+    return { revision, blocks, restartRequired };
+  }),
   saveWebAccount: (payload) => hb.request('/setup/web-account', payload),
   async request(route, { method = 'GET', body } = {}) {
     if (route === '/session') {

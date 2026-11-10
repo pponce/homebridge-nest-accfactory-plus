@@ -1,4 +1,8 @@
-## v0.5.4
+## v0.6.1
+
+- Enable Homebridge’s native Save button for restart-required configuration edits, including accessory and connection settings. Keep those edits staged until Homebridge saves them and offers its bridge restart prompt.
+- Apply live climate settings with the interface’s Save changes button. Preserve the standalone dashboard’s Save and Restart child bridge flow.
+- Validate staged settings, preserve credentials and bridge identities, and clear drafts on discard. Save the optional web login separately from connection configuration.
 
 ## v0.6.0
 
@@ -7,6 +11,8 @@
 - Pause temperature automation across all groups for a thermostat, including the optional pause after manual target changes. Restart recovery selects the currently eligible window after equipment checks.
 - Show Scheduled, Standby, Waiting, and active control states in both the Homebridge configuration interface and standalone dashboard. Fan windows preserve priority, manual overrides, and bounded restoration behavior.
 
+
+## v0.5.4
 
 **Account setup within the climate interface.**
 

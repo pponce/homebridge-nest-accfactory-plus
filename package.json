@@ -2,7 +2,7 @@
     "name": "homebridge-nest-climate-cntrl",
     "displayName": "Nest Climate Cntrl",
     "type": "module",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "description": "Nest thermostat, room sensor and Heat Link controls with a live Homebridge climate dashboard",
     "author": "pponce",
     "license": "Apache-2.0",
