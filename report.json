@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "a01f8cae98ec4c0e2628cbaf9365bc3ba9999ce7",
+  "sourceBranch": "feature/rule-time-windows",
+  "fixtureDataOnly": true,
+  "checks": [
+    "Always default",
+    "overnight windows and start days",
+    "time zone selection",
+    "save and switch to Always in both hosts",
+    "390px layout"
+  ],
+  "screenshots": [
+    "embedded-window-temperature.png",
+    "embedded-window-temperature-mobile.png",
+    "standalone-window-fan.png",
+    "standalone-window-fan-mobile.png"
+  ]
+}
