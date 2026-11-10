@@ -29,14 +29,14 @@ export function mountConnectionPage(root, { host, confirm }) {
     dirty = true; stageGeneration++; host.invalidateDraft('accounts'); say('Checking connection settings…');
     queueMicrotask(() => { const button = root.querySelector('[type="submit"]'); if (button) button.hidden = !loginNeedsSave(); stage(); });
   };
-  function field(parent, label, object, key, { type = 'text', choices, help, refresh = false } = {}) {
+  function field(parent, label, object, key, { type = 'text', choices, help, refresh = false, update } = {}) {
     const wrapper = node('label', undefined, 'field'); wrapper.append(node('span', label));
     const input = node(choices ? 'select' : 'input'); input.setAttribute('aria-label', label);
     if (choices) for (const [value, title] of choices) { const option = node('option', title); option.value = value; input.append(option); }
     else input.type = type;
     input.value = object[key] ?? '';
     if (type === 'password') input.autocomplete = 'off';
-    input.addEventListener(choices ? 'change' : 'input', () => { object[key] = type === 'number' ? Number(input.value) : input.value; changed(); if (refresh) render(); });
+    input.addEventListener(choices ? 'change' : 'input', () => { object[key] = type === 'number' ? Number(input.value) : input.value; update?.(input.value); changed(); if (refresh) render(); });
     wrapper.append(input); if (help) wrapper.append(node('small', help)); parent.append(wrapper); return input;
   }
   function toggle(parent, label, object, key, help, refresh = false) {
@@ -90,8 +90,8 @@ export function mountConnectionPage(root, { host, confirm }) {
       }
       web.append(grid);
       const login = node('div', undefined, 'form-grid'); const loginDraft = { username, password };
-      const nameInput = field(login, 'Web username', loginDraft, 'username'); nameInput.autocomplete = 'username'; nameInput.addEventListener('input', () => { username = nameInput.value; });
-      const passwordInput = field(login, 'Web password', loginDraft, 'password', { type: 'password', help: accountStatus.accountConfigured ? 'Leave blank to keep the current web login. Enter a password to replace it and sign out existing sessions.' : 'Use 8–128 characters. This login is separate from Nest, Google and Homebridge.' }); passwordInput.autocomplete = 'new-password'; passwordInput.addEventListener('input', () => { password = passwordInput.value; });
+      const nameInput = field(login, 'Web username', loginDraft, 'username', { update: (value) => { username = value; } }); nameInput.autocomplete = 'username';
+      const passwordInput = field(login, 'Web password', loginDraft, 'password', { type: 'password', update: (value) => { password = value; }, help: accountStatus.accountConfigured ? 'Leave blank to keep the current web login. Enter a password to replace it and sign out existing sessions.' : 'Use 8–128 characters. This login is separate from Nest, Google and Homebridge.' }); passwordInput.autocomplete = 'new-password';
       web.append(node('h4', accountStatus.accountConfigured ? 'Web login configured' : 'Create your web login'), login);
     }
     fields.append(accounts, web);

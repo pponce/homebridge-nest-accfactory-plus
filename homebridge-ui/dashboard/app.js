@@ -300,6 +300,7 @@ function markDirty() {
   state.dirty = true; $('save-bar').hidden = false; $('save-title').textContent = 'You have unsaved changes';
   $('save-detail').textContent = 'Saving applies enabled rules. Disabled rules remain drafts.'; $('save').disabled = state.saving;
   if (host) {
+    notice(); clearTimeout(toastTimer); $('toast').hidden = true;
     nativeDraftGeneration++; host.invalidateDraft('climate'); clearTimeout(nativeDraftTimer);
     $('save').disabled = true; $('save-detail').textContent = 'Checking how to apply your changes…';
     nativeDraftTimer = setTimeout(stageNativeClimate, 150);
