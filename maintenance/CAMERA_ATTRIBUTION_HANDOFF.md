@@ -87,7 +87,14 @@ claim to use those removed implementations.
   helper from commit `acc7f2d63ea5fb95afc3b0227ad66d41152247ae`, verifies its pinned SHA-256, and invokes it. The
   helper verifies the released tarball, publishes to `latest`, and checks registry
   integrity. Login and publication use `--browser=false` for SSH use.
-- Next: confirm the GitHub release assets, run the supplied npm script on the
-  publishing host, then check the saved publication result. Live authentication
+- PR #26 is merged. GitHub v0.6.2 is published at commit
+  `acc7f2d63ea5fb95afc3b0227ad66d41152247ae`, with all eight release-workflow jobs
+  successful: https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42904387642.
+  The package, installer, migration preflight, publisher and SHA256SUMS assets are
+  uploaded. Package SHA-256:
+  `6644dd0a1d7d3832050b54e6c819f1a4ec911b992aa32c8e26ee6833c6f01b69`.
+  The publisher asset digest matches the bootstrap's pinned checksum.
+- Next: run `maintenance/publish-0.6.2.sh` on the publishing host, complete any npm
+  web sign-in using the printed URL, and check the saved publication result. Live authentication
   and thermostat behavior remain to be exercised on a real installation.
 - No direct npm publication or live installation was performed by the agent.
