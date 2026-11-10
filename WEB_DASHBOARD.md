@@ -15,28 +15,29 @@ The standalone dashboard provides a visual interface for daily use and supported
 | **Overview** | Check temperatures, targets, heating/cooling activity and account connectivity. Use supported native Nest controls and inspect schedules and observed runtime. |
 | **Sensors & fans** | Discover configured Homebridge main and child bridges. Search and filter temperature, motion, occupancy and fan sources; inspect their readings and availability. |
 | **Climate rules** | Build named temperature groups, Home/Away rules and room-fan rules with source pickers and current-signal previews. Enable selected rules and inspect their live execution status, timers and pause/resume controls. |
+| **Accounts & web access** | View account and web access status. Manage credentials, optional web access and initial setup from this page in Homebridge Settings. |
 | **Settings** | Choose heating type, collect local response history, review per-rule recommendations, and change the dashboard name and supported accessory options. Save changes with account credentials and bridge identity preserved; the dashboard identifies options requiring a restart. |
 
-The same climate application is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings**. Open **Connection & advanced setup** there for Google/Nest credentials and web login, certificate and network settings. Named rules and live controls are available in both interfaces.
+The same climate application is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings**. Open **Menu → Accounts & web access** there for Google/Nest credentials and web login, certificate and network settings. Named rules and live controls are available in both interfaces.
 
-The runtime starts only with a usable, non-excluded Nest or Google account. Without one, no climate listeners, automation or discovery run. Homebridge Settings opens connection setup when the runtime is unavailable, so you can add an account, save and restart the bridge. Once configured, the Homebridge interface works with standalone web access disabled. Standalone web access defaults off; creating web login credentials does not enable it.
+The runtime starts only with a usable, non-excluded Nest or Google account. Without one, no climate listeners, automation or discovery run. Homebridge Settings opens **Accounts & web access** when no usable account is saved. Add an account, select **Save changes** and restart the bridge. Once an account is saved, future visits open **Overview**, including when the bridge is temporarily unavailable. Once configured, the Homebridge interface works with standalone web access disabled. Standalone web access defaults off; creating web login credentials does not enable it.
 
 Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
 
 ## Navigate on phones and in Homebridge
 
-Use **☰ Menu** to switch between **Overview**, **Sensors & fans**, **Climate rules** and **Settings**. In Homebridge Settings and on narrow web screens, navigation starts collapsed so the page can use the available width. The menu opens over the page and closes when you select a destination, click outside, press Escape or move keyboard focus out of it. The current page is highlighted. On the standalone mobile dashboard, the menu also includes **Sign out**.
+Use **☰ Menu** to switch between **Overview**, **Sensors & fans**, **Climate rules**, **Settings** and **Accounts & web access**. In Homebridge Settings and on narrow web screens, navigation starts collapsed so the page can use the available width. The menu opens over the page and closes when you select a destination, click outside, press Escape or move keyboard focus out of it. The current page is highlighted. On the standalone mobile dashboard, the menu also includes **Sign out**.
 
 The standalone dashboard uses a persistent sidebar on wider desktop screens. Resizing the window switches between layouts without discarding unsaved changes.
 
 ## Enable web access
 
-1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup → Web dashboard**. The Nest bridge must be running.
-2. Create a **web username and password**. Use at least 8 characters for the password. This account is separate from your Google and Homebridge accounts.
-3. Select **Enable standalone dashboard**. Save with Homebridge's **Save** button and restart the Nest child bridge.
-4. Reopen **Connection & advanced setup**, then select **Open climate dashboard**. The default HTTPS port is **9444**.
+1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Menu → Accounts & web access**. Add your Nest or Google credentials if needed.
+2. Select **Enable standalone web dashboard** and create a **web username and password**. Use at least 8 characters for the password. This login is separate from Nest, Google and Homebridge.
+3. Select **Save changes** and restart the Nest child bridge. Initial account and web login setup works before the bridge is running. Changing an existing web login requires the bridge to be running.
+4. Open the configured address, usually `https://<homebridge-host>:9444`. The default HTTPS port is **9444**.
 
-The web server is off by default. Under **Connection & advanced setup → Web dashboard → Connection mode**, choose how browsers reach it:
+The web server is off by default. Under **Menu → Accounts & web access → Web connection mode**, choose how browsers reach it:
 
 | Connection mode | Browser connection | Certificate owner | Backend |
 | --- | --- | --- | --- |
@@ -247,7 +248,7 @@ Unavailable inputs cannot establish Away. The last confirmed state is retained w
 
 ## HTTP mode
 
-HTTPS is the default. Under **Connection & advanced setup → Web dashboard → Connection mode**, choose **HTTP · unencrypted**, save and restart the Nest bridge. The port remains configurable; the default is 9444. Open `http://<homebridge-host>:9444`.
+HTTPS is the default. Under **Menu → Accounts & web access → Web connection mode**, choose **HTTP · unencrypted**, save and restart the Nest bridge. The port remains configurable; the default is 9444. Open `http://<homebridge-host>:9444`.
 
 **HTTP sends passwords and dashboard data unencrypted. Use it only on a trusted local network.** This warning appears in setup, before sign-in, in the dashboard and in the startup log. HTTP still requires the web login and validates browser origins and changes. It does not generate or read TLS certificates. Certificate paths stay saved for switching back to HTTPS.
 
@@ -394,7 +395,7 @@ Homebridge plugin Settings and the standalone dashboard use the same climate app
 
 Use **Save changes** for climate configuration. It checks the saved revision before writing; a change made elsewhere requires reloading. The outer Homebridge Save button is disabled while this application is open. **Enabled** describes the saved rule permission; **Active**, **Waiting**, and **Paused** describe its current execution.
 
-Open **Connection & advanced setup** to edit account credentials, web-server settings or advanced schema fields, including while the bridge is unavailable. This form uses Homebridge’s Save button. Save or discard climate edits before opening it. Returning to climate controls discards unsaved form edits and reloads saved configuration. If the saved configuration changes while the form is open, reopen setup before saving. Raw advanced rule temperatures use Celsius; the graphical editors use your chosen display unit.
+Open **Menu → Accounts & web access** to edit account credentials and web-server settings in the same interface. Select **Save changes** on that page, then restart the bridge. Save or discard climate edits before saving account settings. Switching pages keeps unsaved edits. If configuration changes elsewhere, discard the account draft to load the latest saved settings. The standalone dashboard shows account status here; credentials are managed through Homebridge.
 
 A reported built-in Nest sensor can guide a temperature rule even when Nest omits its room-sensor scheduling mode or empty paired-sensor list. These missing fields still prevent automatic changes to native sensor schedules. A rule combining official Nest room sensors with Homebridge sensors requires confirmed native sensor setup.
 

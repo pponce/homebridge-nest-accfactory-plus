@@ -45,6 +45,7 @@ svg { display: block; }
 .icon { width: 20px; height: 20px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 [data-icon] { display: inline-flex; align-items: center; justify-content: center; }
 .skip-link { position: fixed; z-index: 100; left: 16px; top: -80px; padding: 12px 18px; background: var(--surface); border-radius: 10px; }
+.skip-link:not(:focus) { clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; padding: 0; white-space: nowrap; }
 .skip-link:focus { top: 16px; }
 .eyebrow { display: block; color: var(--muted); font-size: 10px; letter-spacing: 1.7px; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; }
 .subtle, .small-note { color: var(--muted); font-size: 12px; }
@@ -584,3 +585,14 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .compact-navigation .climate-page-title { grid-column: 1 / -1; grid-row: 2; }
   .compact-navigation .page-header .eyebrow { display: none; }
 }
+.connection-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.connection-panel { margin: 18px 0; }
+.connection-panel h3, .connection-panel h4 { margin-bottom: 16px; }
+.connection-account { border-top: 1px solid var(--line); padding: 24px 0; }
+.connection-account .section-heading h4 { margin: 0; }
+.connection-toggle { margin: 12px 0; cursor: pointer; }
+.connection-panel > h4 { margin-top: 24px; }
+.connection-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0; }
+#connection-form details { margin-top: 16px; }
+#connection-form .field > span { display: block; margin-bottom: 8px; font-weight: 600; }
+#connection-form .field > small { display: block; margin: 8px 0 12px; color: var(--muted); }

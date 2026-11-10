@@ -103,9 +103,9 @@ const server = http.createServer(async (request, response) => {
     json(404, { error: 'Not found.' }); return;
   }
   let file; let name;
-  if (route.startsWith('/shared/') && ['climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js', 'fan-speed.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
+  if (route.startsWith('/shared/') && ['climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js', 'fan-speed.js', 'connection-page.js', 'connection-config.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
   else { name = route === '/' ? 'index.html' : route.slice(1); if (!assets.has(name)) { response.writeHead(404).end(); return; } file = path.join(staticRoot, name); }
-  response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html');
+  response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html; charset=utf-8');
   response.end(await fs.readFile(file));
 });
 await fs.mkdir(output, { recursive: true });
@@ -398,7 +398,10 @@ try {
   await page.waitForFunction(() => !document.body.classList.contains('compact-navigation'));
   assert.equal(await page.locator('#climate-sidebar').isVisible(), true);
   assert.equal(await page.locator('#climate-menu-toggle').isVisible(), false);
-  assert.equal(await page.locator('#navigation a').count(), 4);
+  assert.equal(await page.locator('#navigation a').count(), 5);
+  await navigate(page, 'Accounts & web access');
+  assert.equal(await page.locator('#connection-form').count(), 0, 'Standalone web access must not expose credential editors');
+  await page.getByText('Manage Nest/Google credentials and web access in Homebridge', { exact: false }).waitFor();
   await page.setViewportSize({ width: 360, height: 800 });
   await page.waitForFunction(() => document.body.classList.contains('compact-navigation'));
   assert.equal(await page.locator('#climate-menu-panel').isVisible(), false);

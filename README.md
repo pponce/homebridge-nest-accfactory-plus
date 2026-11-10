@@ -86,7 +86,7 @@ Open **Homebridge → Plugins → Nest Climate Cntrl → Settings** for the shar
 - **Climate rules:** guided editors, previews, execution status, enable switches, pause/resume controls and presence overrides.
 - **Settings:** dashboard and supported accessory options, saved with a clear indication when a bridge restart is needed.
 
-Rule editors, field help, fan priority ordering, heating recommendations and execution status are available in both interfaces. Direct temperature editing on thermostat cards is available in the standalone dashboard. Open **Connection & advanced setup** inside Homebridge for account credentials and web access settings.
+Rule editors, field help, fan priority ordering, heating recommendations and execution status are available in both interfaces. Direct temperature editing on thermostat cards is available in the standalone dashboard. Open **Menu → Accounts & web access** inside Homebridge for account credentials and web access settings.
 
 The layout adapts to desktop and phone screens. Web access has its own sign-in and supports direct HTTP, direct HTTPS with certificates in the plugin, or HTTPS through a local reverse proxy such as Nginx. [Set up the web dashboard](WEB_DASHBOARD.md).
 
@@ -110,14 +110,14 @@ Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0
 
 1. Use Homebridge **1.11.4+ or 2.4.0+** with Node **22 or 24**. Node **26** requires Homebridge **2.4.0+**.
 2. Install **`homebridge-nest-climate-cntrl`** through Homebridge's plugin installer. A child bridge is recommended for a new installation.
-3. Open **Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup**, add your account and save.
+3. Open **Plugins → Nest Climate Cntrl → Settings**. With no usable account configured, **Accounts & web access** opens automatically. Add your account and select **Save changes**. Future visits open **Overview** once credentials are saved.
 4. Restart the plugin's bridge, then select the optional Apple Home features you want.
 
 Google issue-token/cookie credentials and compatible existing legacy refresh tokens are supported. Legacy Nest access tokens are available for supported accounts. **No SDM project is required.** See [account setup](AUTHENTICATION.md).
 
-The plugin stays inactive until a usable, non-excluded Nest or Google account is configured. It starts no dashboard listeners or climate automation in that state. Homebridge Settings remains available for account setup. Standalone web access is **off by default** and requires explicitly enabling **Web dashboard → Enable standalone dashboard**.
+The plugin stays inactive until a usable, non-excluded Nest or Google account is configured. It starts no dashboard listeners or climate automation in that state. Homebridge Settings remains available for account setup. Standalone web access is **off by default** and requires explicitly enabling **Menu → Accounts & web access → Enable standalone web dashboard**.
 
-Live action buttons send commands immediately. Climate configuration uses **Save changes** in the shared interface. Accounts and network settings are under **Connection & advanced setup** and use Homebridge's **Save** button. Accessory and connection changes may require a bridge restart.
+Live action buttons send commands immediately. Climate configuration uses **Save changes** in the shared interface. Accounts and network settings are under **Menu → Accounts & web access** and use **Save changes** on that page. Accessory and connection changes may require a bridge restart.
 
 External discovery requires readable Homebridge accessories and the bridge's accessory-control configuration. Sensors or fans visible only in Apple Home are not accessible. Bridge PINs stay on the server.
 
@@ -125,7 +125,7 @@ Schedule entries show planned changes, not guaranteed hold-expiry times. Runtime
 
 ## Web dashboard
 
-Open **Plugins → Nest Climate Cntrl → Settings → Connection & advanced setup → Web dashboard**, create a web username/password, then enable web access, save and restart the Nest child bridge. Select **Open climate dashboard** to visit its address, usually `https://<homebridge-host>:9444`.
+Open **Plugins → Nest Climate Cntrl → Settings → Menu → Accounts & web access**, enable the optional standalone dashboard, create its web username/password and select **Save changes**. Restart the Nest child bridge, then visit its address, usually `https://<homebridge-host>:9444`.
 
 The phone-friendly interface shows thermostat status, native controls, sensors, schedules and runtime. It also lets you save supported settings and enable temperature, occupancy and room-fan rules. The engine runs in the Nest bridge independently of an open browser.
 

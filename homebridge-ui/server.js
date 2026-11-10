@@ -4,10 +4,20 @@ import path from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { ClimateAccess } from './climate-access.js';
 import crypto from 'node:crypto';
+import { ConnectionSetup } from './connection-setup.js';
 
 class ClimateUi extends HomebridgePluginUiServer {
   constructor() {
     super();
+    const setup = new ConnectionSetup(this.homebridgeConfigPath, this.homebridgeStoragePath, this.forward.bind(this));
+    this.onRequest('/setup/account-status', async () => {
+      try { return await setup.accountStatus(); } catch { throw new RequestError('Web login status could not be read.', { status: 503 }); }
+    });
+    this.onRequest('/setup/web-account', async (payload) => {
+      try { return await setup.saveAccount(payload); } catch (error) {
+        throw new RequestError(error.code ? 'Web login could not be saved. Check Homebridge storage permissions.' : error.message, { status: error.status || error.error?.status || 400 });
+      }
+    });
     this.onRequest('/plugin-config', async () => {
       try {
         const bytes = await fs.readFile(this.homebridgeConfigPath, 'utf8');

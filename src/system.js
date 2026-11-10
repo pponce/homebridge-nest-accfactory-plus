@@ -177,7 +177,7 @@ export default class NestAccfactory {
     this.#connections = this.#createConnections();
     if (this.#connections.size === 0) {
       this.log?.error?.(
-        'No active connections are configured. Add an account in Connection & advanced setup, then restart the bridge.',
+        'No active connections are configured. Add an account in Menu → Accounts & web access, then restart the bridge.',
       );
       return;
     }

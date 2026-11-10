@@ -108,7 +108,7 @@ const server = http.createServer(async (request, response) => {
     // asset controller rejects additional HTML documents, including nested index.html.
     if (name !== 'index.html' && /\.(?:html?|xhtml)$/i.test(name)) { response.writeHead(404).end(); return; }
     try {
-      response.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.png') ? 'image/png' : 'text/html');
+      response.setHeader('Content-Type', name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.png') ? 'image/png' : 'text/html; charset=utf-8');
       const asset = await fs.readFile(path.join(publicRoot, name));
       // Model the global theme rules included in Homebridge's custom-UI iframe.
       response.end(name === 'host.css' ? asset.toString() + '\n.homebridge-host { color: #000 !important; background: #fff !important; } .homebridge-host .sidebar { background: #c2155d; color: #eee; } .homebridge-host a { color: #c2155d; } .homebridge-host a:hover { color: #c2155d !important; }' : asset);
@@ -116,9 +116,9 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   let file; let name;
-  if (route.startsWith('/shared/') && ['climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js', 'fan-speed.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
+  if (route.startsWith('/shared/') && ['climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js', 'fan-speed.js', 'connection-page.js', 'connection-config.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
   else { name = route === '/' ? 'index.html' : route.slice(1); if (!assets.has(name)) { response.writeHead(404).end(); return; } file = path.join(staticRoot, name); }
-  response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html');
+  response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html; charset=utf-8');
   response.end(await fs.readFile(file));
 });
 
@@ -131,19 +131,31 @@ try {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.addInitScript(() => {
-    window.outerSave = true; window.schemaShown = false; window.configRevision = 'disk-1'; window.webAccounts = [];
+    window.outerSave = true; window.schemaShown = false; window.configRevision = 'disk-1'; window.webAccounts = []; window.climateRequests = 0;
+    window.savedBlocks = JSON.parse(sessionStorage.getItem('saved-blocks') || 'null') || (sessionStorage.getItem('first-install') ? [] : [{
+      platform: 'NestClimateCntrl', accounts: [{ name: 'Home', type: 'google', authMethod: 'refreshToken', refreshToken: 'fixture-token' }],
+      devices: { T1: { custom: 'keep' } }, custom: 'keep', rules: { temperature: [{ id: 'preserved' }] }, _bridge: { username: 'AA:BB:CC:DD:EE:FF' },
+    }]);
     window.homebridge = {
       disableSaveButton() { window.outerSave = false; }, enableSaveButton() { window.outerSave = true; },
       showSchemaForm() { window.schemaShown = true; }, hideSchemaForm() { window.schemaShown = false; },
       updatePluginConfig: async (blocks) => { window.staged = blocks; },
+      savePluginConfig: async () => {
+        if (window.failSave) throw new Error('Fixture save failed');
+        window.savedBlocks = structuredClone(window.staged); window.configRevision += '-saved';
+        sessionStorage.setItem('saved-blocks', JSON.stringify(window.savedBlocks));
+      },
       request: async (route, payload) => {
-        if (route === '/plugin-config') return { revision: window.configRevision, blocks: [{ platform: 'NestClimateCntrl', accounts: [], devices: { T1: { custom: 'keep' } }, custom: 'keep' }] };
+        if (route === '/plugin-config') return { revision: window.configRevision, blocks: structuredClone(window.savedBlocks) };
+        if (route === '/setup/account-status') return { accountConfigured: sessionStorage.getItem('web-login') === 'true', username: 'admin' };
+        if (route === '/setup/web-account') { window.webAccounts.push(payload); sessionStorage.setItem('web-login', 'true'); return {}; }
         if (route === '/web/status') {
           if (sessionStorage.getItem('runtime-inactive')) throw new Error('Fixture runtime inactive.');
           return { enabled: false, accountConfigured: false, instanceId: 'fixture-instance' };
         }
-        if (route === '/web/account') { window.webAccounts.push(payload); return {}; }
         if (route !== '/climate') throw new Error('Unexpected host route: ' + route);
+        window.climateRequests++;
+        if (sessionStorage.getItem('runtime-inactive')) throw new Error('Fixture runtime inactive.');
         const response = await fetch('/api' + payload.route, { method: payload.method,
           headers: { 'Content-Type': 'application/json', 'x-csrf-token': 'fixture-csrf' },
           body: payload.body === undefined ? undefined : JSON.stringify(payload.body) });
@@ -171,7 +183,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 1000 });
   assert.equal(await page.locator('#sign-out').isVisible(), false);
   assert.equal(await page.evaluate(() => window.outerSave), false);
-  assert.equal(await page.locator('#connection-setup').isVisible(), true);
+  assert.equal(await page.locator('#connection-setup').count(), 0);
   await navigate(page, 'Settings');
   await page.locator('#pause-on-restart').check();
   await page.getByRole('switch', { name: 'Show climate rule temperature in Apple Home', exact: false }).first().check();
@@ -188,17 +200,36 @@ try {
   await page.getByText('Set rule priority', { exact: false }).waitFor();
   await page.locator('[data-kind="presence"]').click();
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).waitFor();
-  await page.locator('#connection-setup').click();
-  assert.equal(await page.evaluate(() => window.schemaShown && window.outerSave), true);
-  assert.equal(await page.evaluate(() => window.staged[0].devices[0].custom), 'keep');
-  await page.locator('#web-account-password').fill('fixture-password');
-  await page.locator('#web-account-save').click();
-  await page.waitForFunction(() => window.webAccounts.length === 1);
-  assert.equal(await page.locator('#web-account-password').inputValue(), '');
-  await page.evaluate(() => { window.configRevision = 'disk-2'; });
-  await page.waitForFunction(() => !window.outerSave);
-  await page.locator('#return-to-climate').click();
-  assert.equal(await page.evaluate(() => window.schemaShown), false);
+  await navigate(page, 'Accounts & web access');
+  await page.getByRole('heading', { name: 'Nest & Google accounts', exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.schemaShown || window.outerSave), false);
+  await page.getByRole('switch', { name: 'Enable standalone web dashboard', exact: true }).check();
+  await page.getByLabel('Web password', { exact: true }).fill('fixture-password');
+  await page.locator('#toast').waitFor({ state: 'hidden' });
+  await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
+  await page.screenshot({ path: path.join(output, 'accounts-desktop.png'), fullPage: true });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: path.join(output, 'accounts-dark.png'), fullPage: true });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: path.join(output, 'accounts-mobile.png'), fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('Saved. Restart Homebridge', { exact: false }).waitFor();
+  assert.equal(await page.evaluate(() => window.webAccounts.length), 1);
+  assert.equal(await page.getByLabel('Web password', { exact: true }).inputValue(), '');
+  assert.equal(await page.evaluate(() => window.savedBlocks[0].devices.T1.custom), 'keep');
+  assert.equal(await page.evaluate(() => window.savedBlocks[0].rules.temperature[0].id), 'preserved');
+  assert.equal(await page.evaluate(() => window.savedBlocks[0]._bridge.username), 'AA:BB:CC:DD:EE:FF');
+  assert.equal(await page.evaluate(() => JSON.stringify(window.savedBlocks).includes('fixture-password')), false);
+  await page.getByLabel('Account name', { exact: true }).fill('Edited account');
+  await page.evaluate(() => { window.configRevision = 'disk-conflict'; });
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('Configuration changed elsewhere.', { exact: false }).waitFor();
+  assert.equal(await page.getByLabel('Account name', { exact: true }).inputValue(), 'Edited account');
+  assert.equal(await page.evaluate(() => window.savedBlocks[0].accounts[0].name), 'Home');
+  await page.reload();
   await navigate(page, 'Settings');
   await page.locator('#dashboard-name').fill('A conflicting edit');
   conflict = true;
@@ -211,18 +242,49 @@ try {
   await page.reload();
   await page.getByText('Climate controls could not load.', { exact: false }).waitFor();
   assert.equal(await page.locator('#host-notice').textContent().then((message) => /missing|reinstall/i.test(message)), false);
-  await page.locator('#connection-setup').click();
-  await page.locator('#connection-panel').waitFor();
+  await page.locator('#setup-fallback').click();
   assert.equal(await page.evaluate(() => window.schemaShown && window.outerSave), true);
   await page.unroute('**/climate/markup.js');
-  // A fresh opening while the child bridge is unavailable still permits account/network setup.
+  // Configured users still land on Overview during an outage, with account setup available in the menu.
   statusAvailable = false;
   await page.evaluate(() => sessionStorage.setItem('runtime-inactive', 'true'));
   await page.reload();
-  await page.locator('#connection-panel').waitFor();
-  assert.equal(await page.evaluate(() => window.schemaShown && window.outerSave), true);
-  await page.getByText('Standalone web access is optional and off by default.', { exact: false }).waitFor();
-  assert.equal(await page.locator('#open-climate-web').isVisible(), false);
+  await page.locator('#page-overview').waitFor();
+  assert.equal(new URL(page.url()).hash, '#overview');
+  await navigate(page, 'Accounts & web access');
+  await page.getByLabel('Account name', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.schemaShown || window.outerSave), false);
+  // First install has no running bridge and never asks it for climate data before account setup.
+  await page.evaluate(() => { sessionStorage.removeItem('saved-blocks'); sessionStorage.removeItem('web-login'); sessionStorage.setItem('first-install', 'true'); });
+  await page.reload();
+  await page.getByRole('heading', { name: 'Connect your home', exact: true }).waitFor();
+  assert.equal(new URL(page.url()).hash, '#accounts');
+  assert.equal(await page.getByRole('switch', { name: 'Enable standalone web dashboard', exact: true }).isChecked(), false);
+  await page.locator('#refresh-status').click();
+  assert.equal(await page.evaluate(() => window.climateRequests), 0);
+  await page.screenshot({ path: path.join(output, 'accounts-first-install.png'), fullPage: true });
+  await page.getByLabel('Account name', { exact: true }).fill('My Nest home');
+  await page.getByLabel('Account type', { exact: true }).selectOption('nest');
+  await page.getByLabel('Nest access token', { exact: true }).fill('fixture-access-token');
+  await page.evaluate(() => { window.failSave = true; });
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('Fixture save failed', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Account name', { exact: true }).inputValue(), 'My Nest home');
+  assert.equal(await page.evaluate(() => window.savedBlocks.length), 0);
+  await page.evaluate(() => { window.failSave = false; });
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('Saved. Restart Homebridge', { exact: false }).waitFor();
+  assert.equal(await page.evaluate(() => window.savedBlocks[0].webDashboard.enabled), false);
+  assert.equal(await page.evaluate(() => window.webAccounts.length), 0);
+  await page.reload();
+  await page.locator('#page-overview').waitFor();
+  assert.equal(new URL(page.url()).hash, '#overview');
+  await navigate(page, 'Accounts & web access');
+  await page.getByRole('switch', { name: 'Enable standalone web dashboard', exact: true }).check();
+  await page.getByLabel('Web password', { exact: true }).fill('fixture-first-login');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByText('Saved. Restart Homebridge', { exact: false }).waitFor();
+  assert.equal(await page.evaluate(() => window.webAccounts.length), 1);
   assert.deepEqual(errors, []);
   console.log('Homebridge shared climate UI: restricted assets, load failure, settings, rules, persistence, conflicts, setup and offline access passed.');
 } finally {

@@ -2,9 +2,13 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 
 export async function navigate(page, name, exact = true) {
+  await page.locator('#app').waitFor({ state: 'visible' });
   const toggle = page.locator('#climate-menu-toggle');
   if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
-  await page.getByRole('link', { name, exact }).click();
+  const link = page.getByRole('link', { name, exact });
+  const target = (await link.getAttribute('href')).slice(1);
+  await link.click();
+  await page.locator('#page-' + target).waitFor({ state: 'visible' });
 }
 
 export async function checkCompactNavigation(page, output, label) {
@@ -23,7 +27,7 @@ export async function checkCompactNavigation(page, output, label) {
   await toggle.click();
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
   assert.deepEqual(await page.locator('#page-title').boundingBox(), before, 'Menu overlays content without moving it');
-  assert.equal(await page.locator('#navigation a').count(), 4);
+  assert.equal(await page.locator('#navigation a').count(), 5);
   const bounds = await panel.boundingBox();
   const viewport = page.viewportSize();
   assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= viewport.width, 'Menu must fit the viewport');

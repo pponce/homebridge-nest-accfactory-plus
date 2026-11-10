@@ -1,23 +1,7 @@
 <link rel="stylesheet" href="host.css" />
-<div class="homebridge-tools">
-  <button id="connection-setup" type="button">Connection &amp; advanced setup</button>
-  <p>Use Save changes for climate settings. Connection setup uses Homebridge’s Save button.</p>
-  <p id="host-notice" role="status" hidden></p>
-</div>
-<section id="connection-panel" class="panel" hidden>
-  <h2>Connection &amp; advanced setup</h2>
-  <p id="web-access-status" role="status"></p>
-  <a id="open-climate-web" hidden target="_blank" rel="noopener noreferrer">Open climate dashboard</a>
-  <p>Edit accounts, web-server settings and advanced configuration in the form below. Use Homebridge’s Save button to apply those edits.</p>
-  <button id="return-to-climate" type="button">Discard form edits and return to climate controls</button>
-  <section id="web-account-setup">
-    <h3>Standalone web login</h3>
-    <p>This login is separate from Homebridge. Creating or updating it takes effect immediately.</p>
-    <label>Web username<input id="web-account-username" autocomplete="username" maxlength="64" /></label>
-    <label>Web password<input id="web-account-password" type="password" autocomplete="new-password" minlength="8" maxlength="128" /></label>
-    <button id="web-account-save" type="button">Save web login</button>
-    <p id="web-account-result" role="status"></p>
-  </section>
-</section>
 <div id="climate-mount"><p role="status">Loading climate controls…</p></div>
+<section id="setup-failure" class="panel" hidden>
+  <p id="host-notice" role="status"></p>
+  <button id="setup-fallback" type="button">Open account setup</button>
+</section>
 <script type="module" src="index.js"></script>

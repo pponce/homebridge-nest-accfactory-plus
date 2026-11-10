@@ -29,6 +29,8 @@ const assets = new Map([
   ['/shared/climate-utils.js', ['public/climate-utils.js', 'text/javascript; charset=utf-8']],
   ['/shared/time-zone-picker.js', ['public/time-zone-picker.js', 'text/javascript; charset=utf-8']],
   ['/shared/sensor-preview.js', ['public/sensor-preview.js', 'text/javascript; charset=utf-8']],
+  ['/shared/connection-page.js', ['public/connection-page.js', 'text/javascript; charset=utf-8']],
+  ['/shared/connection-config.js', ['public/connection-config.js', 'text/javascript; charset=utf-8']],
   ['/shared/fan-speed.js', ['public/fan-speed.js', 'text/javascript; charset=utf-8']],
 ]);
 const hostname = (value) =>
