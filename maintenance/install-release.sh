@@ -32,7 +32,7 @@ NODE
   }
   climate_install_release() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local version='0.6.1'
+    local version='0.6.2'
     local package='homebridge-nest-climate-cntrl'
     local directory="$project/maintenance/releases/v$version"
     local archive="$package-$version.tgz"
@@ -82,3 +82,4 @@ NODE
   unset -f climate_install_release climate_download_release_asset
   printf '%s\n' '=== Nest Climate release update END ==='
 }
+

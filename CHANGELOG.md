@@ -1,4 +1,13 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.2
+
+- Remove unsupported camera, doorbell and floodlight implementations, video assets, camera-only protocol definitions and streaming dependencies from the source and published package.
+- Preserve the Nest climate integration and pinned HomeKitDevice, HomeKitHistory and fetchWrapper libraries.
+- Include upstream acknowledgments at the end of the README, third-party notices and bundled-library license texts in the distribution.
+- Verify production-package installation, required notices and the absence of camera/media code in the compatibility checks.
+
+Existing Nest Climate Cntrl installations retain their settings and accessory identities.
+
 ## v0.6.1
 
 - Enable Homebridge’s native Save button for restart-required configuration edits, including accessory and connection settings. Keep those edits staged until Homebridge saves them and offers its bridge restart prompt.

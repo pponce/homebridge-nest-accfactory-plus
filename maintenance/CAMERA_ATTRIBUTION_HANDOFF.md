@@ -7,9 +7,11 @@ and the distributable.
 - Repository: `pponce/homebridge-nest-climate-cntrl`.
 - Base: `main` at `a7095f93330cdac45dfffed07f19d5b22f83d736`.
 - Work branch: `cleanup/camera-code-and-attribution`.
-- Review: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/26 (draft).
+- Review: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/26.
 - Validated code commit: `5ffe7c2b01a4cc24976f7aa4ae43fa102cac3757`.
-- Package version remains `0.6.1`. No npm publication or live installation is authorized by this cleanup.
+- Release version: `0.6.2`. GitHub publication was explicitly requested after the
+  cleanup review. npm publication is performed separately by the supplied script;
+  no live Homebridge installation is part of this release task.
 
 ## Changes
 
@@ -76,8 +78,16 @@ claim to use those removed implementations.
 - Embedded and standalone dashboard browser checks pass. All seven CI jobs passed
   for the validated code commit above; this checkpoint update changes documentation only.
 - Live Google/Nest endpoints, physical thermostats and HomeKit were not exercised.
-- Next: review/merge PR #26, then exercise the retained
-  authentication and climate behavior on a real installation before a release.
-- `main` and the released package are unchanged. No npm publication or live
-  installation was performed.
-- Publishing to npm requires a separate explicit user instruction.
+- Release preparation updates package/lockfile versions, changelog, the release
+  trigger, and stable publishing/installing helpers to `0.6.2`. The existing
+  GitHub workflow gates publication on the six compatibility jobs, browser checks,
+  package installation and mocked helper tests.
+- GitHub release: https://github.com/pponce/homebridge-nest-climate-cntrl/releases/tag/v0.6.2.
+- npm bootstrap: `maintenance/publish-0.6.2.sh`. It downloads the stable publishing
+  helper from the release tag, verifies its pinned SHA-256, and invokes it. The
+  helper verifies the released tarball, publishes to `latest`, and checks registry
+  integrity. Login and publication use `--browser=false` for SSH use.
+- Next: confirm the GitHub release assets, run the supplied npm script on the
+  publishing host, then check the saved publication result. Live authentication
+  and thermostat behavior remain to be exercised on a real installation.
+- No direct npm publication or live installation was performed by the agent.
