@@ -35,19 +35,24 @@ export function prepareFanRules(engine) {
     }
     const current = { running: source.running, speed: source.speedAvailable ? source.speed : undefined };
     const before = engine.fanObservations.get(id);
-    const watched = states.some((state) => state.rule.enabled && !state.paused && state.rule.targetIds.includes(id));
+    const watched = states.some((state) => state.rule.enabled && !state.paused &&
+      state.windowStatus?.active !== false && state.rule.targetIds.includes(id));
     if (watched && !engine.leases.has('fan:' + id) && before &&
         (before.running !== current.running || (Number.isFinite(before.speed) && Number.isFinite(current.speed) &&
           Math.abs(before.speed - current.speed) >= 0.001))) {
       engine.manualFan(id, 'The fan changed outside automatic control. Resume this fan when ready.');
     }
-    engine.fanObservations.set(id, current);
+    if (watched) {
+      engine.fanObservations.set(id, current);
+    } else {
+      engine.fanObservations.delete(id);
+    }
   }
   const winners = new Map();
   for (const state of states.sort((a, b) => b.rule.priority - a.rule.priority)) {
     state.fanTargets = [];
     state.fanSpeeds = [];
-    if (!state.rule.enabled || state.paused) {
+    if (!state.rule.enabled || state.paused || state.windowStatus?.active === false) {
       continue;
     }
     const rule = state.rule;
@@ -76,7 +81,8 @@ export function prepareFanRules(engine) {
         delete state.fanSpeedObserved?.[id];
       }
       const selected = !engine.fanOverrides.has(id) && (winner === state ||
-        (!winner && !state.paused && state.rule.enabled && engine.leases.get('fan:' + id)?.owner === state.rule.id));
+        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false &&
+          engine.leases.get('fan:' + id)?.owner === state.rule.id));
       if (selected) {
         state.fanTargets.push(id);
         if (lastWrites.has(id)) {
@@ -97,7 +103,7 @@ export async function handoffFanLease(engine, key, lease, state) {
   }
   const previous = engine.states.get(lease.owner);
   if (lease.mode === 'speed' ? !observe(engine, key, lease, source, previous) :
-    !engine.observe(key, lease, source.running, previous)) {
+      !engine.observe(key, lease, source.running, previous)) {
     return false;
   }
   if (state.rule.speedMode !== 'last' && lease.mode !== 'speed') {
@@ -148,6 +154,8 @@ function observe(engine, key, lease, source, state) {
 }
 
 async function write(engine, key, lease, source, desired, state, restoring = false) {
+  const previousLease = engine.leases.has(key) ? structuredClone(lease) : undefined;
+  const previousWrite = state?.fanWrites?.[lease.targetId];
   const speedStep = desired.running && Math.abs(source.speed - desired.speed) >= 0.001;
   lease.before = fanState(source);
   lease.expected = { running: speedStep ? source.running : desired.running, speed: desired.speed };
@@ -160,10 +168,14 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
   }
   engine.leases.set(key, lease);
   await engine.persist();
+  if (!restoring && !engine.windowPermits(state, lease.targetId)) {
+    engine.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
+    return;
+  }
   const options = {
     minimum: 1,
     maximum: lease.maximum,
-    guard: () => restoring || (!engine.stopping && !state.paused),
+    guard: () => restoring || engine.windowPermits(state, lease.targetId),
   };
   try {
     if (speedStep) {
@@ -172,6 +184,10 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
       await engine.access.setFan(lease.targetId, desired.running, lease.before, options);
     }
   } catch (error) {
+    if (error.code === 'CLIMATE_CONFLICT' && !restoring && !engine.windowPermits(state, lease.targetId)) {
+      engine.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
+      return;
+    }
     // Keep ownership of other fans so a partial group command can still restore them.
     error.fanTargetId = lease.targetId;
     throw error;

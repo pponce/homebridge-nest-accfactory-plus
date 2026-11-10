@@ -386,6 +386,53 @@
                                     "type": "number",
                                     "minimum": 1,
                                     "maximum": 60
+                                },
+                                "window": {
+                                    "title": "Scheduled window (omit for Always)",
+                                    "type": "object",
+                                    "description": "All day, every day when omitted. Start days refer to the day a window opens; an earlier end time is the following day.",
+                                    "required": [
+                                        "days",
+                                        "start",
+                                        "end",
+                                        "timeZone"
+                                    ],
+                                    "properties": {
+                                        "days": {
+                                            "title": "Start days (0 Monday\u20136 Sunday)",
+                                            "type": "array",
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "uniqueItems": true,
+                                            "items": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 6
+                                            }
+                                        },
+                                        "start": {
+                                            "title": "Start time",
+                                            "type": "string",
+                                            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+                                        },
+                                        "end": {
+                                            "title": "End time",
+                                            "type": "string",
+                                            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+                                        },
+                                        "timeZone": {
+                                            "title": "Window time zone",
+                                            "type": "string",
+                                            "description": "Named zone such as America/Los_Angeles."
+                                        }
+                                    }
+                                },
+                                "priority": {
+                                    "title": "Priority",
+                                    "type": "integer",
+                                    "minimum": 0,
+                                    "maximum": 100,
+                                    "description": "Higher numbers take priority. Enabled groups sharing a thermostat need different priorities."
                                 }
                             },
                             "required": [
@@ -511,6 +558,46 @@
                                 },
                                 "thresholdInclusive": {
                                     "type": "boolean"
+                                },
+                                "window": {
+                                    "title": "Scheduled window (omit for Always)",
+                                    "type": "object",
+                                    "description": "All day, every day when omitted. Start days refer to the day a window opens; an earlier end time is the following day.",
+                                    "required": [
+                                        "days",
+                                        "start",
+                                        "end",
+                                        "timeZone"
+                                    ],
+                                    "properties": {
+                                        "days": {
+                                            "title": "Start days (0 Monday\u20136 Sunday)",
+                                            "type": "array",
+                                            "minItems": 1,
+                                            "maxItems": 7,
+                                            "uniqueItems": true,
+                                            "items": {
+                                                "type": "integer",
+                                                "minimum": 0,
+                                                "maximum": 6
+                                            }
+                                        },
+                                        "start": {
+                                            "title": "Start time",
+                                            "type": "string",
+                                            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+                                        },
+                                        "end": {
+                                            "title": "End time",
+                                            "type": "string",
+                                            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+                                        },
+                                        "timeZone": {
+                                            "title": "Window time zone",
+                                            "type": "string",
+                                            "description": "Named zone such as America/Los_Angeles."
+                                        }
+                                    }
                                 }
                             },
                             "required": [
@@ -980,6 +1067,12 @@
                         },
                         {
                             "key": "climateRuleDrafts.temperature[].minimumIntervalMinutes"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].window"
+                        },
+                        {
+                            "key": "climateRuleDrafts.temperature[].priority"
                         }
                     ]
                 },
@@ -1048,6 +1141,9 @@
                         },
                         {
                             "key": "climateRuleDrafts.fans[].thresholdInclusive"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].window"
                         }
                     ]
                 },

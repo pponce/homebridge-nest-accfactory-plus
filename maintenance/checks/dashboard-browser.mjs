@@ -1,3 +1,4 @@
+import { checkRuleWindows } from './dashboard-rule-windows.mjs';
 // Browser fixture only. No Nest, Homebridge or other real device requests are made.
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -116,7 +117,7 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   let file; let name;
-  if (route.startsWith('/shared/') && ['climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js', 'fan-speed.js', 'connection-page.js', 'connection-config.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
+  if (route.startsWith('/shared/') && ['climate-utils.js', 'time-zone-picker.js', 'sensor-preview.js', 'fan-speed.js', 'rule-window.js', 'connection-page.js', 'connection-config.js'].includes(route.slice(8))) { name = route.slice(8); file = path.join(publicRoot, name); }
   else { name = route === '/' ? 'index.html' : route.slice(1); if (!assets.has(name)) { response.writeHead(404).end(); return; } file = path.join(staticRoot, name); }
   response.setHeader('Content-Type', name.endsWith('.png') ? 'image/png' : name.endsWith('.js') ? 'text/javascript' : name.endsWith('.css') ? 'text/css' : name.endsWith('.webmanifest') ? 'application/manifest+json' : 'text/html; charset=utf-8');
   response.end(await fs.readFile(file));
@@ -200,6 +201,7 @@ try {
   await page.getByText('Set rule priority', { exact: false }).waitFor();
   await page.locator('[data-kind="presence"]').click();
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).waitFor();
+  await checkRuleWindows(page, output, 'embedded', () => config);
   await navigate(page, 'Accounts & web access');
   await page.getByRole('heading', { name: 'Nest & Google accounts', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.schemaShown || window.outerSave), false);

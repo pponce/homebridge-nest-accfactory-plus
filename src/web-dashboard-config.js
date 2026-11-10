@@ -1,3 +1,4 @@
+import { windowError } from '../homebridge-ui/public/rule-window.js';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -116,6 +117,7 @@ export function validateRuleDrafts(value) {
         'speedMode',
         'fixedSpeed',
         'priority',
+        'window',
         'thresholdInclusive',
       ]);
       assert(
@@ -123,6 +125,8 @@ export function validateRuleDrafts(value) {
         'Each rule needs a unique identifier.',
       );
       known.add(rule.id);
+      assert(kind !== 'presence' || rule.window === undefined, 'Time windows apply to temperature and fan rules.');
+      assert(!windowError(rule.window), windowError(rule.window));
       assert(text(rule.name, 80) && rule.kind === kind, 'Enter a rule name and supported rule type.');
       assert(rule.enabled === undefined || typeof rule.enabled === 'boolean', 'Choose whether this rule is enabled.');
       assert(
@@ -201,12 +205,14 @@ export function validateRuleDrafts(value) {
       return { ...rule, sourceIds: sources, targetIds: targets, enabled: rule.enabled === true };
     });
   }
-  const thermostatOwners = new Set();
+  const thermostatOwners = new Map();
   const fanOwners = new Map();
   for (const rule of result.temperature.filter((entry) => entry.enabled)) {
     const id = rule.thermostatId.toUpperCase();
-    assert(!thermostatOwners.has(id), 'Only one enabled temperature group can control each thermostat.');
-    thermostatOwners.add(id);
+    const priorities = thermostatOwners.get(id) ?? new Set();
+    assert(!priorities.has(rule.priority ?? 0), 'Enabled rules sharing a thermostat need different priorities; reorder the rules.');
+    priorities.add(rule.priority ?? 0);
+    thermostatOwners.set(id, priorities);
   }
   for (const rule of result.fans.filter((entry) => entry.enabled)) {
     for (const id of rule.targetIds) {
