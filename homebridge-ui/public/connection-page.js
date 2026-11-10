@@ -2,13 +2,14 @@ import { setupDraft, validateSetup } from './connection-config.js';
 
 export function mountConnectionPage(root, { host, confirm, saved }) {
   let current; let draft; let dirty = false; let busy = false;
-  let username = 'admin'; let password = ''; let accountStatus = {};
+  let username = 'admin'; let password = ''; let accountStatus = {}; let loadGeneration = 0;
   const node = (tag, text, className) => {
     const item = document.createElement(tag); if (text !== undefined) item.textContent = text;
     if (className) item.className = className; return item;
   };
   const message = node('p', '', 'callout'); message.hidden = true; message.setAttribute('role', 'status');
   const say = (text) => { message.textContent = text; message.hidden = !text; };
+  const webLive = node('div', undefined, 'connection-web-status');
   const changed = () => { dirty = true; say(''); };
   function field(parent, label, object, key, { type = 'text', choices, help, refresh = false } = {}) {
     const wrapper = node('label', undefined, 'field'); wrapper.append(node('span', label));
@@ -57,7 +58,7 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
       const advanced = node('details'); advanced.append(node('summary', 'Account options')); toggle(advanced, 'Use Nest field-test environment', account, 'fieldTest', 'Use only with an account enrolled in Nest field testing.'); card.append(advanced); accounts.append(card);
     });
     accounts.append(action('Add account', () => { draft.accounts.push({ name: '', type: 'google', authMethod: 'issueTokenCookie' }); changed(); render(); }));
-    const web = node('section', undefined, 'panel connection-panel'); web.append(node('h3', 'Standalone web dashboard'));
+    const web = node('section', undefined, 'panel connection-panel'); web.append(node('h3', 'Standalone web dashboard'), webLive);
     toggle(web, 'Enable standalone web dashboard', draft.webDashboard, 'enabled', 'Optional browser access outside Homebridge. Climate settings remain available here when this is off.', true);
     if (draft.webDashboard.enabled) {
       const grid = node('div', undefined, 'form-grid');
@@ -88,7 +89,17 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
       current = await host.loadSetup(); draft = setupDraft(current.blocks[0]); accountStatus = current.webAccount || {};
       username = accountStatus.username || 'admin'; password = ''; dirty = false;
       if (!current.configured && !draft.accounts.length) draft.accounts.push({ name: '', type: 'google', authMethod: 'issueTokenCookie' });
-      say(''); render();
+      say(''); webLive.replaceChildren(); render();
+      const generation = ++loadGeneration;
+      if (current.configured && host.webStatus) host.webStatus().then((status) => {
+        if (generation !== loadGeneration || !status.available || !status.url) return;
+        try {
+          const url = new URL(status.url);
+          if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return;
+          const link = node('a', 'Open climate dashboard ↗', 'button secondary'); link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+          webLive.replaceChildren(link);
+        } catch { /* Invalid runtime URLs are not displayed. */ }
+      }).catch(() => { /* Account editing does not require a running bridge. */ });
     } catch { root.replaceChildren(node('p', 'Account settings could not be read. Refresh Homebridge and try again.', 'callout danger')); }
   }
   async function saveChanges(event) {

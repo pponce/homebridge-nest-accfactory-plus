@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 
 export async function navigate(page, name, exact = true) {
+  await page.locator('#app').waitFor({ state: 'visible' });
   const toggle = page.locator('#climate-menu-toggle');
   if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
   await page.getByRole('link', { name, exact }).click();

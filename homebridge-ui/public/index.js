@@ -15,6 +15,7 @@ window.climateHost = {
   initialConfigured: false,
   connect(controls) { climate = controls; },
   loadSetup,
+  webStatus: () => hb.request('/web/status'),
   async saveSetup(draft, revision) {
     if (climate?.hasEdits()) throw new Error('Save or discard your climate edits before saving account settings.');
     const current = await hb.request('/plugin-config');
