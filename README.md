@@ -2,7 +2,7 @@
 
 # Nest Climate Cntrl
 
-**Nest Climate Cntrl is an independently maintained climate automation plugin for Homebridge.** Use Nest thermostats with temperature sensors, room fans and presence sensors exposed by other Homebridge plugins. Manage your climate rules through a redesigned Homebridge configuration interface or a standalone web dashboard, and bring supported climate accessories into Apple Home.
+**Nest Climate Cntrl is climate automation plugin for Homebridge.** Use Nest thermostats with temperature sensors (can be nest or any homebridge exposed temp sensor), room fans and presence sensors exposed by other Homebridge plugins. Manage your climate rules through a Homebridge configuration interface or a standalone web dashboard.
 
 This project builds on the Nest/Google integrations in [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory), with its own climate rule engine, interfaces, package and platform identity. It is maintained and supported separately by [pponce](https://github.com/pponce). Upstream authors retain credit for their contributions; this is an independent fork, not an official Nest Accfactory edition.
 
@@ -12,7 +12,7 @@ This project builds on the Nest/Google integrations in [Nest Accfactory](https:/
 
 **Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and pairing.** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Recreate affected Apple Home room assignments, scenes and automations; follow the [cutover instructions](MIGRATION.md). Existing Climate Cntrl installations can update normally.
 
-Temperature groups and fan rules can run all day or in local-time windows, including overnight. For example, use only bedroom sensors from 10 PM to 6 AM and a larger room average during the day. Drag rules into priority order; the dashboard shows which rule is active, scheduled, or waiting. [Set up time windows](WEB_DASHBOARD.md#time-windows-and-priority).
+Temperature groups and fan rules can run all day or be set to run at certain times of the day, including overnight. For example, use only bedroom sensors from 10 PM to 6 AM and a larger room average during the day. Drag rules into priority order; the dashboard shows which rule is active, scheduled, or waiting. [Set up time windows](WEB_DASHBOARD.md#time-windows-and-priority).
 
 ## What makes this plugin different
 
@@ -23,7 +23,7 @@ The climate features extend the underlying Nest integration to coordinate device
 | Feature | What you can do |
 | --- | --- |
 | **Redesigned Homebridge configuration UI and standalone web dashboard** | Use the shared visual application to find sensors and fans, create and edit rules, inspect execution status, pause/resume control and manage settings. The standalone dashboard adds direct temperature editing on thermostat cards. |
-| **Climate temperature rules with Nest and non-Nest sensors** | Choose one temperature sensor or take an equal average of selected Nest and other Homebridge sensors. The rule makes bounded Nest target adjustments to follow your desired room temperature in **Heat mode**. Non-Nest readings participate in control through the plugin's rule engine. |
+| **Climate temperature rules with Nest and non-Nest sensors** | Choose one temperature sensor or take an equal average of selected Nest and other Homebridge temp sensors. The rule makes bounded Nest target adjustments to follow your desired room temperature in **Heat mode**. Non-Nest readings participate in control through the plugin's rule engine. |
 | **Homebridge ceiling and room fan rules** | Run fans above a room-temperature threshold or during Nest heating/cooling activity. Choose the last speed, a fixed speed or temperature-based speed with a cap. Order overlapping rules by priority; manual changes suspend automation for that fan. |
 | **Heating response & tuning** | Choose the heating type, observe local heating cycles, and review evidence and confidence for each rule’s interval and adjustment recommendations. Apply each suggestion explicitly in Settings. |
 | **Home/Away from Nest and non-Nest signals** | Combine Nest Home/Away with motion and occupancy sensors exposed by other Homebridge plugins. Use any/all logic, motion holds and an Away delay to publish a separate Apple Home occupancy sensor, with timed dashboard overrides. Google's native Home/Away and Eco states remain separate. |
