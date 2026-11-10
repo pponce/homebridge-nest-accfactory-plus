@@ -7,8 +7,6 @@
 
 **Stable release:** install `homebridge-nest-climate-cntrl` from npm. Climate rules are optional and disabled until you enable and save them.
 
-**Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and pairing.** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Recreate affected Apple Home room assignments, scenes and automations; follow the [cutover instructions](MIGRATION.md). Existing Climate Cntrl installations can update normally.
-
 Temperature groups and fan rules can run all day or be set to run at certain times of the day, including overnight. For example, use only bedroom sensors from 10 PM to 6 AM and a larger room average during the day. Drag rules into priority order; the dashboard shows which rule is active, scheduled, or waiting. [Set up time windows](WEB_DASHBOARD.md#time-windows-and-priority).
 
 ## What makes this plugin different
@@ -107,6 +105,8 @@ Nest thermostats, associated Nest Temperature Sensors and Nest Heat Links suppor
 Need those capabilities? Use [upstream Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory). Nest Accfactory can run alongside this plugin with separate device ownership; see [coexistence guidance](MIGRATION.md#running-alongside-upstream).
 
 ## Get started
+
+**Previously used Nest Accfactory Plus?** Users of the earlier `homebridge-nest-accfactory-plus` plugin that was maintained here for legacy Google authentication should consult the [setup and pairing guide](https://github.com/pponce/homebridge-nest-climate-cntrl/blob/main/MIGRATION.md) before installing Nest Climate Cntrl. Moving between these packages requires fresh setup and Apple Home pairing. Existing Nest Climate Cntrl installations can update normally.
 
 1. Use Homebridge **1.11.4+ or 2.4.0+** with Node **22 or 24**. Node **26** requires Homebridge **2.4.0+**.
 2. Install **`homebridge-nest-climate-cntrl`** through Homebridge's plugin installer. A child bridge is recommended for a new installation.
