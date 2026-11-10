@@ -1,6 +1,6 @@
 ## v0.5.4
 
-## 0.6.0
+## v0.6.0
 
 - Schedule temperature groups and fan rules using start days, start/end times, and a named time zone. Overnight windows are supported. Always is the default for all-day operation, including existing rules.
 - Reorder temperature groups by dragging or using keyboard controls. The highest eligible group controls each thermostat; handoffs preserve the original target, minimum update interval, and temporary desired room temperature.
