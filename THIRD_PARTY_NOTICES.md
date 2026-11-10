@@ -32,6 +32,10 @@ not additional runtime package dependencies of Nest Climate Cntrl.
 
 ## Installed dependencies
 
+HomeKitDevice uses Homebridge/HAP-NodeJS APIs and Node.js standard library
+facilities. These runtime foundations are separate from HomeKitDevice's
+own accessory lifecycle and messaging implementation.
+
 Homebridge and the packages listed in `package.json` provide their own
 licenses and attribution notices in their installed distributions. This
 plugin does not replace those notices or claim authorship of those packages.

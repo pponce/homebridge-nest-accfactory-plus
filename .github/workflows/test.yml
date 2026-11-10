@@ -54,6 +54,8 @@ jobs:
       - name: "${{ steps.migration.outputs.detail }}"
         if: always() && steps.migration.outcome != 'skipped'
         run: test '${{ steps.migration.outcome }}' = 'success'
+      - name: Verify production package contents and installation
+        run: node scripts/check-package.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:

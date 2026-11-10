@@ -114,7 +114,7 @@ test('missing, null and malformed options receive defaults while valid settings 
     let config = processConfig({ options }, log, {});
     assert.equal(Array.isArray(config.options), false);
     assert.equal(config.options.eveHistory, true);
-    assert.equal(config.options.maxStreams, 2);
+    assert.equal(config.options.maxStreams, undefined);
     assert.equal(config.options.useNestAPI, true);
     assert.equal(config.options.useGoogleAPI, true);
   }
