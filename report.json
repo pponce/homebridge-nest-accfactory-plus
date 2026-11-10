@@ -1,0 +1,18 @@
+{
+  "sourceCommit": "8504eaa4fbcba9c227a33258fdb39e2ef6f8dccd",
+  "sourceBranch": "feature/account-onboarding",
+  "fixtureDataOnly": true,
+  "checks": [
+    "saved account routing",
+    "optional web access",
+    "first setup without runtime",
+    "config preservation and conflict detection",
+    "mobile layout and shared navigation"
+  ],
+  "screenshots": [
+    "accounts-desktop.png",
+    "accounts-mobile.png",
+    "accounts-first-install.png",
+    "accounts-dark.png"
+  ]
+}
