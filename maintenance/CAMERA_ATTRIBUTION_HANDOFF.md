@@ -7,6 +7,8 @@ and the distributable.
 - Repository: `pponce/homebridge-nest-climate-cntrl`.
 - Base: `main` at `a7095f93330cdac45dfffed07f19d5b22f83d736`.
 - Work branch: `cleanup/camera-code-and-attribution`.
+- Review: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/26 (draft).
+- Validated code commit: `5ffe7c2b01a4cc24976f7aa4ae43fa102cac3757`.
 - Package version remains `0.6.1`. No npm publication or live installation is authorized by this cleanup.
 
 ## Changes
@@ -46,18 +48,36 @@ Shared libraries remain unchanged at:
 
 HomeKitHistory acknowledges fakegato-history protocol research and homebridge-lib
 Eve type references. Their acknowledgments and license texts are retained.
+HomeKitDevice uses Homebridge/HAP-NodeJS APIs and Node.js standard library facilities;
+the README credits these runtime foundations separately from the library itself.
+The inspected source, README and public commit history identify Mark Hulskamp as
+HomeKitDevice's author. No acknowledgment of another author's predecessor
+implementation was found in that inspection; this is not proof of exclusive origin.
+The first public repository commit is
+`3c34d3abc4b4cf097c65113fb73d994fad1b454a` (2024-10-07).
 Google RPC files retain their original copyright/license headers. Camera-specific
 credits stay with historical camera source; the current distribution does not
 claim to use those removed implementations.
 
 ## Validation and next steps
 
-- Local build and syntax checks pass; package inspection found the required notices
-  and licenses and no forbidden camera/media paths.
+- Local build and syntax checks pass. The final tarball contains 154 files,
+  including all eight required license/notice paths and no forbidden camera/media paths.
+- Compared 81 local modified/deleted/new file paths with the remote Git tree:
+  all match. All three submodule pins are unchanged.
 - Focused authentication, HTTP wrapper and command failure-path tests: 103 passed.
 - Broad local test attempt: 822 passed; missing dependency installations prevented
-  the remaining integration test files from loading. Full CI results are pending.
+  the remaining integration test files from loading. GitHub CI subsequently installed
+  the dependencies and passed the full project checks on all six matrix combinations:
+  Node 22 with Homebridge 1.11.4/2.4.0, Node 24 with 1.11.4/2.4.0/2.5.0,
+  and Node 26 with 2.4.0. Lint, tests, coverage floors, build, migration restoration,
+  and production-package installation pass in every combination.
+- CI: https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/42902831659.
+- Embedded and standalone dashboard browser checks pass. All seven CI jobs passed
+  for the validated code commit above; this checkpoint update changes documentation only.
 - Live Google/Nest endpoints, physical thermostats and HomeKit were not exercised.
-- Next: complete GitHub CI, address failures without lowering existing coverage
-  floors, and update this checkpoint with the exact results before merge/release.
+- Next: review/merge PR #26, then exercise the retained
+  authentication and climate behavior on a real installation before a release.
+- `main` and the released package are unchanged. No npm publication or live
+  installation was performed.
 - Publishing to npm requires a separate explicit user instruction.
