@@ -584,3 +584,16 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .compact-navigation .climate-page-title { grid-column: 1 / -1; grid-row: 2; }
   .compact-navigation .page-header .eyebrow { display: none; }
 }
+.connection-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.connection-panel { margin: 18px 0; }
+.connection-panel h3, .connection-panel h4 { margin-bottom: 16px; }
+.connection-account { border-top: 1px solid var(--line); padding: 24px 0; }
+.connection-account .section-heading h4 { margin: 0; }
+.connection-toggle { display: flex; align-items: flex-start; gap: 12px; margin: 20px 0; cursor: pointer; }
+.connection-toggle input { width: 22px; height: 22px; flex-shrink: 0; margin-top: 2px; accent-color: var(--accent); }
+.connection-toggle strong, .connection-toggle small { display: block; }
+.connection-toggle small { margin-top: 4px; color: var(--muted); font-size: 12px; }
+.connection-actions { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0; }
+#connection-form details { margin-top: 16px; }
+#connection-form .field > span { display: block; margin-bottom: 8px; font-weight: 600; }
+#connection-form .field > small { display: block; margin: 8px 0 12px; color: var(--muted); }

@@ -1,3 +1,12 @@
+## v0.5.4
+
+**Account setup within the climate interface.**
+
+- Manage Nest/Google credentials and optional web access from **Menu → Accounts & web access**, directly below Settings, using the shared responsive layout.
+- Open account setup on first install when no usable account is saved. Open Overview on later visits, including when the bridge is temporarily unavailable.
+- Configure the first web login before starting the bridge. Web access remains off by default, and the Homebridge interface works independently.
+- Save account settings with **Save changes**, preserving climate rules, device settings and bridge identity. Keep edits visible when saving fails or configuration changes elsewhere.
+
 ## v0.5.3
 
 **Compact navigation for Homebridge and mobile.**

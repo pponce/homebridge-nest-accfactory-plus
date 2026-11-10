@@ -1,5 +1,6 @@
 import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
 import { mountTimeZonePicker } from '/shared/time-zone-picker.js';
+import { mountConnectionPage } from '/shared/connection-page.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
 import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed } from '/shared/fan-speed.js';
 
@@ -46,9 +47,11 @@ const state = {
 };
 const ruleKey = { temperature: 'temperature', presence: 'occupancy', fan: 'fans' };
 const pageDetails = {
+  accounts: ['Connect your home', 'Accounts & web access'],
   overview: ['Your home at a glance', 'Climate overview'], sources: ['Connected rooms, clearer choices', 'Sensors & fans'],
   rules: ['Comfort, on your terms', 'Climate rules'], settings: ['The details that make it yours', 'Your setup'],
 };
+let connectionPage;
 const compactViewport = window.matchMedia('(max-width: 760px)');
 let compactNavigation;
 function closeNavigation(restoreFocus = false) {
@@ -293,7 +296,7 @@ function showLogin(message = '', setup = false) {
   $('login-error').textContent = message; $('login-error').hidden = !message;
   $('login-form').hidden = setup; $('setup-retry').hidden = !setup;
   $('login-title').textContent = setup ? 'A little setup first.' : 'Welcome home.';
-  $('login-help').textContent = setup ? 'Create your web account in Homebridge → Nest Climate Cntrl → Connection & advanced setup, then return here.' : 'Sign in with your Climate Cntrl web account.';
+  $('login-help').textContent = setup ? 'Create your web login in Homebridge → Nest Climate Cntrl → Menu → Accounts & web access, then return here.' : 'Sign in with your Climate Cntrl web account.';
 }
 async function checkSession() {
   try {
@@ -306,6 +309,11 @@ async function enterDashboard() {
   $('login-screen').hidden = true; $('app').hidden = false; $('signed-in-name').textContent = state.session.username || 'Web account';
   $('password').value = '';
   route(false);
+  if (host && !host.initialConfigured) {
+    state.config = null; state.envelope = null; state.live = false; renderAll();
+    notice('Add a Nest or Google account in Accounts & web access, then save and restart the bridge.', 'warning');
+    return;
+  }
   const results = await Promise.allSettled([api('/config'), api('/status')]);
   if (results[0].status === 'fulfilled') {
     if (!state.dirty) { state.envelope = results[0].value; state.config = structuredClone(state.envelope.config); }
@@ -349,7 +357,7 @@ function route(focus = true) {
   if (focus) { $('page-title').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'auto' }); }
 }
 window.addEventListener('hashchange', () => route());
-window.addEventListener('beforeunload', (event) => { if (state.dirty) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', (event) => { if (state.dirty || connectionPage?.hasEdits()) { event.preventDefault(); event.returnValue = ''; } });
 
 async function readStatus() {
   if (statusPromise) return statusPromise;
@@ -379,6 +387,7 @@ async function readStatus() {
   finally { if (statusPromise === request) statusPromise = null; }
 }
 async function refreshStatus() {
+  if (host && !host.initialConfigured) return;
   if (state.restarting) return;
   if (refreshPromise) return refreshPromise;
   $('refresh-status').disabled = true;
@@ -762,7 +771,7 @@ function renderSchedule(device) {
   for (const point of chosen) { const row = el('div', undefined, 'schedule-row'); row.append(el('span', days[point.day] + ' · ' + time(point)), el('strong', formatTemp(point['temp-min']) + ' / ' + formatTemp(point['temp-max']))); $('schedule-preview').append(row); }
 }
 async function discoverSources(explicit = true) {
-  if (state.discovering || !state.session?.authenticated) return;
+  if (state.discovering || !state.session?.authenticated || (host && !host.initialConfigured)) return;
   const session = state.session;
   state.discovering = true; $('refresh-sources').disabled = true; $('source-summary').textContent = 'Discovering configured Homebridge sources…';
   try { const external = await api('/sources'); if (state.session === session) { state.external = external; if (explicit) toast('Sources refreshed.'); } }
@@ -1519,10 +1528,24 @@ async function restartChildBridge() {
   renderRestart();
 }
 $('restart-child').addEventListener('click', restartChildBridge);
-function renderAll() { renderLive(); renderSettings(); renderRules(); renderRestart(); }
+function renderAccountSummary() {
+  if (host) return;
+  const section = $('page-accounts'); section.replaceChildren(el('h2', 'Accounts & web access'));
+  const panel = el('section', undefined, 'panel connection-panel');
+  panel.append(el('p', 'Manage Nest/Google credentials and web access in Homebridge → Plugins → Nest Climate Cntrl → Menu → Accounts & web access.'));
+  for (const account of state.envelope?.accounts || []) panel.append(el('p', (account.name || 'Account') + ' · ' + (account.configured ? 'Configured' : 'Needs setup')));
+  panel.append(el('p', 'Standalone web access: ' + (state.envelope?.web?.enabled ? 'enabled' : 'disabled'))); section.append(panel);
+}
+function renderAll() { renderLive(); renderSettings(); renderRules(); renderRestart(); renderAccountSummary(); }
 if (host) host.connect({
   hasEdits: () => state.dirty || state.saving,
   confirm: confirmAction,
   reload: () => enterDashboard(),
 });
+if (host) {
+  connectionPage = mountConnectionPage($('page-accounts'), { host, confirm: confirmAction, saved: async () => {
+    state.envelope = null; state.config = null; await enterDashboard();
+  } });
+  await connectionPage.load();
+}
 checkSession();

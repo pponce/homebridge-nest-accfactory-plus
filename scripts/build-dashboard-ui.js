@@ -18,6 +18,6 @@ const markup = fs.readFileSync(path.join(root, 'dashboard', 'index.html'), 'utf8
 fs.writeFileSync(path.join(destination, 'markup.js'), 'export default ' + JSON.stringify(markup) + ';\n');
 const app = fs.readFileSync(path.join(destination, 'app.js'), 'utf8').replaceAll("from '/shared/", "from './shared/");
 fs.writeFileSync(path.join(destination, 'app.js'), app);
-for (const name of ['climate-utils.js', 'sensor-preview.js', 'fan-speed.js', 'time-zone-picker.js']) {
+for (const name of ['climate-utils.js', 'sensor-preview.js', 'fan-speed.js', 'time-zone-picker.js', 'connection-page.js', 'connection-config.js']) {
   fs.copyFileSync(path.join(root, 'public', name), path.join(destination, 'shared', name));
 }

@@ -23,7 +23,7 @@ export async function checkCompactNavigation(page, output, label) {
   await toggle.click();
   assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
   assert.deepEqual(await page.locator('#page-title').boundingBox(), before, 'Menu overlays content without moving it');
-  assert.equal(await page.locator('#navigation a').count(), 4);
+  assert.equal(await page.locator('#navigation a').count(), 5);
   const bounds = await panel.boundingBox();
   const viewport = page.viewportSize();
   assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= viewport.width, 'Menu must fit the viewport');

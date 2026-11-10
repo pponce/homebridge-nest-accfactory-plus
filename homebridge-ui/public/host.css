@@ -1,14 +1,8 @@
-.homebridge-tools { padding: 12px 20px; background: var(--surface, #fff); color: var(--text, #2d2834); border-bottom: 1px solid #ddd6e4; }
-.homebridge-tools p { margin: 6px 0; font-size: 14px; }
-.homebridge-tools button, #connection-panel button { min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid #b9adca; cursor: pointer; }
-#connection-panel { margin: 20px; padding: 20px; }
-#web-account-setup { margin-top: 24px; }
-#web-account-setup label { display: block; margin-top: 12px; }
-#web-account-setup input { display: block; width: min(100%, 420px); padding: 10px; }
-#web-account-save { margin-top: 14px; }
+#setup-failure { margin: 20px; padding: 20px; }
+#setup-fallback { min-height: 44px; padding: 8px 14px; border-radius: 8px; border: 1px solid #b9adca; cursor: pointer; }
 .homebridge-host .app-shell { min-height: 75vh; }
 .homebridge-host #climate-mount { color: var(--text); background: var(--ground); }
-/* Homebridge theme link rules include !important hover colors. Keep this menu legible. */
+/* Homebridge theme link rules include important hover colors. Keep this menu legible. */
 .homebridge-host #climate-menu-panel .navigation a { color: var(--text) !important; }
 .homebridge-host #climate-menu-panel .navigation a[aria-current="page"] { color: var(--accent-deep) !important; }
 .homebridge-host #http-login-warning, .homebridge-host #http-session-warning { display: none; }

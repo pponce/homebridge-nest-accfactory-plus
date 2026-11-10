@@ -137,7 +137,7 @@ export async function checkTemperatureEditor(browser, base, output) {
   // The Homebridge host renders the shared overview without temperature command controls.
   const embedded = await browser.newPage();
   try {
-    await embedded.addInitScript(() => { window.climateHost = { connect() {}, request: (route) => fetch('/api' + route).then((r) => r.json()) }; });
+    await embedded.addInitScript(() => { window.climateHost = { initialConfigured: true, loadSetup: async () => ({ configured: true, blocks: [], revision: 'fixture' }), connect() {}, request: (route) => fetch('/api' + route).then((r) => r.json()) }; });
     await embedded.route(base + '/api/**', async (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(responseFor(new URL(route.request().url()).pathname.slice(4))) }));
     await embedded.goto(base); await embedded.locator('.thermostat-card').waitFor();
     assert.equal(await embedded.locator('.target-edit-button, .target-editor').count(), 0);
