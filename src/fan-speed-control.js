@@ -154,6 +154,8 @@ function observe(engine, key, lease, source, state) {
 }
 
 async function write(engine, key, lease, source, desired, state, restoring = false) {
+  const previousLease = engine.leases.has(key) ? structuredClone(lease) : undefined;
+  const previousWrite = state?.fanWrites?.[lease.targetId];
   const speedStep = desired.running && Math.abs(source.speed - desired.speed) >= 0.001;
   lease.before = fanState(source);
   lease.expected = { running: speedStep ? source.running : desired.running, speed: desired.speed };
@@ -166,6 +168,10 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
   }
   engine.leases.set(key, lease);
   await engine.persist();
+  if (!restoring && !engine.windowPermits(state, lease.targetId)) {
+    engine.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
+    return;
+  }
   const options = {
     minimum: 1,
     maximum: lease.maximum,
@@ -178,6 +184,10 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
       await engine.access.setFan(lease.targetId, desired.running, lease.before, options);
     }
   } catch (error) {
+    if (error.code === 'CLIMATE_CONFLICT' && !restoring && !engine.windowPermits(state, lease.targetId)) {
+      engine.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
+      return;
+    }
     // Keep ownership of other fans so a partial group command can still restore them.
     error.fanTargetId = lease.targetId;
     throw error;

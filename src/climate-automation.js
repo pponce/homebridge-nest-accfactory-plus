@@ -615,6 +615,25 @@ export class ClimateAutomation {
       (other.rule.priority ?? 0) > (state.rule.priority ?? 0) && windowActive(other.rule.window, this.now()));
   }
 
+  undoPreparedCommand(key, lease, previous, state, lastWriteAt) {
+    if (this.leases.get(key) !== lease) {
+      return;
+    }
+    if (previous) {
+      this.leases.set(key, previous);
+    } else {
+      this.leases.delete(key);
+    }
+    if (lease.kind === 'temperature') {
+      state.lastWriteAt = lastWriteAt;
+      state.temperatureControl = 'waiting';
+    } else {
+      state.fanWrites[lease.targetId] = lastWriteAt;
+    }
+    state.phase = 'waiting';
+    state.reason = 'The time window changed before the command was sent. Checking the current rule.';
+  }
+
   async observeHeating() {
     const rules = this.rules.filter((rule) => rule.kind === 'temperature').map((rule) => ({
       ...rule, desiredTemperature: desiredTarget(this.states.get(rule.id) ?? { rule }),
@@ -1142,6 +1161,8 @@ export class ClimateAutomation {
       state.reason = 'Waiting for the minimum heating-target update interval.';
       return;
     }
+    const previousLease = lease && structuredClone(lease);
+    const previousWrite = state.lastWriteAt;
     lease ??= { kind: 'temperature', targetId: rule.thermostatId, owner: rule.id, baseline: target(device) };
     lease.before = target(device);
     lease.expected = proposed;
@@ -1152,13 +1173,25 @@ export class ClimateAutomation {
     const epoch = state.targetEpoch;
     await this.persist();
     if (!this.windowPermits(state) || state.manualTarget || state.targetEpoch !== epoch) {
+      if (!state.paused && !state.manualTarget && state.targetEpoch === epoch) {
+        this.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
+      }
       return;
     }
-    await this.dashboard.setAutomationTarget(rule.thermostatId, proposed, lease.before, () => {
-      const current = this.schedule(this.dashboard.devices.get(rule.thermostatId), rule.thermostatId);
-      return this.windowPermits(state) && !state.manualTarget && state.targetEpoch === epoch &&
-        current.position === scheduleKey && current.signature === scheduleSignature && this.sensorSetup.permits(rule);
-    });
+    try {
+      await this.dashboard.setAutomationTarget(rule.thermostatId, proposed, lease.before, () => {
+        const current = this.schedule(this.dashboard.devices.get(rule.thermostatId), rule.thermostatId);
+        return this.windowPermits(state) && !state.manualTarget && state.targetEpoch === epoch &&
+          current.position === scheduleKey && current.signature === scheduleSignature && this.sensorSetup.permits(rule);
+      });
+    } catch (error) {
+      if (error.code === 'CLIMATE_CONFLICT' && !this.windowPermits(state) && !state.paused &&
+          !state.manualTarget && state.targetEpoch === epoch) {
+        this.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
+        return;
+      }
+      throw error;
+    }
     state.lastAction = { at: this.now(), value: proposed, message: 'Heating target accepted; awaiting device feedback.' };
     state.phase = 'waiting';
     state.temperatureControl = 'updating';
@@ -1229,6 +1262,8 @@ export class ClimateAutomation {
         state.nextChangeAt = state.fanWrites[id] + MINUTE;
         continue;
       }
+      const previousLease = lease && structuredClone(lease);
+      const previousWrite = state.fanWrites[id];
       lease ??= { kind: 'fan', targetId: id, owner: rule.id, baseline: source.running };
       lease.before = source.running;
       lease.expected = desired;
@@ -1238,11 +1273,16 @@ export class ClimateAutomation {
       this.leases.set(key, lease);
       await this.persist();
       if (!this.windowPermits(state, id)) {
+        this.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
         return;
       }
       try {
         await this.access.setFan(id, desired, lease.before, { guard: () => this.windowPermits(state, id) });
       } catch (error) {
+        if (error.code === 'CLIMATE_CONFLICT' && !this.windowPermits(state, id)) {
+          this.undoPreparedCommand(key, lease, previousLease, state, previousWrite);
+          return;
+        }
         error.fanTargetId = id;
         throw error;
       }

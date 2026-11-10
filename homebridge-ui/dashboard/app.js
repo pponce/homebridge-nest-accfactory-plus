@@ -1296,7 +1296,8 @@ function renderRuleEditor() {
   }, 'button danger')); host.append(footer); renderRulePreview();
 }
 function renderRuleWindow(host, rule) {
-  const section = editorSection(host, 'Time', 'When to run', 'Always allows this rule all day, every day. A scheduled window limits when it can compete for control. The highest eligible rule in the list wins.');
+  const step = rule.kind === 'temperature' ? '04' : rule.action === 'temperature' || rule.speedMode === 'curve' ? '06' : '05';
+  const section = editorSection(host, step, 'When to run', 'Always allows this rule all day, every day. A scheduled window limits when it can compete for control. The highest eligible rule in the list wins.');
   inputField(section, 'When to run', rule.window ? 'scheduled' : 'always', (value) => {
     if (value === 'always') delete rule.window;
     else {

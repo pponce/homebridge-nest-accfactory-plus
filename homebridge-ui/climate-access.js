@@ -273,7 +273,11 @@ export class ClimateAccess {
       error.code = 'CLIMATE_CONFLICT';
       throw error;
     }
-    if (options.guard && !options.guard()) throw new Error('Room-fan command cancelled.');
+    if (options.guard && !options.guard()) {
+      const error = new Error('Room-fan command cancelled.');
+      error.code = 'CLIMATE_CONFLICT';
+      throw error;
+    }
     await this.writeFan(instance, control, control.iid, control.type === '40' ? running : Number(running));
   }
 
@@ -289,7 +293,11 @@ export class ClimateAccess {
       error.code = 'CLIMATE_CONFLICT';
       throw error;
     }
-    if (options.guard && !options.guard()) throw new Error('Room-fan command cancelled.');
+    if (options.guard && !options.guard()) {
+      const error = new Error('Room-fan command cancelled.');
+      error.code = 'CLIMATE_CONFLICT';
+      throw error;
+    }
     await this.writeFan(instance, control, control.speedIid, speed);
   }
 

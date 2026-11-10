@@ -1848,3 +1848,122 @@ test('fan windows hand off without a power cycle, restore at closing, and allow 
   await f.engine.evaluate();
   assert.equal(f.engine.fanOverrides.size, 0);
 });
+
+test('a window closing while a target is being prepared does not leave a phantom pending command', async (t) => {
+  const rules = windowRules();
+  rules[0].window = windowAt('09:00', '10:01');
+  rules[1].window = windowAt('10:01', '22:00');
+  rules.forEach((rule) => {
+    rule.enabled = false;
+  });
+  const f = await fixture(t, { temperature: rules });
+  const persist = f.engine.persist.bind(f.engine);
+  let crossed = false;
+  f.engine.persist = async () => {
+    await persist();
+    if (!crossed && f.engine.leases.get('temperature:T')?.pending) {
+      crossed = true;
+      f.advance(minute);
+    }
+  };
+  rules.forEach((rule) => {
+    rule.enabled = true;
+  });
+  f.rules({ temperature: rules });
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, 0);
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.rule('day').paused, false);
+});
+
+test('a confirmed native schedule target at the window boundary expires the manual group target', async (t) => {
+  const f = await fixture(t, { temperature: windowRules() });
+  f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+  f.dashboard.update('T', 'Thermostat', { schedules: { 0: {
+    earlier: { time: 9 * 3600, 'temp-min': 21 }, next: { time: 10 * 3600 + 5 * 60, 'temp-min': 20 },
+  } } }, 'A');
+  await f.engine.control({ id: 'night', action: 'resume' });
+  await f.engine.evaluate();
+  await f.engine.setRoomTarget('thermostat', { ruleId: 'night', value: 23 });
+  f.advance(5 * minute);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 20 }, 'A');
+  await f.engine.evaluate();
+  assert.equal(f.rule('day').desiredTemperature, 20);
+  assert.equal(f.rule('day').targetSource, 'schedule');
+  assert.equal(f.rule('day').paused, false);
+});
+
+test('fan power and speed commands cancelled at a window boundary can hand off on the next check', async (t) => {
+  for (const mode of ['last', 'fixed']) {
+    for (const stage of ['persist', 'guard']) {
+      const rules = [
+        { ...fanRule, id: 'early', priority: 2, enabled: false, speedMode: mode, fixedSpeed: 50, window: windowAt('09:00', '10:01') },
+        { ...fanRule, id: 'later', priority: 1, enabled: false, speedMode: mode, fixedSpeed: 50, window: windowAt('10:01', '11:00') },
+      ];
+      const f = await fixture(t, { fans: rules });
+      f.source('room').temperature = 26;
+      let crossed = false;
+      if (stage === 'persist') {
+        const persist = f.engine.persist.bind(f.engine);
+        f.engine.persist = async () => {
+          await persist();
+          if (!crossed && f.engine.leases.get('fan:fan')?.pending) {
+            crossed = true;
+            f.advance(minute);
+          }
+        };
+      } else {
+        const method = mode === 'last' ? 'setFan' : 'setFanSpeed';
+        const send = f.access[method];
+        f.access[method] = async (...args) => {
+          if (!crossed) {
+            crossed = true;
+            f.advance(minute);
+            assert.equal(args[3].guard(), false);
+            const error = new Error('Window ended');
+            error.code = 'CLIMATE_CONFLICT';
+            throw error;
+          }
+          return send(...args);
+        };
+      }
+      rules.forEach((rule) => {
+        rule.enabled = true;
+      });
+      f.rules({ fans: rules });
+      await f.engine.evaluate();
+      assert.equal(f.fanCommands.length + f.fanSpeedCommands.length, 0, mode + ' ' + stage);
+      assert.equal(f.engine.fanOverrides.size, 0, mode + ' ' + stage);
+      await f.engine.evaluate();
+      assert.equal(f.fanCommands.length + f.fanSpeedCommands.length, 1, mode + ' ' + stage);
+    }
+  }
+});
+
+test('a Nest command rejected by its final window guard preserves the successor instead of pausing', async (t) => {
+  const rules = windowRules();
+  rules[0].window = windowAt('09:00', '10:01'); rules[1].window = windowAt('10:01', '22:00');
+  rules.forEach((rule) => {
+    rule.enabled = false;
+  });
+  const f = await fixture(t, { temperature: rules });
+  const send = f.dashboard.setAutomationTarget.bind(f.dashboard);
+  let crossed = false;
+  f.dashboard.setAutomationTarget = async (...args) => {
+    if (!crossed) {
+      crossed = true;
+      f.advance(minute);
+    }
+    return send(...args);
+  };
+  rules.forEach((rule) => {
+    rule.enabled = true;
+  });
+  f.rules({ temperature: rules });
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, 0);
+  await f.engine.evaluate();
+  assert.equal(f.commands.length, 1);
+  assert.equal(f.rule('day').paused, false);
+});
