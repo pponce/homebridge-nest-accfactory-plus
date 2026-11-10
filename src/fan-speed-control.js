@@ -35,7 +35,8 @@ export function prepareFanRules(engine) {
     }
     const current = { running: source.running, speed: source.speedAvailable ? source.speed : undefined };
     const before = engine.fanObservations.get(id);
-    const watched = states.some((state) => state.rule.enabled && !state.paused && state.windowStatus?.active !== false && state.rule.targetIds.includes(id));
+    const watched = states.some((state) => state.rule.enabled && !state.paused &&
+      state.windowStatus?.active !== false && state.rule.targetIds.includes(id));
     if (watched && !engine.leases.has('fan:' + id) && before &&
         (before.running !== current.running || (Number.isFinite(before.speed) && Number.isFinite(current.speed) &&
           Math.abs(before.speed - current.speed) >= 0.001))) {
@@ -80,7 +81,8 @@ export function prepareFanRules(engine) {
         delete state.fanSpeedObserved?.[id];
       }
       const selected = !engine.fanOverrides.has(id) && (winner === state ||
-        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false && engine.leases.get('fan:' + id)?.owner === state.rule.id));
+        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false &&
+          engine.leases.get('fan:' + id)?.owner === state.rule.id));
       if (selected) {
         state.fanTargets.push(id);
         if (lastWrites.has(id)) {
@@ -101,7 +103,7 @@ export async function handoffFanLease(engine, key, lease, state) {
   }
   const previous = engine.states.get(lease.owner);
   if (lease.mode === 'speed' ? !observe(engine, key, lease, source, previous) :
-    !engine.observe(key, lease, source.running, previous)) {
+      !engine.observe(key, lease, source.running, previous)) {
     return false;
   }
   if (state.rule.speedMode !== 'last' && lease.mode !== 'speed') {
@@ -167,7 +169,7 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
   const options = {
     minimum: 1,
     maximum: lease.maximum,
-    guard: () => restoring || engine.windowPermits(state),
+    guard: () => restoring || engine.windowPermits(state, lease.targetId),
   };
   try {
     if (speedStep) {

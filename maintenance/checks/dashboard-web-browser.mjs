@@ -462,7 +462,7 @@ try {
   await page.waitForFunction(() => document.getElementById('save-bar').hidden);
   assert.ok(config.rules.occupancy[0].sourceIds.includes('nest:home-away'));
   assert.equal(config.rules.occupancy[0].sourceIds.includes('nest-home-copy'), false);
-  await checkRuleWindows(page, output, 'standalone', config);
+  await checkRuleWindows(page, output, 'standalone', () => config);
   assert.deepEqual(errors, []);
   assert.deepEqual(cspErrors, []);
   console.log('PASS standalone dashboard: login, live controls, preview isolation, opt-in execution, pause/resume, durable config payload, preserved custom durations, revision conflicts, offline controls, 360px layout, mobile save workflow, text contrast, phone hit targets, dark mode, CSP, iOS icons');

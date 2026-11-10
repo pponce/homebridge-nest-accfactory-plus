@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { navigate } from './dashboard-navigation.mjs';
 
-export async function checkRuleWindows(page, output, prefix, config) {
+export async function checkRuleWindows(page, output, prefix, getConfig) {
   await navigate(page, 'Climate rules');
   for (const [kind, key] of [['temperature', 'temperature'], ['fan', 'fans']]) {
     await page.locator('[data-kind="' + kind + '"]').click();
@@ -15,7 +15,7 @@ export async function checkRuleWindows(page, output, prefix, config) {
     await page.getByLabel('Window time zone', { exact: true }).selectOption('America/Los_Angeles');
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await page.waitForFunction(() => document.getElementById('save-bar').hidden);
-    assert.deepEqual(config.rules[key][0].window, { days: [0, 1, 2, 3, 4], start: '22:00', end: '06:00', timeZone: 'America/Los_Angeles' });
+    assert.deepEqual(getConfig().rules[key][0].window, { days: [0, 1, 2, 3, 4], start: '22:00', end: '06:00', timeZone: 'America/Los_Angeles' });
     assert.ok(await page.locator('.rule-rank').first().isVisible());
     await page.getByLabel('When to run', { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: path.join(output, prefix + '-window-' + kind + '.png'), fullPage: true });
@@ -27,7 +27,7 @@ export async function checkRuleWindows(page, output, prefix, config) {
     assert.equal(await page.getByLabel('Start time', { exact: true }).count(), 0);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await page.waitForFunction(() => document.getElementById('save-bar').hidden);
-    assert.equal(config.rules[key][0].window, undefined);
+    assert.equal(getConfig().rules[key][0].window, undefined);
     await page.setViewportSize({ width: 1280, height: 1000 });
   }
 }

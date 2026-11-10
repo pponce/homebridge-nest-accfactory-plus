@@ -525,9 +525,7 @@ export class ClimateAutomation {
             continue;
           }
         }
-        state.paused = true;
-        state.phase = 'paused';
-        state.reason = 'Command or state storage failed. Check the equipment before resuming; no automatic retry is made.';
+        this.pause(state, 'Command or state storage failed. Check the equipment before resuming; no automatic retry is made.');
       }
     }
     await this.observeHeating();
@@ -561,7 +559,9 @@ export class ClimateAutomation {
         const device = this.device(serial);
         // Observe the outgoing group's feedback before changing groups. A manual change
         // at a boundary belongs to its room target and manual-change policy.
-        if (previous.controlStarted && this.connected(device)) {
+        if (previous.controlStarted && this.connected(device) && validTarget(target(device)) &&
+            device.data.hvac_mode === 'heat' && device.data.eco_mode === false &&
+            device.data.temperature_lock !== true && nativeSensorAllowsHeating(device.data)) {
           if (this.temperatureSchedule(previous, device, this.schedule(device, serial))) {
             this.temperatureFeedback(previous, device, this.leases.get(key));
           }
@@ -600,12 +600,15 @@ export class ClimateAutomation {
     }
   }
 
-  windowPermits(state) {
+  windowPermits(state, targetId) {
     if (this.stopping || state.paused || !state.rule.enabled || !windowActive(state.rule.window, this.now())) {
       return false;
     }
-    if (state.rule.kind !== 'temperature') {
-      return true;
+    if (state.rule.kind === 'fan') {
+      return ![...this.states.values()].some((other) => other !== state && other.rule.kind === 'fan' &&
+        other.rule.targetIds.includes(targetId) && other.rule.enabled && !other.paused &&
+        (other.rule.priority ?? 0) > (state.rule.priority ?? 0) && windowActive(other.rule.window, this.now()) &&
+        (other.windowStatus?.active === false || other.fanPlan?.demand !== false));
     }
     return ![...this.states.values()].some((other) => other !== state && other.rule.kind === 'temperature' &&
       other.rule.thermostatId === state.rule.thermostatId && other.rule.enabled && !other.paused &&
@@ -1234,11 +1237,11 @@ export class ClimateAutomation {
       lease.pending = true;
       this.leases.set(key, lease);
       await this.persist();
-      if (!this.windowPermits(state)) {
+      if (!this.windowPermits(state, id)) {
         return;
       }
       try {
-        await this.access.setFan(id, desired, lease.before, { guard: () => this.windowPermits(state) });
+        await this.access.setFan(id, desired, lease.before, { guard: () => this.windowPermits(state, id) });
       } catch (error) {
         error.fanTargetId = id;
         throw error;
@@ -1512,7 +1515,7 @@ export class ClimateAutomation {
             if (candidate.rule.kind === 'temperature' && candidate.rule.thermostatId === state.rule.thermostatId) {
               candidate.paused = payload.action === 'pause';
               if (candidate.paused) {
-                candidate.thermostatPause = 'Paused by you. Temperature automation is suspended. Resume any group for this thermostat to continue.';
+                candidate.thermostatPause = 'Paused by you. Resume any group for this thermostat to continue temperature automation.';
               } else {
                 delete candidate.thermostatPause;
                 this.resetTemperatureTarget(candidate);

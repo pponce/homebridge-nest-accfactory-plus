@@ -1,5 +1,13 @@
 ## v0.5.4
 
+## 0.6.0
+
+- Schedule temperature groups and fan rules using start days, start/end times, and a named time zone. Overnight windows are supported. Always is the default for all-day operation, including existing rules.
+- Reorder temperature groups by dragging or using keyboard controls. The highest eligible group controls each thermostat; handoffs preserve the original target, minimum update interval, and temporary desired room temperature.
+- Pause temperature automation across all groups for a thermostat, including the optional pause after manual target changes. Restart recovery selects the currently eligible window after equipment checks.
+- Show Scheduled, Standby, Waiting, and active control states in both the Homebridge configuration interface and standalone dashboard. Fan windows preserve priority, manual overrides, and bounded restoration behavior.
+
+
 **Account setup within the climate interface.**
 
 - Manage Nest/Google credentials and optional web access from **Menu → Accounts & web access**, directly below Settings, using the shared responsive layout.

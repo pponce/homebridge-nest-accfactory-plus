@@ -1793,7 +1793,10 @@ test('pending Nest feedback transfers across a window without a duplicate comman
   const rules = windowRules(); rules[0].enabled = false; rules[1].enabled = false;
   const f = await fixture(t, { temperature: rules });
   f.advance(4 * minute); f.noAck();
-  rules.forEach((rule) => { rule.enabled = true; }); f.rules({ temperature: rules });
+  rules.forEach((rule) => {
+    rule.enabled = true;
+  });
+  f.rules({ temperature: rules });
   await f.engine.evaluate();
   f.advance(minute);
   await f.engine.evaluate();

@@ -13,7 +13,9 @@ test('Always is implicit; start inclusive, end exclusive, and overnight days mea
     ['2026-11-07T05:59:59Z', false], ['2026-11-07T06:00:00Z', true],
     ['2026-11-07T13:59:59Z', true], ['2026-11-07T14:00:00Z', false],
     ['2026-11-06T13:00:00Z', false],
-  ]) assert.equal(windowActive(friday, at(date)), expected, date);
+  ]) {
+    assert.equal(windowActive(friday, at(date)), expected, date);
+  }
   assert.match(windowSummary(friday), /Fri.*next day/);
   const day = { ...night, start: '06:00', end: '22:00' };
   assert.equal(windowActive(day, at('2026-11-07T14:00:00Z')), true);
@@ -43,7 +45,9 @@ test('invalid and ambiguous windows are rejected for both rule categories', () =
       assert.throws(() => validateRuleDrafts({ [category]: [{ id: 'x', name: 'Test', kind, window: bad }] }));
     }
   }
-  assert.throws(() => validateRuleDrafts({ occupancy: [{ id: 'p', name: 'Presence', kind: 'presence', window: night }] }), /temperature and fan/);
+  assert.throws(() => validateRuleDrafts({
+    occupancy: [{ id: 'p', name: 'Presence', kind: 'presence', window: night }],
+  }), /temperature and fan/);
   assert.equal(validateRuleDrafts({ temperature: [{ id: 't', name: 'Temperature', kind: 'temperature', window: night }] })
     .temperature[0].window.start, '22:00');
 });

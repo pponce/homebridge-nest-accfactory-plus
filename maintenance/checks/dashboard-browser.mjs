@@ -201,7 +201,7 @@ try {
   await page.getByText('Set rule priority', { exact: false }).waitFor();
   await page.locator('[data-kind="presence"]').click();
   await page.getByRole('switch', { name: 'Enable automatic execution', exact: false }).waitFor();
-  await checkRuleWindows(page, output, 'embedded', config);
+  await checkRuleWindows(page, output, 'embedded', () => config);
   await navigate(page, 'Accounts & web access');
   await page.getByRole('heading', { name: 'Nest & Google accounts', exact: true }).waitFor();
   assert.equal(await page.evaluate(() => window.schemaShown || window.outerSave), false);

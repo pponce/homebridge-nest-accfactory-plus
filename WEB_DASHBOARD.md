@@ -86,7 +86,7 @@ Discovery records when a value was read, which may differ from when the sensor m
 5. Choose **Equal average of selected sensors** and select two or more inputs. A Nest living-room sensor at **20 °C** plus a Homebridge dining-room sensor at **22 °C** averages **21 °C**. Nest-only, other Homebridge-only and mixed groups are supported. For a single room, choose **One selected sensor** and select exactly one input.
 6. Review **Maximum target adjustment** and **Minimum update interval (minutes)**. Defaults are **1.5 °C / 2.7 °F** and **5 minutes**; a **0.5 °C / 0.9 °F** adjustment limit is a useful starting point for a small, supervised trial.
 7. Turn on **Enable automatic execution** and select **Save changes**. If a group mixes Nest room sensors with other Homebridge temperature sensors and needs native sensor setup, review the in-page confirmation. **Prepare thermostat** authorizes the sensor changes; **Keep current settings** leaves the group waiting. Watch **Execution status** for sensor confirmation, the group reading, desired room target, physical Nest target and command feedback. It can take a polling cycle and device feedback for a change to appear.
-8. Confirm the target on the physical thermostat or in Nest. Use **Pause rule** to finish the trial. The engine restores its previous target only while it still owns that setting and Nest remains in the same control context.
+8. Confirm the target on the physical thermostat or in Nest. Use **Pause thermostat automation** to finish the trial. The engine restores its previous target only while it still owns that setting and Nest remains in the same control context.
 
 The heating controller starts with:
 
@@ -98,7 +98,28 @@ Nest target = desired room temperature
 
 It limits that adjustment, rounds on the device's Celsius/Fahrenheit grid, and keeps the final target between 9 and 32 °C. For example, if Nest reads 22 °C, the selected rooms average 20 °C and the desired room temperature is 21 °C, the unbounded target is 23 °C. With the default 1.5 °C limit, the target is capped at 22.5 °C.
 
-Only one enabled group can control a thermostat. A group does not create an independent physical HVAC zone or pair third-party devices as native Nest sensors. This heating pilot does not compensate in Cool or Heat/Cool range mode and does not provide weighted or scheduled groups.
+Several enabled groups can share a thermostat. The highest-priority group inside its time window controls it. A group does not create an independent physical HVAC zone or pair third-party devices as native Nest sensors. Heating compensation supports Heat mode and equal sensor averages; it does not compensate in Cool or Heat/Cool range mode.
+
+### Time windows and priority
+
+**When to run → Always** is the default: all day, every day, subject to the rule's other conditions. Existing rules keep this behavior. Choose **Scheduled window** to set start days, start/end times, and a named time zone. Switch back to **Always** to remove the time restriction.
+
+Create separate rules when the sensors, desired temperature, or fan settings differ. For example:
+
+| Rule | Window | Selected temperature sources |
+| --- | --- | --- |
+| Upstairs night | Every day, 10 PM–6 AM | Both kids' room sensors |
+| Upstairs day | Every day, 6 AM–10 PM | Both kids' room sensors, living-room fan sensor, upstairs thermostat |
+
+An end time before its start continues into the next day. A Friday 10 PM–6 AM window ends Saturday morning. The start is included and the end excluded. Select the home's local time zone; daylight-saving changes follow that zone. A skipped local time starts when the clock enters the remaining portion of the window, and repeated hours follow the displayed local time. Changes take effect on the next automation check, normally within 15 seconds.
+
+Drag temperature or fan rules into priority order. The top enabled, unpaused rule inside its window wins for each thermostat. Fan rules must also meet their run condition. An eligible higher-priority rule with missing readings waits for those readings; a lower group does not silently substitute different sensors. **Scheduled** means outside its window, **Standby** means another rule has priority, and **Waiting** means equipment or sensor feedback is needed.
+
+Temperature handoffs preserve the original Nest target for later restoration and the minimum write interval. A temporary manual room target follows the thermostat across groups until the next confirmed Nest schedule target or an explicit reset. Without a temporary target, the incoming group's saved desired temperature applies. **Pause thermostat automation**, or the manual-change pause option, suspends every temperature group for that thermostat. Resume any group to allow the currently eligible group to run.
+
+When no temperature group is eligible, the plugin restores only a target it still owns and lets native Nest control continue. Fan windows use the same priority rules: a successor takes over without an off/on cycle; otherwise the original fan state is restored within its speed limit. Manual fan overrides continue to suspend all rules for that fan. Presence rules have no time-window setting.
+
+These controls are shared by the Homebridge configuration interface and standalone web dashboard. Window changes require **Save changes**, with no bridge restart.
 
 ### Manual targets and Nest schedules
 
@@ -107,12 +128,12 @@ The **desired room temperature** is the target for the selected sensor or averag
 **Pause after a manual Nest target change** is off by default:
 
 - **Off:** changing Nest’s target moves the desired room target by the same increase or decrease, accounting for Nest’s display rounding. This applies to the physical thermostat and Google’s app. For example, a desired room target of **70 °F** with an adjusted Nest target of **72 °F** becomes a desired **71 °F** when Nest is raised to **73 °F**. The selected sensors stay active.
-- **On:** changing Nest’s target pauses the group and leaves that manual setting in place. Select **Resume automatic control** when you want the group to use its saved room target again.
+- **On:** changing Nest’s target pauses all temperature groups for that thermostat and leaves that manual setting in place. Select **Resume automatic control** when you want the group to use its saved room target again.
 
 Apple Home follows this same policy when it displays native Nest temperatures.
 Saving a changed **Desired room temperature** uses that exact room target. A manual adjustment does not rewrite the saved rule target, sensor membership or Nest’s weekly schedule. **Use saved room target** ends a temporary adjustment without pausing the group. Resume and re-enabling a rule start from the saved target.
 
-At the next reported Nest schedule event, the group waits for Nest to confirm its scheduled heating target, then uses that value as the desired room temperature and continues with the same sensors. An edit to a future schedule point does not end the current manual adjustment. If no Nest schedule is reported, a manual adjustment lasts until another target change, a saved-target reset or Resume. This controller does not create a Nest temperature hold or its own sensor-group schedule.
+At the next reported Nest schedule event, the group waits for Nest to confirm its scheduled heating target, then uses that value as the desired room temperature and continues with the same sensors. An edit to a future schedule point does not end the current manual adjustment. If no Nest schedule is reported, a manual adjustment lasts until another target change, a saved-target reset or Resume. Rule windows select which sensor group is eligible; they do not create a native Nest temperature hold.
 
 Off, Eco, heating-mode changes, temperature locks and native sensor changes still take priority. Failed commands, conflicting feedback during a pending adjustment and unconfirmed schedule targets pause control for review. The plugin recognizes its own accepted target writes and does not reinterpret them as manual adjustments.
 
