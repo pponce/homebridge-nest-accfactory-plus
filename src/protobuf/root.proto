@@ -10,7 +10,6 @@ import "nest/trait/hvac.proto";
 import "nest/trait/input.proto";
 import "nest/trait/lighting.proto";
 import "nest/trait/located.proto";
-import "nest/trait/media.proto";
 import "nest/trait/network.proto";
 import "nest/trait/occupancy.proto";
 import "nest/trait/product/protect.proto";

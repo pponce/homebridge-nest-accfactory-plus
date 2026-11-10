@@ -17,7 +17,7 @@ test('climate protocol bundle resolves HVAC and safety types without camera mess
   assert.ok(getProtoType(file, 'nest.trait.hvac.RemoteComfortSensingSettingsTrait'));
   const names = getProtoTypes(file).map((type) => type.fullName);
   assert.ok(names.some((name) => name.startsWith('.nest.trait.product.protect.')));
-  assert.equal(names.some((name) => /camera|doorbell|nexustalk|foyer/i.test(name)), false);
+  assert.deepEqual(names.filter((name) => /camera|doorbell|nexustalk|foyer|\.nest\.trait\.media\./i.test(name)), []);
 });
 
 async function fixture(

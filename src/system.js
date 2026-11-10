@@ -496,8 +496,7 @@ export default class NestAccfactory {
                   // Object existed previously but is no longer referenced, so treat as removed
                   if (
                     childObjectKey.startsWith('structure.') === true ||
-                    childObjectKey.startsWith('topaz.') === true ||
-                    childObjectKey.startsWith('quartz.') === true
+                    childObjectKey.startsWith('topaz.') === true
                   ) {
                     let serialNumber = this.#rawData?.[childObjectKey]?.value?.serial_number;
                     let trackedDevice = this.#trackedDevices.get(serialNumber);

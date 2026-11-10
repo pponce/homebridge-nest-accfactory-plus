@@ -74,7 +74,7 @@ try {
   }
   const unsupported = new RegExp(
     '^(?:dist/plugins/(?:camera(?:/|\\.)|doorbell\\.|floodlight\\.)|dist/res/|dist/ringbuffer\\.' +
-    '|dist/protobuf/(?:googlehome/|nest/nexustalk|.*/product/(?:camera|doorbell)\\.proto))',
+    '|dist/protobuf/(?:googlehome/|nest/nexustalk|nest/trait/media\\.proto|.*/product/(?:camera|doorbell)\\.proto))',
   );
   for (const file of packed.files) {
     assert.equal(

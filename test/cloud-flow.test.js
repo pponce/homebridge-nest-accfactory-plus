@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Follow Google Observe -> cache -> mapper -> accessory -> HAP, and HomeKit SET -> cloud -> commit.
 // Only account authorisation and remote gRPC are replaced; platform and device code stay file-backed.
 import assert from 'node:assert/strict';
@@ -35,7 +36,6 @@ async function setup(context, options = {}) {
     userID: 'fixture-user',
     type: 'Google',
     authorised: true,
-    snapshotWaiters: new Map(),
     grpcTransport: {
       observe: (...args) => {
         consume = args.at(-1);
@@ -233,3 +233,4 @@ test('retained Nest REST ingestion creates Protect and ignores retired thermosta
   assert.equal(protect.smokeService.getCharacteristic(hap.Characteristic.SmokeDetected).value, 0);
   assert.equal(protect.smokeService.getCharacteristic(hap.Characteristic.StatusActive).value, true);
 });
+
