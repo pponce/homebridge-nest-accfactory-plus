@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "189c68108fbf83803115195a1100911024e17bb0",
+  "sourceCommit": "48831dfecb8219714652a5dafe7b19e61dda1d80",
   "sourceBranch": "feature/native-config-save",
   "fixtureDataOnly": true,
   "checks": [

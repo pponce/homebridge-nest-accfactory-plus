@@ -1,6 +1,6 @@
 # Climate dashboard visual review
 
-Rendered with fixture data only. Source: [189c68108fbf](https://github.com/pponce/homebridge-nest-climate-cntrl/commit/189c68108fbf83803115195a1100911024e17bb0).
+Rendered with fixture data only. Source: [48831dfecb82](https://github.com/pponce/homebridge-nest-climate-cntrl/commit/48831dfecb8219714652a5dafe7b19e61dda1d80).
 
 ## native save desktop
 
