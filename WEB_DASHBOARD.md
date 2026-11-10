@@ -15,6 +15,7 @@ The standalone dashboard provides a visual interface for daily use and supported
 | **Overview** | Check temperatures, targets, heating/cooling activity and account connectivity. Use supported native Nest controls and inspect schedules and observed runtime. |
 | **Sensors & fans** | Discover configured Homebridge main and child bridges. Search and filter temperature, motion, occupancy and fan sources; inspect their readings and availability. |
 | **Climate rules** | Build named temperature groups, Home/Away rules and room-fan rules with source pickers and current-signal previews. Enable selected rules and inspect their live execution status, timers and pause/resume controls. |
+| **Accounts & web access** | View account and web access status. Manage credentials, optional web access and initial setup from this page in Homebridge Settings. |
 | **Settings** | Choose heating type, collect local response history, review per-rule recommendations, and change the dashboard name and supported accessory options. Save changes with account credentials and bridge identity preserved; the dashboard identifies options requiring a restart. |
 
 The same climate application is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings**. Open **Menu → Accounts & web access** there for Google/Nest credentials and web login, certificate and network settings. Named rules and live controls are available in both interfaces.

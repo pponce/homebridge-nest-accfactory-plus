@@ -205,6 +205,8 @@ try {
   assert.equal(await page.evaluate(() => window.schemaShown || window.outerSave), false);
   await page.getByRole('switch', { name: 'Enable standalone web dashboard', exact: true }).check();
   await page.getByLabel('Web password', { exact: true }).fill('fixture-password');
+  await page.locator('#toast').waitFor({ state: 'hidden' });
+  await page.evaluate(() => { document.activeElement?.blur(); window.scrollTo(0, 0); });
   await page.screenshot({ path: path.join(output, 'accounts-desktop.png'), fullPage: true });
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.screenshot({ path: path.join(output, 'accounts-dark.png'), fullPage: true });

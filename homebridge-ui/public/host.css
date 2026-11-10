@@ -6,3 +6,5 @@
 .homebridge-host #climate-menu-panel .navigation a { color: var(--text) !important; }
 .homebridge-host #climate-menu-panel .navigation a[aria-current="page"] { color: var(--accent-deep) !important; }
 .homebridge-host #http-login-warning, .homebridge-host #http-session-warning { display: none; }
+
+.homebridge-host #page-accounts a, .homebridge-host .skip-link { color: var(--accent-deep) !important; }

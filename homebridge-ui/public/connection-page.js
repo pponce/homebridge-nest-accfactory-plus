@@ -22,10 +22,10 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
     wrapper.append(input); if (help) wrapper.append(node('small', help)); parent.append(wrapper); return input;
   }
   function toggle(parent, label, object, key, help, refresh = false) {
-    const wrapper = node('label', undefined, 'connection-toggle'); const input = node('input'); input.type = 'checkbox'; input.checked = object[key] === true;
+    const wrapper = node('label', undefined, 'toggle-row connection-toggle'); const input = node('input'); input.type = 'checkbox'; input.checked = object[key] === true;
     input.setAttribute('role', 'switch'); input.setAttribute('aria-label', label);
     input.addEventListener('change', () => { object[key] = input.checked; changed(); if (refresh) render(); });
-    const copy = node('span'); copy.append(node('strong', label)); if (help) copy.append(node('small', help)); wrapper.append(input, copy); parent.append(wrapper);
+    const copy = node('span'); copy.append(node('strong', label)); if (help) copy.append(node('small', help)); wrapper.append(copy, input); parent.append(wrapper);
   }
   function action(label, callback, className = 'button secondary') {
     const button = node('button', label, className); button.type = 'button'; button.addEventListener('click', callback); return button;
@@ -33,7 +33,7 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
   function render() {
     root.replaceChildren();
     const intro = node('div', undefined, 'section-heading'); const copy = node('div');
-    copy.append(node('h2', current.configured ? 'Accounts & web access' : 'Connect your home'), node('p', 'Connect a Nest or Google account to get started. Homebridge Settings works with standalone web access off.'));
+    copy.append(node('h2', current.configured ? 'Your connections' : 'Connect your home'), node('p', current.configured ? 'Manage your Nest or Google accounts and optional web access.' : 'Connect a Nest or Google account to get started. Homebridge Settings works with standalone web access off.'));
     intro.append(copy); root.append(intro, message);
     const form = node('form'); form.id = 'connection-form'; const fields = node('fieldset', undefined, 'connection-fields'); fields.disabled = busy;
     const accounts = node('section', undefined, 'panel connection-panel'); accounts.append(node('h3', 'Nest & Google accounts'));
