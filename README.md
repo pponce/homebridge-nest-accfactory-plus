@@ -152,7 +152,7 @@ Maintained and supported by [pponce](https://github.com/pponce). Please report i
 
 Nest Climate Cntrl is a fork of **[Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory)** by **[Mark Hulskamp / n0rt0nthec4t](https://github.com/n0rt0nthec4t)** and its contributors. Its Nest/Google authentication and API integration, device discovery and management, HomeKit accessory foundation, and supported Nest device implementations derive substantially from that project. We thank the upstream author and contributors for that foundation and their ongoing open-source work.
 
-The climate rule engine, cross-plugin sensor and fan coordination, combined presence rules, heating-response tools, and climate dashboard are additions maintained in this fork. Maintenance and support for Nest Climate Cntrl are provided here; upstream authors do not endorse or provide support for this fork.
+The climate rule engine, cross-plugin sensor and fan coordination, combined presence rules, heating-response tools, and climate dashboard are additions maintained in this fork. Maintenance and support for Nest Climate Cntrl are provided here.
 
 | Project | Contribution used here | License |
 | --- | --- | --- |
