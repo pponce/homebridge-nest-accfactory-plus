@@ -398,7 +398,10 @@ try {
   await page.waitForFunction(() => !document.body.classList.contains('compact-navigation'));
   assert.equal(await page.locator('#climate-sidebar').isVisible(), true);
   assert.equal(await page.locator('#climate-menu-toggle').isVisible(), false);
-  assert.equal(await page.locator('#navigation a').count(), 4);
+  assert.equal(await page.locator('#navigation a').count(), 5);
+  await navigate(page, 'Accounts & web access');
+  assert.equal(await page.locator('#connection-form').count(), 0, 'Standalone web access must not expose credential editors');
+  await page.getByText('Manage Nest/Google credentials and web access in Homebridge', { exact: false }).waitFor();
   await page.setViewportSize({ width: 360, height: 800 });
   await page.waitForFunction(() => document.body.classList.contains('compact-navigation'));
   assert.equal(await page.locator('#climate-menu-panel').isVisible(), false);
