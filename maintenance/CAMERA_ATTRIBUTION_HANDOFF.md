@@ -84,7 +84,7 @@ claim to use those removed implementations.
   package installation and mocked helper tests.
 - GitHub release: https://github.com/pponce/homebridge-nest-climate-cntrl/releases/tag/v0.6.2.
 - npm bootstrap: `maintenance/publish-0.6.2.sh`. It downloads the stable publishing
-  helper from the release tag, verifies its pinned SHA-256, and invokes it. The
+  helper from commit `acc7f2d63ea5fb95afc3b0227ad66d41152247ae`, verifies its pinned SHA-256, and invokes it. The
   helper verifies the released tarball, publishes to `latest`, and checks registry
   integrity. Login and publication use `--browser=false` for SSH use.
 - Next: confirm the GitHub release assets, run the supplied npm script on the

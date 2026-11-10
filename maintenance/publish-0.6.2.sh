@@ -3,7 +3,7 @@
 
   climate_publish_stable062() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local revision='v0.6.2'
+    local revision='acc7f2d63ea5fb95afc3b0227ad66d41152247ae'
     local directory="$project/maintenance/releases/v0.6.2"
     local runner="$directory/update-checkout-and-publish-release.sh"
 
