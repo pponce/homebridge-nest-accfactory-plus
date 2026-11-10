@@ -1,3 +1,4 @@
+<!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
 <p align="center"><img src="homebridge-ui/public/nest-climate-cntrl-icon-512.png" alt="Nest Climate Cntrl" width="160" height="160"></p>
 
 # Nest Climate Cntrl
@@ -141,10 +142,28 @@ Support [pponce](https://github.com/pponce)'s development and maintenance of **N
 
 These links fund this independently maintained project. Credits for the upstream code are listed below.
 
-## Help and credits
+## Help
 
 [Report an issue](https://github.com/pponce/homebridge-nest-climate-cntrl/issues) · [Release notes](https://github.com/pponce/homebridge-nest-climate-cntrl/releases) · [Migration](MIGRATION.md)
 
 Maintained and supported by [pponce](https://github.com/pponce). Please report issues with Nest Climate Cntrl in this repository.
 
-This independent fork is based on [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) by [n0rt0nthec4t](https://github.com/n0rt0nthec4t) and its contributors. Their Nest/Google integration and shared HomeKit foundation remain credited. Apache-2.0 licensed; see [LICENSE](LICENSE). Not affiliated with Google or Apple.
+## Credits and licenses
+
+Nest Climate Cntrl is a fork of **[Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory)** by **[Mark Hulskamp / n0rt0nthec4t](https://github.com/n0rt0nthec4t)** and its contributors. Its Nest/Google authentication and API integration, device discovery and management, HomeKit accessory foundation, and supported Nest device implementations derive substantially from that project. We thank the upstream author and contributors for that foundation and their ongoing open-source work.
+
+The climate rule engine, cross-plugin sensor and fan coordination, combined presence rules, heating-response tools, and climate dashboard are additions maintained in this fork. Maintenance and support for Nest Climate Cntrl are provided here; upstream authors do not endorse or provide support for this fork.
+
+| Project | Contribution used here | License |
+| --- | --- | --- |
+| [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory) | Underlying Nest/Google integration and HomeKit device implementations | Apache-2.0 |
+| [HomeKitDevice](https://github.com/n0rt0nthec4t/HomeKitDevice) by n0rt0nthec4t | Shared accessory lifecycle, identity, services and messaging | Apache-2.0 |
+| [HomeKitHistory](https://github.com/n0rt0nthec4t/HomeKitHistory) by n0rt0nthec4t | Accessory history and Eve-compatible features | Apache-2.0 |
+| [fetchWrapper](https://github.com/n0rt0nthec4t/fetchWrapper) by n0rt0nthec4t | HTTP request handling, timeouts and retries | Apache-2.0 |
+| [fakegato-history](https://github.com/simont77/fakegato-history) and [homebridge-lib](https://github.com/ebaauw/homebridge-lib) | Eve protocol research and type references acknowledged by HomeKitHistory | MIT / Apache-2.0 |
+| [Google APIs](https://github.com/googleapis/googleapis/tree/master/google/rpc) | Included Google RPC protocol definitions | Apache-2.0 |
+
+The shared libraries are included at pinned source revisions. Their author credits and license texts are preserved in the distributed plugin. The plugin also uses [Homebridge](https://github.com/homebridge/homebridge), [plugin-ui-utils](https://github.com/homebridge/plugin-ui-utils), [protobuf.js](https://github.com/protobufjs/protobuf.js), [Chalk](https://github.com/chalk/chalk), and [bonjour-service](https://github.com/onlxltd/bonjour-service); installed dependencies retain their own licenses and notices.
+
+See [LICENSE](LICENSE), [NOTICE](NOTICE), and [third-party notices](THIRD_PARTY_NOTICES.md) for attribution and license details. Not affiliated with Google or Apple.
+

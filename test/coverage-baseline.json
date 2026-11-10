@@ -1,4 +1,5 @@
 {
+  "$comment": "Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.",
   "src/HomeKitDevice/HomeKitDevice.js": {
     "lines": 94,
     "branches": 93,
@@ -34,54 +35,19 @@
     "branches": 91,
     "functions": 95
   },
-  "src/plugins/camera/ffmpeg.js": {
-    "lines": 95,
-    "branches": 92,
-    "functions": 95
-  },
   "src/grpctransport.js": {
     "lines": 89,
     "branches": 80,
     "functions": 91
-  },
-  "src/plugins/camera/h264.js": {
-    "lines": 94,
-    "branches": 94,
-    "functions": 95
   },
   "src/index.js": {
     "lines": 95,
     "branches": 95,
     "functions": 95
   },
-  "src/plugins/camera/mediatimeline.js": {
-    "lines": 95,
-    "branches": 95,
-    "functions": 95
-  },
-  "src/plugins/camera/nexustalk.js": {
-    "lines": 87,
-    "branches": 77,
-    "functions": 95
-  },
-  "src/plugins/camera.js": {
-    "lines": 89,
-    "branches": 75,
-    "functions": 88
-  },
   "src/plugins/daikinsystem.mjs": {
     "lines": 95,
     "branches": 92,
-    "functions": 95
-  },
-  "src/plugins/doorbell.js": {
-    "lines": 92,
-    "branches": 75,
-    "functions": 95
-  },
-  "src/plugins/floodlight.js": {
-    "lines": 92,
-    "branches": 75,
     "functions": 95
   },
   "src/plugins/heatlink.js": {
@@ -124,26 +90,6 @@
     "branches": 92,
     "functions": 95
   },
-  "src/ringbuffer.js": {
-    "lines": 95,
-    "branches": 86,
-    "functions": 95
-  },
-  "src/plugins/camera/streamer.js": {
-    "lines": 87,
-    "branches": 74,
-    "functions": 84
-  },
-  "src/plugins/camera/talkback.js": {
-    "lines": 95,
-    "branches": 90,
-    "functions": 100
-  },
-  "src/plugins/camera/streamtransport.js": {
-    "lines": 92,
-    "branches": 84,
-    "functions": 86
-  },
   "src/supportdump.js": {
     "lines": 92,
     "branches": 87,
@@ -163,11 +109,6 @@
     "lines": 95,
     "branches": 94,
     "functions": 95
-  },
-  "src/plugins/camera/webrtc.js": {
-    "lines": 84,
-    "branches": 74,
-    "functions": 91
   },
   "src/auth.js": {
     "lines": 95,
@@ -240,4 +181,3 @@
     "functions": 100
   }
 }
-

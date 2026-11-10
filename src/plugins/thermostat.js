@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Nest Thermostat - HomeKit integration
 // Part of homebridge-nest-accfactory
 //
@@ -2474,4 +2475,5 @@ export function processRawData(log, rawData, config, deviceType = undefined, cha
 
   return devices;
 }
+
 

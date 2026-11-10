@@ -1,14 +1,13 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 import './build-dashboard-ui.js';
-// Copy the distributable, including nested camera modules, preserving resource paths
-// and flattening the shared HomeKit modules.
-import { copyFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
+// Copy the climate distributable and flatten the shared HomeKit modules.
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 let root = fileURLToPath(new URL('../', import.meta.url));
 for (let [source, target, extensions, recursive] of [
   ['src', 'dist', ['.js'], false],
-  ['src/res', 'dist/res', ['.h264', '.jpg'], false],
   ['src/protobuf', 'dist/protobuf', ['.proto'], true],
   ['src/plugins', 'dist/plugins', ['.js', '.mjs'], true],
 ]) {
@@ -26,4 +25,12 @@ for (let [source, target, extensions, recursive] of [
 // Shared modules are published alongside the platform entry point, without their tests or changelogs.
 for (let name of ['HomeKitDevice', 'HomeKitHistory', 'fetchWrapper']) {
   copyFileSync(join(root, 'src', name, name + '.js'), join(root, 'dist', name + '.js'));
+  const notices = join(root, 'dist', 'licenses', name);
+  mkdirSync(notices, { recursive: true });
+  copyFileSync(join(root, 'src', name, 'LICENSE'), join(notices, 'LICENSE'));
+  // Preserve an upstream NOTICE if a pinned dependency supplies one.
+  if (existsSync(join(root, 'src', name, 'NOTICE'))) {
+    copyFileSync(join(root, 'src', name, 'NOTICE'), join(notices, 'NOTICE'));
+  }
 }
+

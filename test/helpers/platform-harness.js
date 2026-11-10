@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Start the real platform against injected account/discovery/HTTP boundaries.
 // Tests feed Observe/subscribe messages and exercise public device SET/GET routes without exposing private methods.
 import assert from 'node:assert/strict';
@@ -39,12 +40,9 @@ export async function platformHarness(context, options = {}) {
     authorised: true,
     referer: 'home.invalid',
     restAPIHost: 'rest.invalid',
-    cameraAPIHost: 'camera.invalid',
     transport_url: 'https://transport.invalid',
     token: 'fixture-token',
     userID: 'fixture-user',
-    cameraAuth: { key: 'Authorization', value: 'Basic ', token: 'fixture-token' },
-    snapshotWaiters: new Map(),
     grpcTransport: {
       observe: (...args) => {
         observations.push(args);
@@ -79,9 +77,6 @@ export async function platformHarness(context, options = {}) {
         return options.subscribe(...args);
       }
       return subscription.promise;
-    }
-    if (String(args[1]).includes('cameras.get_with_properties') === true) {
-      return { json: async () => ({ items: [{ properties: {} }] }) };
     }
     if (typeof options.fetch === 'function') {
       return options.fetch(...args);
@@ -161,3 +156,4 @@ export async function platformHarness(context, options = {}) {
     },
   };
 }
+

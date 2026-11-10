@@ -1,3 +1,4 @@
+# Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 name: Publish Climate Cntrl to npm
 on:
   workflow_dispatch:
@@ -53,3 +54,4 @@ jobs:
           sha256sum --check --ignore-missing SHA256SUMS
       - name: Publish the release package
         run: npm publish "release-package/homebridge-nest-climate-cntrl-$VERSION.tgz" --ignore-scripts --access public --tag "$NPM_TAG"
+

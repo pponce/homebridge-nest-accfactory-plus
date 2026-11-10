@@ -1,0 +1,29 @@
+Nest Climate Cntrl
+
+This product is derived substantially from homebridge-nest-accfactory
+(Nest Accfactory), by Mark Hulskamp (n0rt0nthec4t) and its contributors.
+https://github.com/n0rt0nthec4t/homebridge-nest-accfactory
+
+The inherited foundation includes Nest/Google authentication and API
+integration, device discovery and management, HomeKit accessory architecture,
+device implementations and supporting infrastructure. It is used under the
+Apache License, Version 2.0. The license is included in LICENSE.
+
+Modifications and climate-specific additions are maintained by pponce.
+Modified inherited source files identify these modifications without removing
+upstream author or license notices.
+
+This distribution includes the Apache-2.0 licensed HomeKitDevice,
+HomeKitHistory and fetchWrapper libraries by Mark Hulskamp (n0rt0nthec4t).
+Their license files are included under dist/licenses in the built package.
+
+HomeKitHistory acknowledges Eve protocol research from fakegato-history
+and Eve HomeKit type references from homebridge-lib. Additional acknowledgments
+and license texts are listed in THIRD_PARTY_NOTICES.md and licenses/.
+
+The included Google RPC definitions retain their original notices:
+Copyright 2017 Google Inc. (google/rpc/status.proto)
+Copyright 2018 Google LLC (google/rpc/stream_body.proto)
+
+Upstream authors are not responsible for maintaining or supporting this fork.
+These acknowledgments do not imply endorsement.

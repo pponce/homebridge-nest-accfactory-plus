@@ -1,32 +1,30 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Configuration Processor
 // Part of homebridge-nest-accfactory
 //
 // Validates, normalises, and prepares the platform configuration used by the plugin.
 // Handles migration of legacy configuration formats, runtime option processing,
-// and initialisation of shared capabilities such as FFmpeg support.
+// and dashboard settings.
 //
 // Responsibilities:
 // - Validate and normalise Homebridge configuration structure
 // - Migrate legacy account and device formats to current schema
 // - Process global and per-device runtime options
 // - Configure logging behaviour (including debug mode)
-// - Probe and validate FFmpeg binary and feature support
 //
 // Features:
 // - Automatic migration of legacy Nest/Google account configuration
 // - Legacy device object-to-array transformation
 // - Runtime option defaults and bounds validation
-// - FFmpeg capability detection (version, encoders, decoders, hwaccel)
 // - Debug logging override with coloured output
 // - Optional automatic persistence of migrated config.json
 //
 // Notes:
 // - processConfig() mutates the provided config object in place
 // - persistMigratedConfig() safely updates config.json when migration occurs
-// - FFmpeg validation determines availability of camera streaming and HKSV recording
 // - Used during plugin startup before any device initialisation
 //
-// Code version 2026.10.20
+// Code version 2026.11.10
 // Mark Hulskamp
 'use strict';
 
@@ -37,13 +35,10 @@ import fs from 'node:fs';
 import chalk from 'chalk';
 
 // Import our modules
-import FFmpeg from './plugins/camera/ffmpeg.js';
 import { normalizeWebDashboard } from './web-dashboard.js';
 
-// Define constants
-import { FFMPEG_VERSION } from './consts.js';
 
-function processConfig(config, log, api, capabilities = { video: true }) {
+function processConfig(config, log, api) {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     log?.warn?.('Nest Climate Cntrl is not configured. Open the plugin Settings to add an account.');
     return;
@@ -119,85 +114,9 @@ function processConfig(config, log, api, capabilities = { video: true }) {
   log.debug = options.debug === true ? (message, ...parameters) => log?.info?.(chalk.gray(message), ...parameters) : () => {};
 
   // Support Dump for Nest and Google API data.
-  // When enabled, the plugin logs redacted API objects and streaming diagnostics to assist with troubleshooting.
+  // When enabled, the plugin logs redacted API objects and connection diagnostics to assist with troubleshooting.
   // This may produce a large amount of log output and should normally only be enabled temporarily.
   options.supportDump = config?.options?.supportDump === true;
-
-  // Get configuration for max number of concurrent 'live view' streams.
-  options.maxStreams =
-    Number.isInteger(Number(config.options?.maxStreams)) === true &&
-    Number(config.options.maxStreams) >= 1 &&
-    Number(config.options.maxStreams) <= 4
-      ? Number(config.options.maxStreams)
-      : 2;
-
-  // Resolve the configured FFmpeg executable, or use the platform search locations and PATH.
-  options.ffmpeg = {
-    binary: undefined,
-    valid: false,
-    debug: config.options?.ffmpegDebug === true, // Default to false if not explicitly set to true
-    hwaccel: false,
-  };
-
-  if (capabilities.video === true) {
-    let ffmpegPath = (config?.options?.ffmpegPath?.trim?.() ?? '') !== '' ? config.options.ffmpegPath.trim() : undefined;
-
-    // Create FFmpeg probe
-    let ffmpeg = new FFmpeg(ffmpegPath);
-
-    if (typeof ffmpeg.version !== 'string') {
-      log?.warn?.('ffmpeg binary "%s" not found or not executable, camera/doorbell streaming will be unavailable', ffmpeg.binary);
-    } else {
-      // Proceed with compatibility checks
-      options.ffmpeg.valid = ffmpeg.hasMinimumSupport({
-        version: FFMPEG_VERSION,
-        encoders: ['libx264', 'libfdk_aac', 'libopus'],
-        decoders: ['libspeex'],
-      });
-      if (options.ffmpeg.valid === false) {
-        log?.warn?.('ffmpeg binary "%s" does not meet the minimum support requirements', ffmpeg.binary);
-        log?.warn?.('Stream video/recording from camera/doorbells will be unavailable');
-        if (
-          ffmpeg.version?.localeCompare(FFMPEG_VERSION, undefined, {
-            numeric: true,
-            sensitivity: 'case',
-            caseFirst: 'upper',
-          }) === -1
-        ) {
-          log?.warn?.('Minimum binary version is "%s", however the installed version is "%s"', FFMPEG_VERSION, ffmpeg.version);
-        }
-
-        if (ffmpeg.supportsDecoder('libspeex') === false) {
-          log?.warn?.('Missing speex decoder in ffmpeg');
-        }
-
-        if (ffmpeg.supportsEncoder('libfdk_aac') === false) {
-          log?.warn?.('Missing fdk_aac encoder in ffmpeg');
-        }
-
-        if (ffmpeg.supportsEncoder('libopus') === false) {
-          log?.warn?.('Missing opus encoder in ffmpeg');
-        }
-
-        if (ffmpeg.supportsEncoder('libx264') === false) {
-          log?.warn?.('Missing libx264 encoder in ffmpeg');
-        }
-      }
-
-      if (options.ffmpeg.valid === true) {
-        log?.debug?.(
-          'FFmpeg: v%s "%s" (hwaccel: %s)',
-          ffmpeg.version,
-          ffmpeg.binary,
-          ffmpeg.supportsHardwareH264 === true ? ffmpeg.hardwareH264Codec : 'none',
-        );
-
-        options.ffmpeg.binary = ffmpeg.binary;
-        options.ffmpeg.version = ffmpeg.version;
-        options.ffmpeg.hwaccel = ffmpeg.supportsHardwareH264 === true;
-      }
-    }
-  }
 
   // Process per device configuration(s)
   if (config?.devices === undefined) {
@@ -396,3 +315,4 @@ function persistMigratedConfig(config, log, api) {
 
 // Define exports
 export { processConfig };
+

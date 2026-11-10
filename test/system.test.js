@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Exercise selected private system API methods without booting Homebridge or contacting upstream services.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -30,61 +31,11 @@ let createAuthHost = new Function(
     '};',
 );
 
-test('account authorisation and refresh update only owned camera-family credentials', async () => {
-  let tracked = new Map();
-  let raw = {};
-  for (let account of ['account-A', 'account-B']) {
-    for (let type of [DEVICE_TYPE.CAMERA, DEVICE_TYPE.DOORBELL, DEVICE_TYPE.FLOODLIGHT, DEVICE_TYPE.THERMOSTAT]) {
-      let id = account + '-' + type;
-      tracked.set(id, { uuid: id, type, nest_google_device_uuid: id });
-      raw[id] = { connection: account };
-    }
-  }
-  tracked.set('missing', { uuid: 'missing', type: DEVICE_TYPE.CAMERA, nest_google_device_uuid: 'removed' });
-  let updates = [];
-  let host = createAuthHost(tracked, raw, { UPDATE: 'UPDATE', message: async (...args) => updates.push(args) }, DEVICE_TYPE);
-  for (let wasAuthorised of [false, true]) {
-    for (let account of ['account-A', 'account-B']) {
-      updates.length = 0;
-      let cameraAuth = { token: account + '-new-token' };
-      await host.callback()(account, { cameraAuth }, { wasAuthorised });
-      assert.deepEqual(
-        updates,
-        [DEVICE_TYPE.CAMERA, DEVICE_TYPE.DOORBELL, DEVICE_TYPE.FLOODLIGHT].map((type) => [
-          account + '-' + type,
-          'UPDATE',
-          { apiAccess: cameraAuth },
-        ]),
-      );
-    }
-  }
-  assert.deepEqual(host.starts, [
-    ['nest', 'account-A'],
-    ['google', 'account-A'],
-    ['nest', 'account-B'],
-    ['google', 'account-B'],
-  ]);
-});
-
-test('camera credential refresh follows the selected resource after Nest/Google source switches', async () => {
-  let tracked = new Map([['camera', { uuid: 'camera', type: DEVICE_TYPE.CAMERA, nest_google_device_uuid: 'quartz.camera' }]]);
-  let raw = { 'quartz.camera': { connection: 'nest-account' }, DEVICE_CAMERA: { connection: 'google-account' } };
-  let updates = [];
-  let host = createAuthHost(tracked, raw, { UPDATE: 'UPDATE', message: async (...args) => updates.push(args) }, DEVICE_TYPE);
-  let refresh = host.callback();
-  for (let [resource, owner] of [
-    ['quartz.camera', 'nest-account'],
-    ['DEVICE_CAMERA', 'google-account'],
-    ['quartz.camera', 'nest-account'],
-  ]) {
-    tracked.get('camera').nest_google_device_uuid = resource;
-    for (let account of ['nest-account', 'google-account']) {
-      updates.length = 0;
-      let cameraAuth = { token: account + '-token' };
-      await refresh(account, { cameraAuth }, { wasAuthorised: true });
-      assert.deepEqual(updates, owner === account ? [['camera', 'UPDATE', { apiAccess: cameraAuth }]] : []);
-    }
-  }
+test('account authorisation starts ingestion once and refresh preserves active loops', async () => {
+  const host = createAuthHost(new Map(), {}, {}, DEVICE_TYPE);
+  await host.callback()('account-A', {}, { wasAuthorised: false });
+  await host.callback()('account-A', {}, { wasAuthorised: true });
+  assert.deepEqual(host.starts, [['nest', 'account-A'], ['google', 'account-A']]);
 });
 
 let processDataBegin = source.indexOf('  async #processData(uuid, changedData = undefined) {');
@@ -222,26 +173,6 @@ for (let type of [DEVICE_TYPE.THERMOSTAT, DEVICE_TYPE.PROTECT, DEVICE_TYPE.TEMPS
   }
 }
 
-for (let type of [DEVICE_TYPE.CAMERA, DEVICE_TYPE.DOORBELL, DEVICE_TYPE.FLOODLIGHT]) {
-  test(type + ' retains Nest fallback and can return to Google with consistent SET routing', async () => {
-    let flow = setupDataProcessing(type);
-    await flow.update(DATA_SOURCE.GOOGLE, 21, true);
-    await flow.update(DATA_SOURCE.NEST, 19);
-    assert.equal(flow.data().current_temperature, 19);
-    assert.equal(flow.host.tracked().source, DATA_SOURCE.NEST);
-    assert.equal(flow.host.tracked().nest_google_device_uuid, 'device.nest');
-    await flow.set();
-    assert.equal(flow.host.writes[0][0], 'nest-account');
-    assert.equal(flow.host.writes[0][1], 'device.nest');
-    await flow.update(DATA_SOURCE.GOOGLE, 22);
-    assert.equal(flow.host.tracked().source, DATA_SOURCE.GOOGLE);
-    assert.equal(flow.data().nest_google_device_uuid, 'DEVICE_GOOGLE');
-    await flow.set();
-    assert.equal(flow.host.writes[1][0], 'google-account');
-    assert.equal(flow.host.writes[1][1], 'DEVICE_GOOGLE');
-  });
-}
-
 let begin = source.indexOf('  async #observeGoogleAPI(uuid) {');
 let end = source.indexOf('  async #processData(', begin);
 assert.ok(begin !== -1 && end > begin, 'Observe method boundaries must exist');
@@ -370,162 +301,3 @@ test('Observe does not start for an unauthorised connection or disabled Google A
   assert.deepEqual(calls, []);
 });
 
-let cameraEventsBegin = source.indexOf('  async #getCameraEvents(');
-let cameraEventsEnd = source.lastIndexOf('\n}');
-assert.ok(cameraEventsBegin !== -1 && cameraEventsEnd > cameraEventsBegin, 'Camera events method boundaries must exist');
-
-function setupCameraEvents(fetchImplementation) {
-  let logs = [];
-  let requests = [];
-  let fetchWrapper = async (...args) => {
-    requests.push(args);
-    return fetchImplementation(...args);
-  };
-  fetchWrapper.GET = 'get';
-
-  let connection = {
-    authorised: true,
-    referer: 'home.nest.com',
-    cameraAPIHost: 'camera.test',
-    cameraAuth: {
-      key: 'Authorization',
-      value: 'Basic ',
-      token: 'token',
-    },
-  };
-
-  let createCameraEventsHost = new Function(
-    'connection',
-    'fetchWrapper',
-    'logs',
-    'crypto',
-    'USER_AGENT',
-    'return new class {\n' +
-      '  #connections = new Map([["account", connection]]);\n' +
-      '  config = { options: { useNestAPI: true, useGoogleAPI: false } };\n' +
-      '  log = { debug: (...args) => logs.push(args) };\n' +
-      '  run() { return this.#getCameraEvents("account", "quartz.device-id", "https://nexus.test"); }\n' +
-      source.slice(cameraEventsBegin, cameraEventsEnd) +
-      '\n};',
-  );
-
-  return {
-    host: createCameraEventsHost(connection, fetchWrapper, logs, globalThis.crypto, 'test-agent'),
-    logs,
-    requests,
-  };
-}
-
-function setupGoogleCameraEvents(eventTypes) {
-  let connection = {
-    authorised: true,
-    grpcTransport: {
-      command: async () => ({
-        status: 0,
-        data: [
-          {
-            traitOperations: [
-              {
-                progress: 'COMPLETE',
-                event: {
-                  event: {
-                    cameraEventWindow: {
-                      cameraEvent: [
-                        {
-                          startTime: { seconds: 100, nanos: 0 },
-                          endTime: { seconds: 101, nanos: 0 },
-                          eventId: 'event-id',
-                          eventType: eventTypes,
-                        },
-                      ],
-                    },
-                  },
-                },
-              },
-            ],
-          },
-        ],
-      }),
-    },
-  };
-  let fetchWrapper = () => {};
-  fetchWrapper.GET = 'get';
-
-  let createGoogleCameraEventsHost = new Function(
-    'connection',
-    'fetchWrapper',
-    'crypto',
-    'USER_AGENT',
-    'return new class {\n' +
-      '  #connections = new Map([["account", connection]]);\n' +
-      '  config = { options: { useNestAPI: false, useGoogleAPI: true } };\n' +
-      '  run() { return this.#getCameraEvents("account", "DEVICE_device-id"); }\n' +
-      source.slice(cameraEventsBegin, cameraEventsEnd) +
-      '\n};',
-  );
-
-  return createGoogleCameraEventsHost(connection, fetchWrapper, globalThis.crypto, 'test-agent');
-}
-
-test('Nest camera event timeouts are silent and use one request attempt', async () => {
-  let timeout = new Error('The operation was aborted due to timeout');
-  timeout.name = 'TimeoutError';
-  let requestError = new Error('GET failed after 1 attempt');
-  requestError.cause = timeout;
-  let { host, logs, requests } = setupCameraEvents(async () => {
-    throw requestError;
-  });
-
-  assert.deepEqual(await host.run(), []);
-  assert.equal(logs.length, 0);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0][2].retry, 1);
-});
-
-test('Nest camera event HTTP and malformed-response failures remain visible', async () => {
-  let httpError = Object.assign(new Error('HTTP 401'), { status: 401 });
-  let http = setupCameraEvents(async () => {
-    throw httpError;
-  });
-
-  assert.deepEqual(await http.host.run(), []);
-  assert.equal(http.logs.length, 1);
-  assert.match(http.logs[0][0], /activity notifications/);
-  assert.equal(http.logs[0][2], 'HTTP 401');
-
-  let malformed = setupCameraEvents(async () => ({
-    json: async () => ({ status_detail: 'unexpected payload' }),
-  }));
-
-  assert.deepEqual(await malformed.host.run(), []);
-  assert.equal(malformed.logs.length, 1);
-  assert.equal(malformed.logs[0][2], 'unexpected payload');
-});
-
-test('Google camera event types use Nest-compatible kebab-case names', async () => {
-  let host = setupGoogleCameraEvents([
-    'EVENT_MOTION',
-    'EVENT_UNFAMILIAR_FACE',
-    'EVENT_PERSON_TALKING',
-    'EVENT_DOG_BARKING',
-    'EVENT_VEHICLE',
-    'EVENT_PACKAGE_DELIVERED',
-    'EVENT_PACKAGE_RETRIEVED',
-    'EVENT_PACKAGE_IN_TRANSIT',
-    'EVENT_FUTURE_EVENT_TYPE',
-    'NOT_AN_EVENT',
-  ]);
-
-  let events = await host.run();
-  assert.deepEqual(events[0].types, [
-    'motion',
-    'unfamiliar-face',
-    'person-talking',
-    'dog-barking',
-    'vehicle',
-    'package-delivered',
-    'package-retrieved',
-    'package-in-transit',
-    'future-event-type',
-  ]);
-});

@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Verify humidifier capability changes preserve automatic mode and existing service identity.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -276,3 +277,4 @@ test('HomeKit room target writes use the rule request and propagate failures wit
   await device.setTemperature(hap.Characteristic.TargetTemperature, 25);
   assert.deepEqual(requests.at(-1), { uuid: 'THERMO', target_temperature_low: 25 }, 'native mode retains existing routing');
 });
+

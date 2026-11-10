@@ -1,7 +1,8 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Shared complete cloud fixtures for discovery, mapper contracts and configuration precedence.
 import { DATA_SOURCE, DEVICE_TYPE } from '../../src/consts.js';
 
-export let config = { options: { ffmpeg: {}, eveHistory: true }, devices: [], homes: [] };
+export let config = { options: { eveHistory: true }, devices: [], homes: [] };
 export let home = {
   source: DATA_SOURCE.GOOGLE,
   value: { located_annotations: { predefinedWheres: { room: { whereId: { resourceId: 'ROOM' }, label: { literal: 'Kitchen' } } } } },
@@ -13,15 +14,6 @@ let common = {
   label: { label: 'Device' },
   device_located_settings: { whereAnnotationRid: { resourceId: 'ROOM' } },
   liveness: { status: 'LIVENESS_DEVICE_STATUS_ONLINE' },
-};
-let camera = {
-  ...common,
-  device_info: { ...common.device_info, typeName: 'google.resource.SpencerResource' },
-  streaming_protocol: { supportedProtocols: ['PROTOCOL_WEBRTC'] },
-  recording_toggle: { currentCameraState: 'CAMERA_ON' },
-  microphone_settings: { enableMicrophone: true },
-  speaker_volume: { volume: 50 },
-  observation_trigger_capabilities: { videoEventTypes: { motion: { value: true } } },
 };
 let thermostat = {
   ...common,
@@ -37,34 +29,6 @@ let thermostat = {
   hot_water_settings: { boostTimerEnd: { seconds: '0' }, temperature: { value: 55 } },
 };
 export let fixtures = [
-  { name: 'camera', type: DEVICE_TYPE.CAMERA, value: camera },
-  {
-    name: 'doorbell',
-    type: DEVICE_TYPE.DOORBELL,
-    value: {
-      ...camera,
-      device_info: { ...common.device_info, typeName: 'google.resource.GreenQuartzResource' },
-      doorbell_indoor_chime_settings: { chimeType: 'CHIME_TYPE_MECHANICAL', chimeEnabled: true },
-    },
-  },
-  {
-    name: 'floodlight',
-    type: DEVICE_TYPE.FLOODLIGHT,
-    value: {
-      ...camera,
-      device_info: { ...common.device_info, typeName: 'google.resource.NeonQuartzResource' },
-      related_resources: {
-        relatedResources: {
-          light: {
-            resourceId: { resourceId: 'SERVICE_LIGHT' },
-            resourceTypeName: { resourceName: 'google.resource.AzizResource' },
-          },
-        },
-      },
-      floodlight_settings: { brightness: 5 },
-      floodlight_state: { currentState: 'LIGHT_STATE_ON' },
-    },
-  },
   { name: 'thermostat', type: DEVICE_TYPE.THERMOSTAT, value: thermostat },
   { name: 'heatlink', type: DEVICE_TYPE.HEATLINK, value: thermostat },
   {
@@ -103,29 +67,6 @@ export let fixtures = [
   },
 ];
 
-let nestCamera = {
-  serial_number: 'TEST',
-  structure_id: 'home',
-  where_id: 'ROOM',
-  model: 'Nest Cam',
-  software_version: '1.0.0',
-  description: 'Device',
-  streaming_state: 'enabled',
-  audio_input_enabled: true,
-  capabilities: [],
-  nexus_api_http_server_url: 'https://camera.invalid',
-  properties: { 'cc2migration.overview_state': 'NORMAL' },
-};
-for (let name of ['camera', 'doorbell']) {
-  fixtures.push({
-    name,
-    type: name === 'camera' ? DEVICE_TYPE.CAMERA : DEVICE_TYPE.DOORBELL,
-    source: DATA_SOURCE.NEST,
-    id: 'quartz.TEST',
-    parents: { 'where.home': { value: { wheres: [{ where_id: 'ROOM', name: 'Kitchen' }] } } },
-    value: { ...nestCamera, capabilities: name === 'doorbell' ? ['indoor_chime'] : [] },
-  });
-}
 fixtures.push({
   name: 'protect',
   type: DEVICE_TYPE.PROTECT,
@@ -148,3 +89,4 @@ fixtures.push({
     replace_by_date_utc_secs: 2000000000,
   },
 });
+

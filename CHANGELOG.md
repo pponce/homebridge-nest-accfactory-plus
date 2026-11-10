@@ -1,3 +1,4 @@
+<!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
 ## v0.6.1
 
 - Enable Homebridge’s native Save button for restart-required configuration edits, including accessory and connection settings. Keep those edits staged until Homebridge saves them and offers its bridge restart prompt.
@@ -613,4 +614,5 @@ Apologies for this change, as I can understand what an inconvience and frustrati
 
 - Inital re-coding from Nest_accfactory code base. These projects will now share a common code base
 - Camera/Doorbell support currently removed will re-worked
+
 

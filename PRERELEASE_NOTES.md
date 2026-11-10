@@ -1,3 +1,4 @@
+<!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
 ## v0.5.0-beta.21
 
 **Reliable built-in thermostat sensor feedback for climate rules.**
@@ -1046,3 +1047,4 @@ Due to the volume of changes in this release, versioning has been reverted to al
 
 - Main changes are around the video/audio pipelines in `webrtc.js` and `streamer.js` to improve stability and recovery from packet loss, especially for video streams
 - Added logging and cleanup around talkback stream handling
+

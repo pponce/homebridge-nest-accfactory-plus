@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Overall system communications and device management
 // Part of homebridge-nest-accfactory
 //
@@ -5,7 +6,7 @@
 // HomeKit device modules.
 //
 // Handles platform startup/shutdown, device discovery, raw data aggregation,
-// protobuf-backed observe/subscribe processing, snapshot coordination, and
+// protobuf-backed observe/subscribe processing, and
 // routing of updates and commands between cloud APIs and HomeKit devices.
 //
 // Responsibilities:
@@ -13,7 +14,6 @@
 // - Build and start configured Nest/Google account connections
 // - Observe and subscribe to cloud updates in near real-time
 // - Aggregate and maintain raw device data from multiple API sources
-// - Coordinate protobuf-backed camera snapshot requests and responses
 // - Discover, create, update, and remove supported device instances
 // - Route HomeKit get/set requests to the correct upstream API
 // - Build protobuf-backed observe trait subscriptions
@@ -24,13 +24,12 @@
 // - Nest REST API subscribe loop and Google protobuf observe loop
 // - Shared protobuf schema/type caching via protobuf.js helpers
 // - Raw data merging across Nest and Google sources
-// - Promise-based snapshot waiter handling for upload_live_image updates
 // - Dynamic device module loading and HomeKit category selection
 //
 // Notes:
 // - Account authorisation, token refresh, retry handling, and connection cleanup are handled by connections.js
 // - HomeKit characteristic and service management is handled by individual device modules
-// - Camera, thermostat, sensor, and lock behaviour is implemented in device-specific modules
+// - Thermostat, sensor and other supported device behaviour is implemented in device-specific modules
 //
 // Architecture:
 // - Exports the main NestAccfactory platform class
@@ -39,12 +38,11 @@
 // - Uses shared protobuf helpers for schema/type loading and traversal
 // - Creates and updates HomeKitDevice-based instances for supported device types
 //
-// Code version 2026.10.19
+// Code version 2026.11.10
 // Mark Hulskamp
 'use strict';
 
 // Define nodejs module requirements
-import { Buffer } from 'node:buffer';
 import { setTimeout, clearTimeout } from 'node:timers';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -59,7 +57,7 @@ import GrpcTransport from './grpctransport.js';
 import { loadDeviceModules, getDeviceHKCategory } from './devices.js';
 import { processConfig } from './config.js';
 import { fetchWrapper } from './fetchWrapper.js';
-import { adjustTemperature, scaleValue } from './utils.js';
+import { adjustTemperature } from './utils.js';
 import { getProtoTypes } from './protobuf.js';
 import { createSupportDump } from './supportdump.js';
 import { ClimateDashboard } from './climate-dashboard.js';
@@ -76,14 +74,9 @@ import {
   __dirname,
   DATA_SOURCE,
   DEVICE_TYPE,
-  ACCOUNT_TYPE,
   NEST_API_BUCKETS,
-  PROTOBUF_RESOURCES,
 } from './consts.js';
 
-const SNAPSHOT_TIMEOUT = 7000; // Overall HomeKit snapshot timeout
-const SNAPSHOT_WAIT_TIMEOUT = 3000; // Wait for Google upload_live_image observe update
-const SNAPSHOT_FETCH_TIMEOUT = 3000; // HTTP fetch timeout for snapshot image
 const API_STREAM_LOOP_INTERVAL = 1000; // Normal subscribe/observe loop restart delay
 const API_STREAM_RETRY_INITIAL = 5000; // Initial retry delay after subscribe/observe failure
 const API_STREAM_RETRY_MAX = 60000; // Maximum retry delay during API outage/failure
@@ -140,7 +133,7 @@ export default class NestAccfactory {
 
     // Perform validation on the configuration passed into us and set defaults if not present
     try {
-      this.config = processConfig(config, this.log, this.api, { video: false });
+      this.config = processConfig(config, this.log, this.api);
     } catch {
       this.log?.error?.('Nest Climate Cntrl configuration could not be loaded. Check the plugin Settings. The plugin is inactive.');
       return;
@@ -335,40 +328,6 @@ export default class NestAccfactory {
     return Connections.fromConfig(this.config, {
       log: this.log,
       onAuthorised: async (uuid, connection, details = {}) => {
-        // Notify any camera related devices (camera/doorbell/floodlight) of updated auth details.
-        for (let [, trackedDevice] of this.#trackedDevices) {
-          if (typeof trackedDevice !== 'object' || trackedDevice === null) {
-            continue;
-          }
-
-          if (
-            trackedDevice.type !== DEVICE_TYPE.CAMERA &&
-            trackedDevice.type !== DEVICE_TYPE.DOORBELL &&
-            trackedDevice.type !== DEVICE_TYPE.FLOODLIGHT
-          ) {
-            // Not a camera/doorbell/floodlight device, so skip
-            continue;
-          }
-
-          // Refresh credentials only for cameras whose selected resource belongs to this account.
-          if (this.#rawData?.[trackedDevice.nest_google_device_uuid]?.connection !== uuid) {
-            continue;
-          }
-
-          try {
-            // Send an update message onto the device so it can update its api access details if needed.
-            await HomeKitDevice.message(trackedDevice.uuid, HomeKitDevice.UPDATE, {
-              apiAccess: connection.cameraAuth,
-            });
-          } catch (error) {
-            this?.log?.debug?.(
-              'Unable to update camera auth for tracked device "%s": %s',
-              trackedDevice.uuid,
-              typeof error?.message === 'string' ? error.message : String(error),
-            );
-          }
-        }
-
         // Initial authorisation/re-authorisation should start ingestion loops.
         // Token refreshes keep existing loops running.
         if (details?.wasAuthorised !== true) {
@@ -520,20 +479,6 @@ export default class NestAccfactory {
             );
           }
 
-          if (objectKey.startsWith('quartz.') === true) {
-            // Retrieve additional camera/doorbell properties
-            let properties = await this.#getCameraProperties(uuid, objectKey);
-
-            incomingValue.properties =
-              typeof properties === 'object' && properties.constructor === Object
-                ? properties
-                : typeof existingValue?.properties === 'object' && existingValue.properties.constructor === Object
-                  ? existingValue.properties
-                  : {};
-
-            changedFields.add('properties');
-          }
-
           if (objectKey.startsWith('buckets.') === true) {
             if (
               typeof existingEntry === 'object' &&
@@ -664,18 +609,7 @@ export default class NestAccfactory {
 
     // Dynamically build the 'observe' post body data from cached protobuf message types
     let observeTraitsList = getProtoTypes(path.join(__dirname, 'protobuf/root.proto'), this.log)
-      .filter((type) => {
-        return (
-          (connection.type === ACCOUNT_TYPE.NEST &&
-            type.fullName.startsWith('.nest.trait.product.camera') === false &&
-            type.fullName.startsWith('.nest.trait.product.doorbell') === false &&
-            (type.fullName.startsWith('.nest.trait') === true || type.fullName.startsWith('.weave.') === true)) ||
-          (connection.type === ACCOUNT_TYPE.GOOGLE &&
-            (type.fullName.startsWith('.nest.trait') === true ||
-              type.fullName.startsWith('.weave.') === true ||
-              type.fullName.startsWith('.google.trait.product.camera') === true))
-        );
-      })
+      .filter((type) => type.fullName.startsWith('.nest.trait') || type.fullName.startsWith('.weave.'))
       .map((type) => ({
         traitType: type.fullName.replace(/^\.*|\.*$/g, ''),
       }));
@@ -799,16 +733,6 @@ export default class NestAccfactory {
                   );
                 }
 
-                // We have an update for a camera live image trait
-                // so we'll trigger any waiting snapshot requests to process this new image data
-                if (traitLabel === 'upload_live_image' && connection.snapshotWaiters instanceof Map) {
-                  for (let [waiter, deviceId] of connection.snapshotWaiters) {
-                    if (deviceId === resourceId) {
-                      connection.snapshotWaiters.delete(waiter);
-                      waiter();
-                    }
-                  }
-                }
               }
             }
           }
@@ -953,18 +877,6 @@ export default class NestAccfactory {
                     .toLowerCase()
                     .replace(/\b\w/g, (character) => character.toUpperCase());
 
-                // For camera type devices, inject camera API auth credentials before initial setup
-                // so streaming backends have auth details during their first construction/update pass.
-                if (
-                  deviceModule.class.TYPE === DEVICE_TYPE.CAMERA ||
-                  deviceModule.class.TYPE === DEVICE_TYPE.DOORBELL ||
-                  deviceModule.class.TYPE === DEVICE_TYPE.FLOODLIGHT
-                ) {
-                  deviceData.apiAccess = this.#connections?.get(
-                    this.#rawData?.[deviceData?.nest_google_device_uuid]?.connection,
-                  )?.cameraAuth;
-                }
-
                 let tempDevice = new deviceModule.class(this.cachedAccessories, this.api, deviceData);
                 if (deviceModule.class.TYPE === DEVICE_TYPE.THERMOSTAT) {
                   tempDevice.getClimateRoom = () => this.automation?.homeKitRoom?.(serialNumber) ?? null;
@@ -1013,15 +925,9 @@ export default class NestAccfactory {
               if (newSource !== undefined && newSource !== trackedDevice.source) {
                 // Data source for this device has changed.
                 // Allow initial source assignment and Nest -> Google upgrades.
-                // Camera, doorbell, and floodlight devices may also move back
-                // from Google -> Nest because streaming can depend on Nest data.
                 if (
                   trackedDevice.source === undefined ||
-                  (trackedDevice.source === DATA_SOURCE.NEST && newSource === DATA_SOURCE.GOOGLE) ||
-                  ((deviceModule.class.TYPE === DEVICE_TYPE.CAMERA ||
-                    deviceModule.class.TYPE === DEVICE_TYPE.DOORBELL ||
-                    deviceModule.class.TYPE === DEVICE_TYPE.FLOODLIGHT) &&
-                    trackedDevice.source === DATA_SOURCE.GOOGLE)
+                  (trackedDevice.source === DATA_SOURCE.NEST && newSource === DATA_SOURCE.GOOGLE)
                 ) {
                   this?.log?.debug?.(
                     'Using %s API as data source for "%s" from connection "%s"',
@@ -1341,65 +1247,6 @@ export default class NestAccfactory {
                 : this.#rawData[nest_google_device_uuid].value.fan_control_settings.timerSpeed;
           }
 
-          if (key === 'statusled_brightness' && Number.isFinite(Number(value)) === true) {
-            // 0
-            // 1
-          }
-
-          if (key === 'irled_enabled' && typeof value === 'string') {
-            // 'auto_on'
-            // 'always_off'
-          }
-
-          if (key === 'streaming_enabled' && typeof value === 'boolean') {
-            // Turn camera video on/off
-            setUpdateTrait('recording_toggle_settings', 'type.nestlabs.com/nest.trait.product.camera.RecordingToggleSettingsTrait');
-            updateElement.state.value.targetCameraState = value === true ? 'CAMERA_ON' : 'CAMERA_OFF';
-            updateElement.state.value.changeModeReason = 2;
-            updateElement.state.value.settingsUpdated = timestamp(Date.now());
-          }
-
-          if (key === 'audio_enabled' && typeof value === 'boolean') {
-            // Enable/disable microphone on camera/doorbell
-            setUpdateTrait('microphone_settings', 'type.nestlabs.com/nest.trait.audio.MicrophoneSettingsTrait', undefined, {
-              enableMicrophone: value,
-            });
-          }
-
-          if (key === 'indoor_chime_enabled' && typeof value === 'boolean') {
-            // Enable/disable chime status on doorbell
-            setUpdateTrait(
-              'doorbell_indoor_chime_settings',
-              'type.nestlabs.com/nest.trait.product.doorbell.DoorbellIndoorChimeSettingsTrait',
-              undefined,
-              { chimeEnabled: value },
-            );
-          }
-
-          if (
-            key === 'light_enabled' &&
-            typeof value === 'boolean' &&
-            typeof this.#rawData?.[nest_google_device_uuid]?.value?.related_resources?.relatedResources === 'object'
-          ) {
-            // Turn on/off light on supported camera devices. Need to find the related SERVICE_ object
-            let serviceUUID = Object.values(this.#rawData[nest_google_device_uuid].value.related_resources.relatedResources).find(
-              (resource) =>
-                resource?.resourceTypeName?.resourceName === 'google.resource.AzizResource' &&
-                resource?.resourceId?.resourceId?.startsWith('SERVICE_') === true,
-            )?.resourceId?.resourceId;
-
-            if ((serviceUUID ?? '') !== '') {
-              setCommandTrait('on_off', 'type.nestlabs.com/weave.trait.actuator.OnOffTrait.SetStateRequest', { on: value }, serviceUUID);
-            }
-          }
-
-          if (key === 'light_brightness' && Number.isFinite(Number(value)) === true) {
-            // Set light brightness on supported camera devices. Needs to be scaled to 0-10 for the API
-            setUpdateTrait('floodlight_settings', 'type.nestlabs.com/google.trait.product.camera.FloodlightSettingsTrait', undefined, {
-              brightness: scaleValue(Number(value), 0, 100, 0, 10),
-            });
-          }
-
           if (
             key === 'active_sensor' &&
             typeof value === 'boolean' &&
@@ -1570,73 +1417,36 @@ export default class NestAccfactory {
         }
 
         if (this.#rawData?.[nest_google_device_uuid]?.source === DATA_SOURCE.NEST) {
-          if (nest_google_device_uuid.startsWith('quartz.') === true) {
-            // Set value on Nest Camera/Doorbell
-            let mappedKey =
-              {
-                indoor_chime_enabled: 'doorbell.indoor_chime.enabled',
-                statusled_brightness: 'statusled.brightness',
-                irled_enabled: 'irled.state',
-                streaming_enabled: 'streaming.enabled',
-                audio_enabled: 'audio.enabled',
-              }[key] ?? key;
+          // Retain Nest REST controls for Protect devices.
+          let subscribeJSONData = { objects: [] };
 
+          if (key === 'ntp_green_led_enable' && typeof value === 'boolean' && nest_google_device_uuid.startsWith('topaz.') === true) {
+            // Set night time promise Led status on Protect
+            subscribeJSONData.objects.push({ object_key: nest_google_device_uuid, op: 'MERGE', value: { ntp_green_led_enable: value } });
+          }
+
+          if (subscribeJSONData.objects.length !== 0) {
             let response = await fetchWrapper(
               fetchWrapper.POST,
-              new URL('/api/dropcams.set_properties', 'https://webapi.' + connection.cameraAPIHost).href,
+              new URL('/v5/put', connection.transport_url).href,
               {
                 headers: {
                   Referer: 'https://' + connection.referer,
                   Origin: 'https://' + connection.referer,
-                  [connection.cameraAuth.key]: connection.cameraAuth.value + connection.cameraAuth.token,
-                  'Content-Type': 'application/x-www-form-urlencoded',
+                  Authorization: 'Basic ' + connection.token,
                   'User-Agent': USER_AGENT,
                   'Sec-Fetch-Mode': 'cors',
                   'Sec-Fetch-Site': 'same-origin',
+                  'X-nl-protocol-version': 1,
+                  'Content-Type': 'application/json',
                 },
                 retry: 3,
               },
-              mappedKey + '=' + value + '&uuid=' + nest_google_device_uuid.trim().split('.')[1],
+              JSON.stringify(subscribeJSONData),
             );
-
             let data = await response.json();
-            if (data?.status !== 0) {
-              throw new Error('Nest API camera update failed');
-            }
-          }
-
-          if (nest_google_device_uuid.startsWith('quartz.') === false) {
-            // Retain Nest REST controls for Protect devices.
-            let subscribeJSONData = { objects: [] };
-
-            if (key === 'ntp_green_led_enable' && typeof value === 'boolean' && nest_google_device_uuid.startsWith('topaz.') === true) {
-              // Set night time promise Led status on Protect
-              subscribeJSONData.objects.push({ object_key: nest_google_device_uuid, op: 'MERGE', value: { ntp_green_led_enable: value } });
-            }
-
-            if (subscribeJSONData.objects.length !== 0) {
-              let response = await fetchWrapper(
-                fetchWrapper.POST,
-                new URL('/v5/put', connection.transport_url).href,
-                {
-                  headers: {
-                    Referer: 'https://' + connection.referer,
-                    Origin: 'https://' + connection.referer,
-                    Authorization: 'Basic ' + connection.token,
-                    'User-Agent': USER_AGENT,
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'same-origin',
-                    'X-nl-protocol-version': 1,
-                    'Content-Type': 'application/json',
-                  },
-                  retry: 3,
-                },
-                JSON.stringify(subscribeJSONData),
-              );
-              let data = await response.json();
-              if (Array.isArray(data?.objects) === false || data.objects.length === 0) {
-                throw new Error('Nest API property update failed');
-              }
+            if (Array.isArray(data?.objects) === false || data.objects.length === 0) {
+              throw new Error('Nest API property update failed');
             }
           }
         }
@@ -1673,25 +1483,6 @@ export default class NestAccfactory {
       // By default, the returned value will be undefined. If call is successful, the key value will have the data requested
       values[key] = undefined;
 
-      if (key === 'camera_snapshot') {
-        // Camera snapshot requested.
-        // Keep this timeout shorter than HomeKit's patience so we either return a snapshot
-        // quickly or fall back cleanly without prolonged blocking.
-        try {
-          values[key] = await Promise.race([
-            this.#getCameraSnapshot(uuid, nest_google_device_uuid),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Snapshot request timeout')), SNAPSHOT_TIMEOUT)),
-          ]);
-        } catch (error) {
-          this?.log?.debug?.(
-            'Camera snapshot request failed for device uuid "%s". Error was "%s"',
-            nest_google_device_uuid,
-            typeof error?.message === 'string' ? error.message : String(error),
-          );
-          values[key] = undefined;
-        }
-      }
-
       if (key === 'location_weather') {
         // Weather data requested.
         // We'll pass in the postal code and country code for the device if available to get localised weather data
@@ -1712,190 +1503,9 @@ export default class NestAccfactory {
         }
       }
 
-      if (key === 'camera_events') {
-        // Camera events requested.
-        // We'll pass in the nexus api server url for Nest API devices
-        try {
-          values[key] = await this.#getCameraEvents(
-            uuid,
-            nest_google_device_uuid,
-            this.#rawData[nest_google_device_uuid]?.value?.nexus_api_http_server_url ?? undefined,
-          );
-        } catch (error) {
-          this?.log?.debug?.(
-            'Camera events request failed for device uuid "%s". Error was "%s"',
-            nest_google_device_uuid,
-            typeof error?.message === 'string' ? error.message : String(error),
-          );
-          values[key] = undefined;
-        }
-      }
     }
 
     return values;
-  }
-
-  async #getCameraSnapshot(uuid, nest_google_device_uuid) {
-    let connection = this.#connections?.get(uuid);
-
-    if (
-      typeof connection !== 'object' ||
-      connection === null ||
-      connection.authorised !== true ||
-      (connection.referer ?? '') === '' ||
-      (nest_google_device_uuid?.trim?.() ?? '') === '' ||
-      typeof this.#rawData?.[nest_google_device_uuid]?.value !== 'object'
-    ) {
-      // Not a valid connection object and/or we're not authorised
-      return;
-    }
-
-    let snapshot = undefined;
-
-    // Shared image fetch logic for both Nest and Google snapshot paths
-    let fetchSnapshotImage = async (url, headers) => {
-      try {
-        let response = await fetchWrapper(fetchWrapper.GET, url, {
-          headers,
-          retry: 2,
-          timeout: SNAPSHOT_FETCH_TIMEOUT,
-        });
-
-        let image = Buffer.from(await response.arrayBuffer());
-
-        if (image?.length === 0) {
-          this?.log?.debug?.('Snapshot fetch returned empty image for device uuid "%s"', nest_google_device_uuid);
-          return;
-        }
-
-        return image;
-      } catch (error) {
-        if (
-          error?.cause === undefined ||
-          (error.cause?.message?.toUpperCase?.()?.includes('TIMEOUT') === false &&
-            error.cause?.code?.toUpperCase?.()?.includes('TIMEOUT') === false)
-        ) {
-          this?.log?.debug?.(
-            'Snapshot fetch failed for device uuid "%s". Error was "%s"',
-            nest_google_device_uuid,
-            typeof error?.message === 'string' ? error.message : String(error),
-          );
-        }
-      }
-    };
-
-    if (
-      this.config?.options?.useNestAPI === true &&
-      nest_google_device_uuid.startsWith('quartz.') === true &&
-      (this.#rawData?.[nest_google_device_uuid]?.value?.nexus_api_http_server_url ?? '') !== '' &&
-      (connection?.cameraAPIHost ?? '') !== '' &&
-      (connection?.cameraAuth?.key ?? '') !== '' &&
-      (connection?.cameraAuth?.value ?? '') !== '' &&
-      (connection?.cameraAuth?.token ?? '') !== ''
-    ) {
-      // Nest cameras provide a direct image endpoint, so just fetch the latest image available
-      snapshot = await fetchSnapshotImage(
-        new URL(
-          '/get_image?uuid=' + nest_google_device_uuid.trim().split('.')[1],
-          this.#rawData[nest_google_device_uuid].value.nexus_api_http_server_url.trim(),
-        ).href,
-        {
-          Referer: 'https://' + connection.referer,
-          Origin: 'https://' + connection.referer,
-          [connection.cameraAuth.key]: connection.cameraAuth.value + connection.cameraAuth.token,
-          'User-Agent': USER_AGENT,
-          'Sec-Fetch-Mode': 'cors',
-          'Sec-Fetch-Site': 'same-origin',
-        },
-      );
-
-      if (Buffer.isBuffer(snapshot) === true && snapshot.length > 0) {
-        return snapshot;
-      }
-    }
-
-    if (
-      this.config?.options?.useGoogleAPI === true &&
-      nest_google_device_uuid.startsWith('DEVICE_') === true &&
-      (connection?.token ?? '') !== '' &&
-      connection?.grpcTransport !== undefined &&
-      (PROTOBUF_RESOURCES.CAMERA.includes(this.#rawData?.[nest_google_device_uuid]?.value?.device_info?.typeName) === true ||
-        PROTOBUF_RESOURCES.DOORBELL.includes(this.#rawData?.[nest_google_device_uuid]?.value?.device_info?.typeName) === true ||
-        PROTOBUF_RESOURCES.FLOODLIGHT.includes(this.#rawData?.[nest_google_device_uuid]?.value?.device_info?.typeName) === true)
-    ) {
-      // Record the protobuf upload_live_image state before asking for a new snapshot
-      // so we can fall back to the previously available image URL if no newer data arrives
-      let beforeRequestUploadLiveImage = structuredClone(this.#rawData?.[nest_google_device_uuid]?.value?.upload_live_image ?? {});
-      let beforeRequestUrl = beforeRequestUploadLiveImage?.liveImageUrl ?? '';
-      let latestUploadLiveImage = beforeRequestUploadLiveImage;
-      let latestUrl = beforeRequestUrl;
-
-      // Key by request callback so overlapping snapshots for one device remain independent.
-      let { promise: waitForSnapshotUpdate, resolve: waiter } = Promise.withResolvers();
-      connection.snapshotWaiters.set(waiter, nest_google_device_uuid);
-
-      // Ask Google to refresh the live image
-      try {
-        let grpcResult = await connection.grpcTransport.command('nestlabs.gateway.v1.', 'ResourceApi', 'SendCommand', {
-          resourceRequest: {
-            resourceId: nest_google_device_uuid,
-            requestId: crypto.randomUUID(),
-          },
-          resourceCommands: [
-            {
-              traitLabel: 'upload_live_image',
-              command: {
-                type_url: 'type.nestlabs.com/nest.trait.product.camera.UploadLiveImageTrait.UploadLiveImageRequest',
-                value: {},
-              },
-            },
-          ],
-        });
-
-        let commandResponse = Array.isArray(grpcResult?.data) === true ? grpcResult.data[0] : undefined;
-
-        // Only continue if gRPC reports the camera event request completed successfully
-        if (
-          commandResponse?.traitOperations?.[0]?.progress === 'COMPLETE' &&
-          commandResponse?.traitOperations?.[0]?.event?.event?.status === 'STATUS_SUCCESSFUL'
-        ) {
-          // Wait briefly for observe processing to deliver updated upload_live_image data for this device.
-          // If no update arrives in time, we'll fall back to whatever URL was already available.
-          await Promise.race([waitForSnapshotUpdate, new Promise((resolve) => setTimeout(resolve, SNAPSHOT_WAIT_TIMEOUT))]);
-        }
-      } finally {
-        // Remove only this request, including when the refresh command fails.
-        connection.snapshotWaiters.delete(waiter);
-      }
-
-      // Re-read final upload_live_image state after either observe update or timeout
-      latestUploadLiveImage = structuredClone(this.#rawData?.[nest_google_device_uuid]?.value?.upload_live_image ?? {});
-      latestUrl = latestUploadLiveImage?.liveImageUrl ?? '';
-
-      // If Google did not provide a newer URL in time, fall back to the previous URL as the best available snapshot
-      if (latestUrl === '') {
-        latestUrl = beforeRequestUrl;
-      }
-
-      if ((latestUrl ?? '') !== '') {
-        snapshot = await fetchSnapshotImage(latestUrl, {
-          Referer: 'https://' + connection.referer,
-          Origin: 'https://' + connection.referer,
-          Authorization: 'Basic ' + connection.token,
-          'User-Agent': USER_AGENT,
-          'Sec-Fetch-Mode': 'cors',
-          'Sec-Fetch-Site': 'same-origin',
-        });
-
-        if (Buffer.isBuffer(snapshot) === true && snapshot.length > 0) {
-          return snapshot;
-        }
-      }
-
-      this?.log?.debug?.('Google API did not provide a usable snapshot URL for device uuid "%s"', nest_google_device_uuid);
-    }
-
-    return;
   }
 
   async #getLocationWeather(uuid, nest_google_device_uuid, postal_code, country_code) {
@@ -1983,236 +1593,4 @@ export default class NestAccfactory {
     }
   }
 
-  async #getCameraProperties(uuid, nest_google_device_uuid) {
-    let connection = this.#connections?.get(uuid);
-
-    if (
-      typeof connection !== 'object' ||
-      connection === null ||
-      connection.authorised !== true ||
-      (connection.referer ?? '') === '' ||
-      (connection.cameraAPIHost ?? '') === '' ||
-      (connection.cameraAuth?.key ?? '') === '' ||
-      (connection.cameraAuth?.value ?? '') === '' ||
-      (connection.cameraAuth?.token ?? '') === '' ||
-      (nest_google_device_uuid?.trim?.() ?? '') === '' ||
-      this.config?.options?.useNestAPI !== true ||
-      nest_google_device_uuid.startsWith('quartz.') !== true
-    ) {
-      // Not a valid connection, not authorised, useNestAPI disabled or invalid device
-      return;
-    }
-
-    try {
-      let response = await fetchWrapper(
-        fetchWrapper.GET,
-        new URL(
-          '/api/cameras.get_with_properties?uuid=' + nest_google_device_uuid.trim().split('.')[1],
-          'https://webapi.' + connection.cameraAPIHost,
-        ).href,
-        {
-          headers: {
-            Referer: 'https://' + connection.referer,
-            Origin: 'https://' + connection.referer,
-            [connection.cameraAuth.key]: connection.cameraAuth.value + connection.cameraAuth.token,
-            'User-Agent': USER_AGENT,
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
-          },
-          retry: 3,
-          timeout: 4000,
-        },
-      );
-
-      let data = await response.json();
-
-      // If returned JSON has empty properties, throw it
-      if (data?.items?.[0]?.properties === undefined) {
-        throw new Error(data?.status_detail ?? 'Properties missing or empty');
-      }
-
-      return data.items[0].properties;
-    } catch (error) {
-      this?.log?.debug?.(
-        'Nest API had error retrieving camera/doorbell properties. Error was "%s"',
-        typeof error?.message === 'string' ? error.message : String(error),
-      );
-      return;
-    }
-  }
-
-  async #getCameraEvents(uuid, nest_google_device_uuid, nexus_api_url) {
-    let connection = this.#connections?.get(uuid);
-
-    if (
-      typeof connection !== 'object' ||
-      connection === null ||
-      connection.authorised !== true ||
-      (uuid?.trim?.() ?? '') === '' ||
-      (nest_google_device_uuid?.trim?.() ?? '') === ''
-    ) {
-      // Not a valid connection object and/or we're not authorised
-      return [];
-    }
-
-    if (
-      this.config?.options?.useGoogleAPI === true &&
-      nest_google_device_uuid.startsWith('DEVICE_') === true &&
-      connection?.grpcTransport !== undefined
-    ) {
-      let grpcResult = await connection.grpcTransport.command(
-        'nestlabs.gateway.v1.',
-        'ResourceApi',
-        'SendCommand',
-        {
-          resourceRequest: {
-            resourceId: nest_google_device_uuid,
-            requestId: crypto.randomUUID(),
-          },
-          resourceCommands: [
-            {
-              traitLabel: 'camera_observation_history',
-              command: {
-                type_url: 'type.nestlabs.com/nest.trait.history.CameraObservationHistoryTrait.CameraObservationHistoryRequest',
-                value: {
-                  // We want camera history from up to 15 seconds ago until now
-                  queryStartTime: {
-                    seconds: Math.floor((Date.now() - 15000) / 1000),
-                    nanos: ((Date.now() - 15000) % 1000) * 1e6,
-                  },
-                  queryEndTime: {
-                    seconds: Math.floor(Date.now() / 1000),
-                    nanos: (Date.now() % 1000) * 1e6,
-                  },
-                },
-              },
-            },
-          ],
-        },
-        { timeout: 4000 },
-      );
-
-      let commandResponse = Array.isArray(grpcResult?.data) === true ? grpcResult.data[0] : undefined;
-
-      // Camera history queries can legitimately time out when Google has no recent
-      // event data ready. Treat that as no events rather than logging duplicate noise.
-      if (grpcResult?.status === 4 || grpcResult?.code === 'REQUEST_TIMEOUT') {
-        return [];
-      }
-
-      // Only continue if gRPC reports the camera history request completed successfully
-      if (commandResponse?.traitOperations?.[0]?.progress === 'COMPLETE') {
-        let events =
-          Array.isArray(commandResponse?.traitOperations?.[0]?.event?.event?.cameraEventWindow?.cameraEvent) === true
-            ? commandResponse.traitOperations[0].event.event.cameraEventWindow.cameraEvent
-                .map((event) => ({
-                  playback_time: parseInt(event.startTime.seconds) * 1000 + parseInt(event.startTime.nanos) / 1000000,
-                  start_time: parseInt(event.startTime.seconds) * 1000 + parseInt(event.startTime.nanos) / 1000000,
-                  end_time: parseInt(event.endTime.seconds) * 1000 + parseInt(event.endTime.nanos) / 1000000,
-                  id: event.eventId,
-                  zone_ids:
-                    Array.isArray(event.activityZone) === true
-                      ? event.activityZone.map((zone) => (zone?.zoneIndex !== undefined ? zone.zoneIndex : zone.internalIndex))
-                      : [],
-                  types:
-                    Array.isArray(event.eventType) === true
-                      ? event.eventType
-                          .map((type) => {
-                            // Match Nest REST event names and automatically support future protobuf enum additions.
-                            return type.startsWith('EVENT_') === true ? type.slice(6).toLowerCase().replaceAll('_', '-') : '';
-                          })
-                          .filter(Boolean)
-                      : [],
-                }))
-                .sort((a, b) => b.start_time - a.start_time)
-            : [];
-
-        return events; // Return events from Google API
-      } else {
-        this?.log?.debug?.(
-          'Google API had error retrieving camera/doorbell activity notifications for device "%s"',
-          nest_google_device_uuid,
-        );
-        return [];
-      }
-    }
-
-    if (
-      this.config?.options?.useNestAPI === true &&
-      nest_google_device_uuid.startsWith('quartz.') === true &&
-      (connection?.referer ?? '') !== '' &&
-      (connection?.cameraAPIHost ?? '') !== '' &&
-      (connection?.cameraAuth?.key ?? '') !== '' &&
-      (connection?.cameraAuth?.value ?? '') !== '' &&
-      (connection?.cameraAuth?.token ?? '') !== '' &&
-      (nexus_api_url?.trim?.() ?? '') !== ''
-    ) {
-      try {
-        let response = await fetchWrapper(
-          fetchWrapper.GET,
-          new URL(
-            '/cuepoint/' + nest_google_device_uuid.trim().split('.')[1] + '/2?start_time=' + Math.floor(Date.now() / 1000 - 30),
-            nexus_api_url,
-          ).href,
-          {
-            headers: {
-              Referer: 'https://' + connection.referer,
-              Origin: 'https://' + connection.referer,
-              [connection.cameraAuth.key]: connection.cameraAuth.value + connection.cameraAuth.token,
-              'User-Agent': USER_AGENT,
-              'Sec-Fetch-Mode': 'cors',
-              'Sec-Fetch-Site': 'same-origin',
-            },
-            // This endpoint is polled frequently, so the next poll is the retry.
-            retry: 1,
-            timeout: 4000,
-          },
-        );
-
-        let data = await response.json();
-
-        if (Array.isArray(data) === false) {
-          throw new Error(data?.status_detail ?? 'Activity notifications missing or invalid');
-        }
-
-        let events = data
-          .map((alert) => {
-            let zoneIds = Array.isArray(alert.zone_ids) === true ? alert.zone_ids.map((id) => (id !== 0 ? id : 1)) : [1];
-            if (zoneIds.length === 0) {
-              zoneIds.push(1);
-            }
-            return {
-              playback_time: alert.playback_time,
-              start_time: alert.start_time,
-              end_time: alert.end_time,
-              id: alert.id,
-              zone_ids: zoneIds,
-              types: alert.types,
-            };
-          })
-          .sort((a, b) => b.start_time - a.start_time);
-
-        return events; // Return events from Nest API
-      } catch (error) {
-        // Cuepoint timeouts are expected transient misses; the next two-second poll tries again.
-        if (
-          (error?.cause ?? error)?.name === 'TimeoutError' ||
-          (error?.cause ?? error)?.code === 'UND_ERR_HEADERS_TIMEOUT' ||
-          (error?.cause ?? error)?.code === 'UND_ERR_CONNECT_TIMEOUT'
-        ) {
-          return [];
-        }
-
-        this?.log?.debug?.(
-          'Nest API had error retrieving camera/doorbell activity notifications for device "%s". Error was "%s"',
-          nest_google_device_uuid,
-          typeof error?.message === 'string' ? error.message : String(error),
-        );
-        return [];
-      }
-    }
-
-    return [];
-  }
 }
-

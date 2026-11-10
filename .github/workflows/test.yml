@@ -1,3 +1,4 @@
+# Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 name: Test
 
 on:
@@ -86,3 +87,4 @@ jobs:
         with:
           name: dashboard-browser-review
           path: ${{ runner.temp }}/climate-dashboard-review
+

@@ -1,6 +1,6 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 syntax = "proto3";
 
-import "google/trait/product/camera.proto";
 import "nest/trait/audio.proto";
 import "nest/trait/detector.proto";
 import "nest/trait/diagnostics.proto";
@@ -14,8 +14,6 @@ import "nest/trait/media.proto";
 import "nest/trait/network.proto";
 import "nest/trait/occupancy.proto";
 import "nest/trait/product/protect.proto";
-import "nest/trait/product/camera.proto";
-import "nest/trait/product/doorbell.proto";
 import "nest/trait/resourcedirectory.proto";
 import "nest/trait/safety.proto";
 import "nest/trait/selftest.proto";

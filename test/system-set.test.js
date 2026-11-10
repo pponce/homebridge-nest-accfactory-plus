@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Exercise cloud SET outcomes through the production routing method and real device commit boundary.
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -31,10 +32,8 @@ function setup(source, response, options = {}) {
   let connection = {
     authorised: true,
     referer: 'example.test',
-    cameraAPIHost: 'example.test',
     transport_url: 'https://example.test',
     token: 'test-token',
-    cameraAuth: { key: 'Authorization', value: 'Basic ', token: 'test-token' },
     grpcTransport: {
       command: async (...args) => {
         requests.push(args);
@@ -83,7 +82,7 @@ function deviceFor(context, flow, values) {
   return device;
 }
 
-for (let id of ['topaz.TEST', 'quartz.TEST']) {
+for (let id of ['topaz.TEST']) {
   test('REST failure rejects SET without committing requested values: ' + id, async (context) => {
     let failure = new Error('HTTP 503');
     let flow = setup(
@@ -93,7 +92,7 @@ for (let id of ['topaz.TEST', 'quartz.TEST']) {
       },
       { id },
     );
-    let key = id.startsWith('topaz.') === true ? 'ntp_green_led_enable' : 'streaming_enabled';
+    let key = 'ntp_green_led_enable';
     let device = deviceFor(context, flow, { [key]: false });
     await assert.rejects(device.set({ [key]: true }), (error) => {
       assert.ok(error instanceof AggregateError);
@@ -107,7 +106,6 @@ for (let id of ['topaz.TEST', 'quartz.TEST']) {
 
 for (let [id, response] of [
   ['topaz.TEST', { objects: [] }],
-  ['quartz.TEST', { status: 1 }],
 ]) {
   test('REST application rejection propagates: ' + id, async () => {
     let flow = setup(DATA_SOURCE.NEST, response, { id });
@@ -190,3 +188,4 @@ for (let [reason, options] of [
     assert.equal(flow.requests.length, 0);
   });
 }
+

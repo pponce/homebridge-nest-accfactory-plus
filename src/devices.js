@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Device Module Loader
 // Part of homebridge-nest-accfactory
 //
@@ -26,7 +27,7 @@
 // - Additional named exports are attached to the module entry when present
 // - Used by the main system module to create and manage device instances
 //
-// Code version 2026.05.06
+// Code version 2026.11.10
 // Mark Hulskamp
 'use strict';
 
@@ -103,3 +104,4 @@ function getDeviceHKCategory(type) {
 
 // Define exports
 export { loadDeviceModules, getDeviceHKCategory };
+

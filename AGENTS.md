@@ -1,4 +1,5 @@
-# homebridge-nest-accfactory — Agent Instructions
+<!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+# homebridge-nest-climate-cntrl — Agent Instructions
 
 Apply pragmatic engineering principles: preserve compatibility, keep changes focused, validate failure paths, and test behavior. The external core-engineering-principles skill is optional.
 
@@ -6,18 +7,16 @@ This file contains project-specific architecture, compatibility, and implementat
 
 ## Project
 
-`homebridge-nest-accfactory` provides HomeKit integration for Nest and Google Home devices through Homebridge.
+`homebridge-nest-climate-cntrl` extends the Nest Accfactory foundation with climate automation through Homebridge.
 
-Supported device families include:
+Supported device families include thermostats, Heat Links, Nest Protect,
+temperature sensors, and Home/Away accessories. Climate rules coordinate
+Homebridge temperature sensors, fans and presence sources.
 
-- cameras and doorbells;
-- floodlight cameras;
-- thermostats and Heat Links;
-- Nest Protect;
-- temperature sensors;
-- Nest × Yale locks;
-- weather accessories; and
-- Home/Away accessories.
+Cameras, doorbells, floodlight cameras, video streaming and HKSV are outside
+this plugin's scope. Do not add camera modules, media assets or dependencies
+to its source or distribution. Shared Nest/Google schemas needed by climate
+devices must retain compatible field definitions.
 
 The project integrates with both Nest and Google APIs. Some devices may be represented by both sources.
 
@@ -90,96 +89,6 @@ Nest REST and Google Observe/gRPC connection behaviour is long-running infrastru
 Preserve established authentication refresh, retry, backoff, reconnect, and shutdown semantics unless the change specifically addresses them.
 
 Do not remove a Nest fallback solely because an equivalent Google data source currently exists without first establishing that the fallback is no longer required by supported devices or accounts.
-
-## Cameras and Doorbells
-
-Camera behaviour spans several layers and must be considered as a complete flow.
-
-Relevant components may include:
-
-- camera plugin logic;
-- `Streamer`;
-- `StreamTransport`;
-- WebRTC;
-- NexusTalk;
-- FFmpeg;
-- RTP/H264 handling;
-- media timelines and jitter buffering;
-- snapshots;
-- HomeKit live streaming;
-- HomeKit Secure Video; and
-- two-way audio.
-
-Keep transport-specific behaviour in the relevant transport implementation.
-
-Keep common media scheduling, buffering, lifecycle, and output behaviour in the shared streaming layer when it is genuinely protocol-independent.
-
-When changing streaming lifecycle behaviour, consider:
-
-- startup;
-- source acquisition;
-- replacement;
-- reconnect;
-- requested stop;
-- unexpected termination;
-- stale sessions;
-- HomeKit failing to send a STOP request;
-- asynchronous teardown; and
-- application shutdown.
-
-A stale or stopping stream must not tear down its replacement.
-
-Ownership of transports, FFmpeg processes, timers, listeners, and gRPC connections must remain clear.
-
-## HomeKit Secure Video
-
-HKSV is required for supported camera and doorbell accessories.
-
-Changes affecting recording must consider:
-
-- decoder-safe H264 startup;
-- SPS/PPS availability;
-- keyframe handling;
-- MP4 initialisation;
-- recording session teardown;
-- FFmpeg encoder behaviour;
-- hardware and software encoding; and
-- HomeKit recording lifecycle behaviour.
-
-Do not assume behaviour verified for live streaming is automatically correct for HKSV recording.
-
-## FFmpeg
-
-Camera live streaming, HKSV recording, and talkback depend on FFmpeg.
-
-- Minimum supported FFmpeg version is **7.1**.
-- Required codec checks must remain enforced.
-- Preserve software encoding fallback where supported.
-- Hardware acceleration must only be selected when the relevant encoder is actually usable.
-- Raspberry Pi DRM graphics nodes are not evidence of NVENC, QSV, or VAAPI encoding support.
-- Raspberry Pi V4L2 encoder detection must identify the encoder rather than assuming a fixed `/dev/video*` number.
-
-Avoid unnecessary FFmpeg probes, particularly in frequently constructed or latency-sensitive paths.
-
-## Streaming Performance
-
-RTP processing, jitter buffering, H264 handling, media timelines, and output scheduling are latency-sensitive paths.
-
-Be particularly cautious about introducing:
-
-- repeated packet or queue scans;
-- repeated sorting;
-- unnecessary buffer copies;
-- unbounded queues;
-- synchronous external operations;
-- repeated codec parsing; or
-- diagnostics work when diagnostics are disabled.
-
-Preserve bounded buffering and recovery behaviour.
-
-Performance changes should not weaken decoder recovery or stream correctness.
-
-Do not describe a streaming change as a performance improvement unless there is evidence supporting that claim.
 
 ## Native HomeKit Functionality
 
@@ -256,7 +165,7 @@ Follow the changelog and code-date rules from `core-engineering-principles` when
 
 Use the project's existing test, lint, coverage, and validation scripts.
 
-Camera or streaming changes may require coverage across more than the directly modified module because the media path crosses transport, `Streamer`, FFmpeg, and HomeKit boundaries.
+Package checks must verify that camera/media code is absent and bundled library licenses are present.
 
 Changes to shared `HomeKitDevice` behaviour should consider regression coverage across its lifecycle and supported HAP execution environments where relevant.
 
@@ -264,5 +173,6 @@ Changes to Nest/Google data processing should consider both data sources when th
 
 Hardware-specific behaviour that cannot be exercised locally must be identified as not hardware-verified rather than inferred from unit tests.
 
-Do not treat successful unit tests as evidence that camera hardware, FFmpeg hardware acceleration, Google/Nest backend behaviour, or physical HomeKit devices have been verified.
+Do not treat successful unit tests as evidence that Google/Nest backend behaviour or physical HomeKit devices have been verified.
+
 

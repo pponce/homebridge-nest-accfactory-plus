@@ -1,4 +1,5 @@
-// Verify configuration normalization, viewer limits and protected migration without probing a real executable.
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
+// Verify configuration normalization and protected migration without probing a real executable.
 import assert from 'node:assert/strict';
 import child_process from 'node:child_process';
 import fs from 'node:fs';
@@ -117,80 +118,12 @@ test('missing, null and malformed options receive defaults while valid settings 
     assert.equal(config.options.useNestAPI, true);
     assert.equal(config.options.useGoogleAPI, true);
   }
-  let options = { eveHistory: false, maxStreams: 3, useNestAPI: false, ffmpegDebug: true };
+  let options = { eveHistory: false, useNestAPI: false };
   let config = processConfig({ options }, log, {});
   assert.equal(config.options, options);
   assert.equal(config.options.eveHistory, false);
-  assert.equal(config.options.maxStreams, 3);
   assert.equal(config.options.useNestAPI, false);
-  assert.equal(config.options.ffmpeg.debug, true);
 });
-
-test('legacy camera viewer counts remain parseable without appearing in climate settings', async (t) => {
-  t.mock.method(child_process, 'spawnSync', () => ({ error: new Error('No test FFmpeg') }));
-  let schema = JSON.parse(await readFile(new URL('../config.schema.json', import.meta.url), 'utf8'));
-  assert.equal(schema.schema.properties.options.properties.maxStreams, undefined);
-  assert.equal(JSON.stringify(schema.layout).includes('options.maxStreams'), false);
-  for (let [value, expected] of [
-    [1, 1],
-    [2, 2],
-    [3, 3],
-    [4, 4],
-    ['1', 1],
-    [undefined, 2],
-    [0, 2],
-    [5, 2],
-    [1.5, 2],
-    [NaN, 2],
-  ]) {
-    let config = { accounts: [], options: { maxStreams: value }, devices: [], homes: [] };
-    let log = { warn() {}, info() {}, debug() {} };
-    assert.equal(processConfig(config, log, {}).options.maxStreams, expected, 'Viewer count ' + value);
-  }
-});
-
-for (let [label, version, missing, valid] of [
-  ['supported codecs', '7.1', '', true],
-  ['old binary', '7.0', '', false],
-  ['missing AAC', '8.0', 'libfdk_aac', false],
-  ['missing Opus', '8.0', 'libopus', false],
-  ['missing H264', '8.0', 'libx264', false],
-  ['missing Speex', '8.0', 'libspeex', false],
-]) {
-  test('configuration enforces FFmpeg minimum support: ' + label, (context) => {
-    context.mock.method(child_process, 'spawnSync', (binary, args) => ({
-      status: 0,
-      stdout:
-        {
-          '-version': 'ffmpeg version ' + version + ' ',
-          '-encoders': ['libx264', 'libfdk_aac', 'libopus']
-            .filter((name) => name !== missing)
-            .map((name) => ' A..... ' + name)
-            .join('\n'),
-          '-decoders': missing === 'libspeex' ? '' : ' A..... libspeex',
-          '-muxers': '',
-          '-demuxers': '',
-        }[args[0]] ?? '',
-    }));
-    let warnings = [];
-    let log = { warn: (...args) => warnings.push(args), info() {}, debug() {} };
-    let config = processConfig({ options: { ffmpegPath: 'fixture-ffmpeg', debug: true } }, log, {});
-    assert.equal(config.options.ffmpeg.valid, valid);
-    if (valid === true) {
-      assert.equal(config.options.ffmpeg.version, version);
-      assert.equal(config.options.ffmpeg.binary, 'fixture-ffmpeg');
-      assert.equal(
-        warnings.some((entry) => String(entry[0]).includes('minimum support')),
-        false,
-      );
-    } else {
-      assert.equal(
-        warnings.some((entry) => String(entry[0]).includes('minimum support')),
-        true,
-      );
-    }
-  });
-}
 
 test('legacy Google/Nest accounts migrate together and malformed placeholder overrides are discarded', (context) => {
   context.mock.method(child_process, 'spawnSync', () => ({ error: new Error('Fixture probe unavailable') }));
@@ -372,28 +305,17 @@ test('migration reports non-Error failures without losing the in-memory configur
   );
 });
 
-test('configuration publishes a successfully probed hardware encoder and debug details', (context) => {
-  // Simulate a usable VideoToolbox encoder at the process boundary; no hardware is exercised.
-  context.mock.method(os, 'platform', () => 'darwin');
-  context.mock.method(child_process, 'spawnSync', (binary, args) => ({
-    status: 0,
-    stdout:
-      {
-        '-version': 'ffmpeg version 7.1 ',
-        '-encoders': ' V..... libx264\n A..... libfdk_aac\n A..... libopus\n V..... h264_videotoolbox',
-        '-decoders': ' A..... libspeex',
-        '-hide_banner': Buffer.from([0, 0, 0, 1, 0x65, 1]),
-      }[args[0]] ?? '',
-  }));
-  let messages = [];
-  let log = { warn: () => assert.fail('fixture has all required codecs'), info: (...args) => messages.push(args) };
-  let config = processConfig({ options: { ffmpegPath: 'fixture-config-hardware-ffmpeg', debug: true } }, log, {});
-  assert.equal(config.options.ffmpeg.valid, true);
-  assert.equal(config.options.ffmpeg.hwaccel, true);
-  assert.equal(config.options.ffmpeg.binary, 'fixture-config-hardware-ffmpeg');
-  assert.equal(messages.at(-1).at(-1), 'h264_videotoolbox');
-  // Debug logging is deliberately disabled on the runtime logger when not requested.
-  let quiet = { info: () => assert.fail('disabled debug must stay silent'), warn() {} };
-  processConfig({ options: { debug: false } }, quiet, {});
-  quiet.debug('Fixture message');
+test('legacy video settings never probe an executable or appear in the climate schema', async (t) => {
+  const probe = t.mock.method(child_process, 'spawnSync', () => assert.fail('Climate configuration must not launch a video probe'));
+  const schema = JSON.parse(await readFile(new URL('../config.schema.json', import.meta.url), 'utf8'));
+  for (const key of ['maxStreams', 'ffmpegPath', 'ffmpegDebug', 'ffmpegHWAccel']) {
+    assert.equal(schema.schema.properties.options.properties[key], undefined);
+  }
+  const config = processConfig(
+    { options: { maxStreams: 4, ffmpegPath: '/unused/video', ffmpegDebug: true } }, { info() {}, warn() {} }, {},
+  );
+  assert.equal(config.options.useGoogleAPI, true);
+  assert.equal(config.options.eveHistory, true);
+  assert.equal(config.options.ffmpeg, undefined);
+  assert.equal(probe.mock.callCount(), 0);
 });

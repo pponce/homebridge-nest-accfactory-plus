@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Verify real schema parsing, cache isolation, invalid inputs and recovery after failed reads/lookups.
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -5,6 +6,19 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { getProtoRoot, getProtoType, getProtoTypes, clearProtoCache } from '../src/protobuf.js';
+import { fileURLToPath } from 'node:url';
+
+test('climate protocol bundle resolves HVAC and safety types without camera messages', () => {
+  const file = fileURLToPath(new URL('../src/protobuf/root.proto', import.meta.url));
+  const root = getProtoRoot(file);
+  assert.ok(root);
+  root.resolveAll();
+  assert.ok(getProtoType(file, 'nest.trait.hvac.TargetTemperatureSettingsTrait'));
+  assert.ok(getProtoType(file, 'nest.trait.hvac.RemoteComfortSensingSettingsTrait'));
+  const names = getProtoTypes(file).map((type) => type.fullName);
+  assert.ok(names.some((name) => name.startsWith('.nest.trait.product.protect.')));
+  assert.equal(names.some((name) => /camera|doorbell|nexustalk|foyer/i.test(name)), false);
+});
 
 async function fixture(
   context,
@@ -89,3 +103,4 @@ test('protobuf type traversal reports unexpected library failures instead of cra
     }
   }
 });
+

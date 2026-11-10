@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Cover complete platform command routing without extracting or copying private methods.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -81,12 +82,6 @@ for (let [values, label, expected] of [
   ],
   [{ fan_timer_speed: 3 }, 'fan_control_settings', { timerSpeed: 'FAN_SPEED_SETTING_STAGE3' }],
   [{ fan_timer_speed: 0 }, 'fan_control_settings', { timerSpeed: 'FAN_SPEED_SETTING_STAGE2' }],
-  [{ streaming_enabled: true }, 'recording_toggle_settings', { targetCameraState: 'CAMERA_ON', changeModeReason: 2 }],
-  [{ streaming_enabled: false }, 'recording_toggle_settings', { targetCameraState: 'CAMERA_OFF' }],
-  [{ audio_enabled: true }, 'microphone_settings', { enableMicrophone: true }],
-  [{ audio_enabled: false }, 'microphone_settings', { enableMicrophone: false }],
-  [{ indoor_chime_enabled: true }, 'doorbell_indoor_chime_settings', { chimeEnabled: true }],
-  [{ light_brightness: 70 }, 'floodlight_settings', { brightness: 7 }],
   [{ hot_water_boost_active: { state: false } }, 'hot_water_settings', { boostTimerEnd: { seconds: 0, nanos: 0 } }],
   [{ hot_water_temperature: 60 }, 'hot_water_settings', { temperature: { value: 60 } }],
   [{ auto_relock_duration: 120 }, 'bolt_lock_settings', { autoRelockDuration: { seconds: 120 } }],
@@ -112,8 +107,6 @@ for (let [values, label, expected] of [
 for (let [values, label, resource, expected] of [
   [{ bolt_lock: true }, 'bolt_lock', 'DEVICE_TEST', { state: 'BOLT_STATE_EXTENDED' }],
   [{ bolt_lock: false }, 'bolt_lock', 'DEVICE_TEST', { state: 'BOLT_STATE_RETRACTED' }],
-  [{ light_enabled: true }, 'on_off', 'SERVICE_LIGHT', { on: true }],
-  [{ light_enabled: false }, 'on_off', 'SERVICE_LIGHT', { on: false }],
   [{ vacation_mode: true }, 'structure_mode', 'STRUCTURE_HOME', { structureMode: 'STRUCTURE_MODE_VACATION' }],
   [{ vacation_mode: false }, 'structure_mode', 'STRUCTURE_HOME', { structureMode: 'STRUCTURE_MODE_HOME' }],
 ]) {
@@ -144,11 +137,6 @@ for (let enabled of [true, false]) {
 }
 for (let [id, values, expected] of [
   ['topaz.TEST', { ntp_green_led_enable: true }, 'ntp_green_led_enable'],
-  ['quartz.TEST', { indoor_chime_enabled: false }, 'doorbell.indoor_chime.enabled=false'],
-  ['quartz.TEST', { audio_enabled: false }, 'audio.enabled=false'],
-  ['quartz.TEST', { streaming_enabled: true }, 'streaming.enabled=true'],
-  ['quartz.TEST', { statusled_brightness: 1 }, 'statusled.brightness=1'],
-  ['quartz.TEST', { irled_enabled: 'auto_on' }, 'irled.state=auto_on'],
 ]) {
   test('retained REST SET ' + JSON.stringify(values) + ' on ' + id, async (context) => {
     let flow = await platformHarness(context, { source: DATA_SOURCE.NEST, id, value: {} });
@@ -157,7 +145,7 @@ for (let [id, values, expected] of [
     assert.equal(flow.requests.length, before + 1);
     let request = flow.requests.at(-1);
     assert.equal(request[3].includes(expected), true);
-    assert.equal(new URL(request[1]).hostname, id.startsWith('quartz.') === true ? 'webapi.camera.invalid' : 'transport.invalid');
+    assert.equal(new URL(request[1]).hostname, 'transport.invalid');
   });
 }
 
@@ -262,3 +250,4 @@ test('HomeKit room requests go only to automation and never leak into native com
   await assert.rejects(flow.device.set({ uuid: 'DEVICE_TEST', climate_room_target: { ruleId: 'rooms', value: 21 } }));
   assert.equal(flow.commands.length, 0);
 });
+

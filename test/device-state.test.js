@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Exercise normalised device updates through the real lifecycle and real HAP services.
 // Matrices cover upstream transitions independently of HomeKit writes and retain cached identity.
 import assert from 'node:assert/strict';
@@ -13,7 +14,7 @@ import { LOW_BATTERY_LEVEL } from '../src/consts.js';
 
 let C = hap.Characteristic;
 let classes = {};
-for (let name of ['thermostat', 'heatlink', 'lock', 'protect', 'tempsensor', 'homeaway', 'weather', 'floodlight']) {
+for (let name of ['thermostat', 'heatlink', 'lock', 'protect', 'tempsensor', 'homeaway', 'weather']) {
   classes[name] = (await importSource(new URL('../src/plugins/' + name + '.js', import.meta.url))).default;
 }
 HomeKitDevice.PLUGIN_NAME = 'device-state-test';
@@ -309,30 +310,6 @@ for (let [mode, characteristic, expectedKey] of [
     assert.deepEqual(flow.warnings, []);
   });
 }
-for (let hasLight of [true, false]) {
-  test('floodlight exposes light controls only with the capability: ' + hasLight, async (context) => {
-    // Exercise the light-specific subclass hook; camera/HKSV lifecycle is covered separately.
-    let flow = await setup(context, 'floodlight', { has_light: hasLight, light_enabled: false, light_brightness: 50 });
-    if (hasLight === true) {
-      let service = flow.device.lightService;
-      assert.equal(await service.getCharacteristic(C.On).handleGetRequest(), false);
-      assert.equal(await service.getCharacteristic(C.Brightness).handleGetRequest(), 50);
-      assert.equal(service.getCharacteristic(C.Brightness).props.minStep, 10);
-      await service.getCharacteristic(C.On).handleSetRequest(true);
-      await service.getCharacteristic(C.Brightness).handleSetRequest(70);
-      assert.deepEqual(flow.writes, [
-        { uuid: 'DEVICE_TEST', light_enabled: true },
-        { uuid: 'DEVICE_TEST', light_brightness: 70 },
-      ]);
-      flow.device.deviceData.has_light = false;
-      await flow.device.onAdd();
-      assert.equal(flow.device.accessory.services.includes(service), false);
-    }
-    assert.equal(flow.device.lightService, undefined);
-    assert.deepEqual(flow.warnings, []);
-  });
-}
-
 for (let name of ['thermostat', 'heatlink', 'lock', 'protect', 'tempsensor', 'homeaway', 'weather']) {
   test(name + ' repeated setup reuses existing services and removal releases them', async (context) => {
     let flow = await setup(context, name);
@@ -827,3 +804,4 @@ for (let [humidifier, dehumidifier, expected] of [
     assert.deepEqual(flow.writes, []);
   });
 }
+

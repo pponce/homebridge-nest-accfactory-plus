@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Verify cached discovery across split cloud messages, late parents and unrelated updates without media or network I/O.
 import assert from 'node:assert/strict';
 import { importSource } from './helpers/import-source.js';
@@ -8,19 +9,15 @@ import { config, fixtures, home } from './helpers/discovery-fixtures.js';
 
 let modules = new Map();
 let base = 'data:text/javascript,' + encodeURIComponent('export default class { static makeValidHKName(name) { return name; } }');
-for (let name of ['camera', 'doorbell', 'floodlight', 'thermostat', 'heatlink', 'protect', 'homeaway', 'lock']) {
+for (let name of ['thermostat', 'heatlink', 'protect', 'homeaway', 'lock']) {
   let location = new URL('../src/plugins/' + name + '.js', import.meta.url);
   let source = (await readFile(location, 'utf8')).replace(/from '([^']+)'/g, (match, specifier) => {
     let target =
       specifier === '../HomeKitDevice.js'
         ? base
-        : specifier === './camera.js'
-          ? modules.get('camera').url
-          : ['./camera/streamer.js', './camera/nexustalk.js', './camera/webrtc.js'].includes(specifier) === true
-              ? 'data:text/javascript,export default class {}'
-              : specifier.startsWith('.') === true
-                ? new URL(specifier, location).href
-                : specifier;
+        : specifier.startsWith('.') === true
+          ? new URL(specifier, location).href
+          : specifier;
     return 'from ' + JSON.stringify(target);
   });
   let url = location.href;
@@ -95,3 +92,4 @@ for (let fixture of fixtures) {
     });
   }
 }
+

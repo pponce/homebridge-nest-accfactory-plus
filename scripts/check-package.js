@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const packed = JSON.parse(execFileSync(npm, ['pack', '--ignore-scripts', '--json'], { encoding: 'utf8' }))[0];
 const tarball = path.resolve(packed.filename);
-const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'nest-climate-package-'));
+fs.mkdirSync('maintenance/checks/package-runs', { recursive: true });
+const temporary = fs.mkdtempSync(path.resolve('maintenance/checks/package-runs/install-'));
 try {
   for (const required of [
     'dist/index.js',
@@ -58,13 +58,29 @@ try {
     'dist/web-dashboard.js',
     'dist/web-dashboard-auth.js',
     'dist/web-dashboard-config.js',
-    'dist/plugins/camera/streamer.js',
-    'dist/plugins/camera/talkback.js',
+    'NOTICE',
+    'THIRD_PARTY_NOTICES.md',
+    'licenses/fakegato-history-LICENSE',
+    'licenses/homebridge-lib-LICENSE',
+    'dist/licenses/HomeKitDevice/LICENSE',
+    'dist/licenses/HomeKitHistory/LICENSE',
+    'dist/licenses/fetchWrapper/LICENSE',
     'dist/supportdump.js',
   ]) {
     assert.ok(
       packed.files.some((file) => file.path === required),
       'Package missing ' + required,
+    );
+  }
+  const unsupported = new RegExp(
+    '^(?:dist/plugins/(?:camera(?:/|\\.)|doorbell\\.|floodlight\\.)|dist/res/|dist/ringbuffer\\.' +
+    '|dist/protobuf/(?:googlehome/|nest/nexustalk|.*/product/(?:camera|doorbell)\\.proto))',
+  );
+  for (const file of packed.files) {
+    assert.equal(
+      unsupported.test(file.path),
+      false,
+      'Package contains unsupported camera code: ' + file.path,
     );
   }
   fs.writeFileSync(path.join(temporary, 'package.json'), '{"private":true}');
@@ -85,6 +101,8 @@ try {
   assert.equal(markup, fs.readFileSync(path.join(root, 'homebridge-ui/dashboard/index.html'), 'utf8'));
   assert.equal(fs.existsSync(path.join(root, 'homebridge-ui/public/climate/index.html')), false);
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json')));
+  assert.equal(pkg.dependencies.werift, undefined);
+  assert.equal(pkg.dependencies['@evan/opus'], undefined);
   const schema = JSON.parse(fs.readFileSync(path.join(root, 'config.schema.json')));
   assert.equal(pkg.name, registered[0]);
   assert.equal(schema.pluginAlias, registered[1]);
@@ -107,3 +125,4 @@ try {
 } finally {
   fs.rmSync(temporary, { recursive: true, force: true });
 }
+

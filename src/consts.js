@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Shared Constants and Definitions
 // Part of homebridge-nest-accfactory
 //
@@ -9,25 +10,21 @@
 // - Define supported device types and account types
 // - Expose API resource mappings (Nest REST and Google protobuf)
 // - Define timing intervals and operational limits
-// - Provide fallback media resources for camera streaming
-// - Specify minimum runtime and FFmpeg requirements
 //
 // Features:
 // - Device type definitions used for module loading and HomeKit mapping
 // - Protobuf resource mappings for device identification
 // - Nest API bucket definitions for REST polling/subscription
 // - Timer intervals for polling, cooldowns, and timeouts
-// - FFmpeg minimum version requirement for streaming support
-// - Resource paths and fallback H264 frames for offline states
 // - Temperature, elevation, and duration constraints
 // - Logging level definitions
 //
 // Notes:
 // - This module contains no runtime logic — constants only
 // - Imported throughout the codebase for consistency and reuse
-// - Changes here may affect multiple subsystems (devices, streaming, APIs)
+// - Changes here may affect multiple subsystems (devices, configuration, APIs)
 //
-// Code version 2026.10.16
+// Code version 2026.11.10
 // Mark Hulskamp
 'use strict';
 
@@ -39,11 +36,8 @@ import url from 'node:url';
 export const MIN_NODE_VERSION = 22; // Minimum required Node.js version
 
 export const TIMERS = {
-  CAMERA_EVENTS: { name: 'camera_events', interval: 2000 }, // Camera events polling interval (ms)
   WEATHER: { name: 'weather', interval: 300000 }, // Weather location data refresh interval (ms)
   NEST_API: { name: 'nest-api', interval: 10000 }, // Nest API request timeout (ms)
-  TALKBACK_AUDIO: { name: 'talkback-audio', interval: 1000 }, // Audio talkback timeout (ms)
-  DOORBELL_COOLDOWN: { name: 'doorbell-cooldown', interval: 60000 }, // Cooldown timer for doorbell events (ms)
   MOTION_COOLDOWN: { name: 'motion-cooldown', interval: 60000 }, // Cooldown timer for motion events (ms)
 };
 
@@ -83,20 +77,6 @@ export const PROTOBUF_RESOURCES = {
     'nest.resource.NestProtect2BatteryPoweredResource',
     'nest.resource.NestProtect2Resource',
   ],
-  CAMERA: [
-    'google.resource.SpencerResource',
-    'google.resource.VenusResource',
-    'google.resource.UsticaResource',
-    'google.resource.LinosaResource',
-    'google.resource.RhodesResource',
-    'nest.resource.NestCamIndoorResource',
-    'nest.resource.NestCamIQResource',
-    'nest.resource.NestCamIQOutdoorResource',
-    'nest.resource.NestCamOutdoorResource',
-    'google.resource.GoogleNewmanResource',
-  ],
-  DOORBELL: ['nest.resource.NestHelloResource', 'google.resource.GreenQuartzResource', 'google.resource.VenusResource'],
-  FLOODLIGHT: ['google.resource.NeonQuartzResource', 'google.resource.AzizResource'],
   CONNECT: ['nest.resource.NestConnectResource'],
   DETECT: ['nest.resource.NestDetectResource'],
   GUARD: ['nest.resource.NestGuardResource'],
@@ -112,7 +92,6 @@ export const NEST_API_BUCKETS = [
   'message_center',
   'metadata',
   'occupancy',
-  'quartz',
   'safety',
   'safety_summary',
   'structure',
@@ -131,9 +110,6 @@ export const DEVICE_TYPE = {
   THERMOSTAT: 'Thermostat',
   TEMPSENSOR: 'TemperatureSensor',
   PROTECT: 'Protect',
-  CAMERA: 'Camera',
-  DOORBELL: 'Doorbell',
-  FLOODLIGHT: 'FloodlightCamera',
   WEATHER: 'Weather',
   HEATLINK: 'Heatlink',
   LOCK: 'Lock',
@@ -150,12 +126,8 @@ export const DEVICE_CATEGORY_MAP = {
   [DEVICE_TYPE.WEATHER]: 10,
   [DEVICE_TYPE.HOMEAWAY]: 10,
   [DEVICE_TYPE.ALARM]: 11,
-  [DEVICE_TYPE.CAMERA]: 17,
-  [DEVICE_TYPE.FLOODLIGHT]: 17,
-  [DEVICE_TYPE.DOORBELL]: 18,
 };
 
-export const FFMPEG_VERSION = '7.1';
 
 export const ACCOUNT_TYPE = {
   NEST: 'Nest',
@@ -193,19 +165,6 @@ export const FAN_DURATION_TIMES = [
   604800, // 1w
 ];
 
-export const RESOURCE_PATH = './res';
-export const RESOURCE_IMAGES = {
-  CAMERA_OFFLINE: 'Nest_camera_offline.jpg',
-  CAMERA_OFF: 'Nest_camera_off.jpg',
-  CAMERA_TRANSFER: 'Nest_camera_transfer.jpg',
-};
-
-export const RESOURCE_FRAMES = {
-  CAMERA_OFFLINE: 'Nest_camera_offline.h264',
-  CAMERA_OFF: 'Nest_camera_off.h264',
-  CAMERA_TRANSFER: 'Nest_camera_transfer.h264',
-};
-
 export const LOG_LEVELS = {
   INFO: 'info',
   SUCCESS: 'success',
@@ -219,3 +178,4 @@ export const NESTLABS_MAC_PREFIX = '18B430';
 export const MIN_ELEVATION = 0;
 
 export const MAX_ELEVATION = 8848;
+

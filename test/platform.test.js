@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Exercise registration, device discovery and cache/shutdown boundaries using the real platform modules.
 // Temporary plugin fixtures isolate invalid modules without changing the production registry.
 import assert from 'node:assert/strict';
@@ -158,3 +159,4 @@ test('automation runs with web access disabled and restores a separate cached pr
   await platform.automation.tick();
   assert.equal(removed[0][2][0], accessory);
 });
+

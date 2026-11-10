@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Verify protobuf-only Heat Link and temperature sensor discovery, identity and related-state updates.
 import assert from 'node:assert/strict';
 import { importSource } from './helpers/import-source.js';
@@ -253,3 +254,4 @@ for (let association of [null, {}, { deviceId: { resourceId: '' } }, { deviceId:
     assert.deepEqual(tempsensor(undefined, raw, { options: {} }), {});
   });
 }
+

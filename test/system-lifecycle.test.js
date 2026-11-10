@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Drive discovery decisions, cached identity and account/source ownership through the public platform lifecycle.
 import assert from 'node:assert/strict';
 import hap from './helpers/homebridge-hap.js';
@@ -32,7 +33,7 @@ test('platform waits for a full mapping then delivers partial updates to the sam
   assert.equal(flow.device.accessory, accessory);
   assert.equal(flow.registered.length, 1);
 });
-for (let type of [DEVICE_TYPE.CAMERA, DEVICE_TYPE.WEATHER]) {
+for (let type of [DEVICE_TYPE.PROTECT, DEVICE_TYPE.WEATHER]) {
   test('excluded cached ' + type + ' is unregistered once without creating a device', async (context) => {
     let uuid = HomeKitDevice.generateUUID('platform-harness', { version: 2.7, hap }, 'FIXTURE');
     let cached = new hap.Accessory('Excluded', uuid);
@@ -52,9 +53,9 @@ for (let type of [DEVICE_TYPE.CAMERA, DEVICE_TYPE.WEATHER]) {
     );
   });
 }
-for (let type of [DEVICE_TYPE.CAMERA, DEVICE_TYPE.DOORBELL, DEVICE_TYPE.FLOODLIGHT, DEVICE_TYPE.THERMOSTAT]) {
+for (let type of [DEVICE_TYPE.THERMOSTAT, DEVICE_TYPE.PROTECT]) {
   test(type + ' source switching preserves identity and honours Nest fallback policy', async (context) => {
-    let selected = 'quartz.TEST';
+    let selected = 'topaz.TEST';
     let flow = await platformHarness(context, {
       source: DATA_SOURCE.NEST,
       id: selected,
@@ -63,28 +64,14 @@ for (let type of [DEVICE_TYPE.CAMERA, DEVICE_TYPE.DOORBELL, DEVICE_TYPE.FLOODLIG
       map: (raw) => (raw[selected] === undefined ? {} : { FIXTURE: { full: true, data: { ...data, nest_google_device_uuid: selected } } }),
     });
     let accessory = flow.device.accessory;
-    assert.equal(flow.device.deviceData.nest_google_device_uuid, 'quartz.TEST');
+    assert.equal(flow.device.deviceData.nest_google_device_uuid, 'topaz.TEST');
     selected = 'DEVICE_TEST';
     await flow.send(selected, { fixture: {} });
     assert.equal(flow.device.deviceData.nest_google_device_uuid, 'DEVICE_TEST');
-    selected = 'quartz.TEST';
+    selected = 'topaz.TEST';
     await flow.send('DEVICE_TRIGGER', { fixture: {} });
-    assert.equal(flow.device.deviceData.nest_google_device_uuid, type === DEVICE_TYPE.THERMOSTAT ? 'DEVICE_TEST' : 'quartz.TEST');
+    assert.equal(flow.device.deviceData.nest_google_device_uuid, 'DEVICE_TEST');
     assert.equal(flow.device.accessory, accessory);
-    assert.equal(flow.registered.length, 1);
-  });
-}
-for (let type of [DEVICE_TYPE.CAMERA, DEVICE_TYPE.DOORBELL, DEVICE_TYPE.FLOODLIGHT]) {
-  test(type + ' account refresh changes credentials only for its selected resource owner', async (context) => {
-    let flow = await platformHarness(context, { type });
-    let before = structuredClone(flow.device.deviceData.apiAccess);
-    let other = { ...flow.connection, cameraAuth: { token: 'other-account-token' } };
-    flow.connections.set('other', other);
-    await flow.authorise('other', other, { wasAuthorised: true });
-    assert.deepEqual(flow.device.deviceData.apiAccess, before);
-    flow.connection.cameraAuth = { token: 'refreshed-owner-token' };
-    await flow.authorise('account', flow.connection, { wasAuthorised: true });
-    assert.deepEqual(flow.device.deviceData.apiAccess, flow.connection.cameraAuth);
     assert.equal(flow.registered.length, 1);
   });
 }
@@ -114,3 +101,4 @@ test('a failed device mapper is reported and later data can recover without rest
   await flow.send('DEVICE_TEST', { fixture: { retry: true } });
   assert.equal(flow.registered.length, 1);
 });
+

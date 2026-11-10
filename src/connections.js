@@ -1,11 +1,12 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Connections
 // Part of homebridge-nest-accfactory
 //
 // Manages account-level Nest/Google connection state.
 //
 // Provides a centralised registry for configured account connections,
-// authentication state, timers, gRPC transports, camera authentication
-// details, and pending snapshot waiters.
+// authentication state, timers and gRPC transports
+// and connection lifecycle state.
 //
 // Responsibilities:
 // - Build runtime connection entries from processed configuration
@@ -16,7 +17,6 @@
 // - Create and manage gRPC transports
 // - Handle connection cleanup and shutdown
 // - Release transports and clear timers safely
-// - Resolve/cleanup pending snapshot waiters during disconnect
 //
 // Notes:
 // - Connections are stored internally using a Map keyed by UUID
@@ -24,12 +24,11 @@
 // - runtime cleanup releases transient connection resources but keeps scheduled lifecycle timers intact
 // - shutdown() fully cleans up all connections and clears the registry
 //
-// Code version 2026.09.17
+// Code version 2026.11.10
 // Mark Hulskamp
 'use strict';
 
 // Define nodejs module requirements
-import { Buffer } from 'node:buffer';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { setTimeout, clearTimeout } from 'node:timers';
@@ -101,12 +100,9 @@ export default class Connections {
         observeTimer: undefined,
 
         grpcTransport: undefined,
-        cameraAuth: undefined,
-        snapshotWaiters: new Map(),
 
         referer: fieldTest === true ? 'home.ft.nest.com' : 'home.nest.com',
         restAPIHost: fieldTest === true ? 'home.ft.nest.com' : 'home.nest.com',
-        cameraAPIHost: fieldTest === true ? 'camera.home.ft.nest.com' : 'camera.home.nest.com',
         grpcEndpointHost: fieldTest === true ? 'apigw.ft.nest.com' : 'apigw.production.nest.com',
         protobufAPIHost: fieldTest === true ? 'grpc-web.ft.nest.com' : 'grpc-web.production.nest.com',
       };
@@ -320,7 +316,6 @@ export default class Connections {
         throw new Error('Google authentication returned no access token');
       }
 
-      let googleOAuth2Token = tokenData.access_token.trim();
       let oauthRefreshSeconds = Number(tokenData.expires_in) - 300;
       let googleRefreshSeconds = Number.isFinite(oauthRefreshSeconds) === true ? Math.min(Math.max(60, oauthRefreshSeconds), 3300) : 3300;
 
@@ -360,13 +355,6 @@ export default class Connections {
       await this.#applyAuthorisedConnection(
         uuid,
         sessionData,
-        {
-          key: 'Authorization',
-          value: 'Basic ',
-          token: sessionData.access_token,
-          oauth2: googleOAuth2Token,
-          fieldTest: connection.fieldTest === true,
-        },
         googleRefreshSeconds,
         isRetry === true
           ? 'Successfully performed token refresh using ' + accountLabel + ' credentials for connection "%s"'
@@ -389,53 +377,12 @@ export default class Connections {
     let connection = this.#connections.get(uuid);
 
     try {
-      // Legacy Nest accounts first exchange their configured access token for
-      // a camera API session cookie.
-      let loginResponse = await fetchWrapper(
-        'post',
-        new URL('/api/v1/login.login_nest', 'https://webapi.' + connection.cameraAPIHost).href,
-        {
-          withCredentials: true,
-          headers: {
-            Referer: 'https://' + connection.referer,
-            Origin: 'https://' + connection.referer,
-            'User-Agent': USER_AGENT,
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Sec-Fetch-Mode': 'cors',
-            'Sec-Fetch-Site': 'same-origin',
-          },
-        },
-        Buffer.from('access_token=' + connection.access_token, 'utf8'),
-      );
-
-      let loginData = await loginResponse.json();
-
-      if ((loginData?.items?.[0]?.session_token?.trim?.() ?? '') === '') {
-        let error = new Error(
-          (loginData?.status_detail ? String(loginData.status_detail) : '') +
-            (loginData?.status_description ? ' (' + String(loginData.status_description) + ')' : '') +
-            (loginData?.status_detail || loginData?.status_description ? '' : 'Nest login failed with status ' + loginData.status),
-        );
-        error.name = 'NestAuthError';
-        error.code = loginData.status;
-        error.message = loginData?.status_description || 'Error';
-        throw error;
-      }
-
-      let nestToken = loginData.items[0].session_token;
-
       let sessionData = await this.#fetchSession(connection, 'Basic ' + connection.access_token);
 
       // Store authorised runtime state and schedule token refresh.
       await this.#applyAuthorisedConnection(
         uuid,
         sessionData,
-        {
-          key: 'cookie',
-          value: connection.fieldTest === true ? 'website_ft=' : 'website_2=',
-          token: nestToken,
-          fieldTest: connection.fieldTest === true,
-        },
         3600 * 24,
         isRetry === true
           ? 'Successfully performed token refresh using ' + accountLabel + ' credentials for connection "%s"'
@@ -474,7 +421,7 @@ export default class Connections {
     let data = await response.json();
 
     // Without an access token the connection cannot subscribe, observe, or make
-    // authenticated camera/weather requests, so fail this auth attempt clearly.
+    // authenticated data requests, so fail this auth attempt clearly.
     if (
       (data?.access_token?.trim?.() ?? '') === '' ||
       (data?.userid?.trim?.() ?? '') === '' ||
@@ -487,7 +434,7 @@ export default class Connections {
     return data;
   }
 
-  async #applyAuthorisedConnection(uuid, sessionData, cameraAuth, refreshSeconds, successMessage, isRetry) {
+  async #applyAuthorisedConnection(uuid, sessionData, refreshSeconds, successMessage, isRetry) {
     let connection = this.#connections.get(uuid);
     let refreshSecondsSafe =
       Number.isFinite(Number(refreshSeconds)) === true ? Math.max(60, Number(refreshSeconds)) : CONNECTION_REFRESH_FALLBACK;
@@ -499,7 +446,7 @@ export default class Connections {
 
     this.#log?.[isRetry === true ? 'debug' : 'success']?.(successMessage, connection.name);
 
-    // Drop old transports/waiters before installing the refreshed session.
+    // Drop old transports before installing the refreshed session.
     this.#cleanupRuntime(uuid);
 
     // Mutate the live connection object so callers holding a reference see
@@ -511,7 +458,6 @@ export default class Connections {
       transport_url: sessionData?.urls?.transport_url,
       weather_url: sessionData?.urls?.weather_url,
       token: sessionData.access_token,
-      cameraAuth,
       grpcTransport:
         this.#config?.options?.useGoogleAPI === true
           ? new GrpcTransport({
@@ -526,7 +472,6 @@ export default class Connections {
               },
             })
           : undefined,
-      snapshotWaiters: new Map(),
       refreshDelay: refreshSecondsSafe * 1000,
       retryDelay: CONNECTION_RETRY_INITIAL,
       refreshFailed: false,
@@ -612,23 +557,10 @@ export default class Connections {
     }
 
     // Runtime cleanup is used during re-auth paths. Keep lifecycle timers
-    // intact; only release transient transport/waiter state.
+    // intact; only release transient transport state.
     connection.grpcTransport?.release?.();
     connection.grpcTransport = undefined;
 
-    if (connection.snapshotWaiters instanceof Map !== true) {
-      return;
-    }
-
-    // Resolve waiters rather than reject so in-flight snapshot requests can
-    // continue through their normal fallback path during disconnect/shutdown.
-    for (let waiter of connection.snapshotWaiters.keys()) {
-      if (typeof waiter === 'function') {
-        waiter();
-      }
-    }
-
-    connection.snapshotWaiters.clear();
   }
 
   #cleanup(uuid) {
@@ -666,3 +598,4 @@ export default class Connections {
     this.#clear();
   }
 }
+

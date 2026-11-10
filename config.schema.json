@@ -1,4 +1,5 @@
 {
+    "$comment": "Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.",
     "pluginAlias": "NestClimateCntrl",
     "pluginType": "platform",
     "singular": true,

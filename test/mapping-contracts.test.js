@@ -1,3 +1,4 @@
+// Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE.
 // Verify mapper contracts and exclusion precedence across all supported discovery fixtures and data sources.
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -300,3 +301,4 @@ for (let passed of [false, true]) {
     }
   });
 }
+
