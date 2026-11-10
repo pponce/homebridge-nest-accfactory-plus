@@ -20,7 +20,7 @@ The standalone dashboard provides a visual interface for daily use and supported
 
 The same climate application is available in **Homebridge → Plugins → Nest Climate Cntrl → Settings**. Open **Menu → Accounts & web access** there for Google/Nest credentials and web login, certificate and network settings. Named rules and live controls are available in both interfaces.
 
-The runtime starts only with a usable, non-excluded Nest or Google account. Without one, no climate listeners, automation or discovery run. Homebridge Settings opens **Accounts & web access** when no usable account is saved. Add an account, select **Save changes** and restart the bridge. Once an account is saved, future visits open **Overview**, including when the bridge is temporarily unavailable. Once configured, the Homebridge interface works with standalone web access disabled. Standalone web access defaults off; creating web login credentials does not enable it.
+The runtime starts only with a usable, non-excluded Nest or Google account. Without one, no climate listeners, automation or discovery run. Homebridge Settings opens **Accounts & web access** when no usable account is saved. Add an account, use **Homebridge’s Save button at the bottom of the window**, and follow its restart prompt. Once an account is saved, future visits open **Overview**, including when the bridge is temporarily unavailable. Once configured, the Homebridge interface works with standalone web access disabled. Standalone web access defaults off; creating web login credentials does not enable it.
 
 Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
 
@@ -34,7 +34,7 @@ The standalone dashboard uses a persistent sidebar on wider desktop screens. Res
 
 1. Open **Homebridge → Plugins → Nest Climate Cntrl → Settings → Menu → Accounts & web access**. Add your Nest or Google credentials if needed.
 2. Select **Enable standalone web dashboard** and create a **web username and password**. Use at least 8 characters for the password. This login is separate from Nest, Google and Homebridge.
-3. Select **Save changes** and restart the Nest child bridge. Initial account and web login setup works before the bridge is running. Changing an existing web login requires the bridge to be running.
+3. Select **Save web login** if you are creating or changing the separate dashboard login. Then use **Homebridge’s Save button at the bottom of the window** to save connection settings and follow its restart prompt. Initial account and web login setup works before the bridge is running. Changing an existing web login requires the bridge to be running.
 4. Open the configured address, usually `https://<homebridge-host>:9444`. The default HTTPS port is **9444**.
 
 The web server is off by default. Under **Menu → Accounts & web access → Web connection mode**, choose how browsers reach it:
@@ -397,7 +397,7 @@ For background on radiant response and stored heat, see [Google's True Radiant e
 
 ## Restart after saving
 
-Changes to Apple Home accessories, such as Eco switches or a separate humidity sensor, require a child-bridge restart. After saving, the dashboard offers **Restart child bridge** when Homebridge UI can authenticate locally and identify this exact running Nest child bridge. Save or discard unsaved edits before restarting.
+Changes to Apple Home accessories, such as Eco switches or a separate humidity sensor, require a child-bridge restart. In the standalone dashboard, after saving, the dashboard offers **Restart child bridge** when Homebridge UI can authenticate locally and identify this exact running Nest child bridge. Save or discard unsaved edits before restarting.
 
 The button restarts only the identified Nest child bridge. The dashboard briefly disconnects, checks for a new running instance, and asks you to sign in again. Previously active rules continue after current readings and checks unless restart pausing is enabled; intentional pauses remain in effect. Restart requests are not repeated automatically if their result cannot be confirmed.
 
@@ -414,9 +414,9 @@ Each enabled Home presence rule exposes one combined occupancy sensor, named aft
 
 Homebridge plugin Settings and the standalone dashboard use the same climate application: Overview, Sensors & fans, Climate rules, and Settings. Rule editors, field help, drag ordering, heating recommendations, manual-target policy, Apple Home room-temperature display, runtime status, and live controls are available in both. Standalone web access does not need to be enabled to use the Homebridge interface.
 
-Use **Save changes** for climate configuration. It checks the saved revision before writing; a change made elsewhere requires reloading. The outer Homebridge Save button is disabled while this application is open. **Enabled** describes the saved rule permission; **Active**, **Waiting**, and **Paused** describe its current execution.
+Use **Save changes** for live climate configuration. Restart-required edits enable Homebridge’s bottom **Save** button and display instructions to use it. Settings are validated against the saved revision; a change made elsewhere requires reloading. **Enabled** describes the saved rule permission; **Active**, **Waiting**, and **Paused** describe its current execution.
 
-Open **Menu → Accounts & web access** to edit account credentials and web-server settings in the same interface. Select **Save changes** on that page, then restart the bridge. Save or discard climate edits before saving account settings. Switching pages keeps unsaved edits. If configuration changes elsewhere, discard the account draft to load the latest saved settings. The standalone dashboard shows account status here; credentials are managed through Homebridge.
+Open **Menu → Accounts & web access** to edit account credentials and web-server settings in the same interface. Use Homebridge’s bottom **Save** button and follow its restart prompt. Save a new or changed web login separately with **Save web login**. Save or discard climate edits before saving account settings. Switching pages keeps unsaved edits. If configuration changes elsewhere, discard the account draft to load the latest saved settings. The standalone dashboard shows account status here; credentials are managed through Homebridge.
 
 A reported built-in Nest sensor can guide a temperature rule even when Nest omits its room-sensor scheduling mode or empty paired-sensor list. These missing fields still prevent automatic changes to native sensor schedules. A rule combining official Nest room sensors with Homebridge sensors requires confirmed native sensor setup.
 
@@ -437,3 +437,12 @@ A direct Nest command displays the requested target while checking feedback ever
 The editor checks current connectivity, Eco, temperature lock, mode, capability and target limits. A waiting or restoring rule must establish its controller before editing. If the target, controller or mode changes during an edit, cancel and reopen the editor to review the current setting. Background refresh preserves unsent values. **Cancel** and Escape close an unsent edit without changing the thermostat.
 
 Temperature action editing is exclusive to the standalone web dashboard. The Homebridge configuration interface retains the informational thermostat overview and the climate rule configuration fields.
+
+
+## Saving and restarting
+
+In **Homebridge plugin Settings**, rule edits, time windows, temperature units, and heating tuning use the climate interface’s **Save changes** button and apply without a restart. Edits that require a restart, such as separate humidity accessories, automatically enable **Homebridge’s Save button at the bottom of the window**. A notice directs you there. Homebridge saves the staged configuration, closes the plugin window, and offers its restart action for the affected bridge. When live settings and restart settings are edited together, that same Save includes both. Discard removes the staged edits. Invalid settings keep the native Save button disabled until corrected.
+
+Account and web-server settings also use Homebridge’s bottom Save button. **Save web login** writes the separate private login credentials immediately; it does not save or enable the web server. Discarding connection edits does not undo a saved web login.
+
+In the **standalone dashboard**, use **Save changes**. If the saved settings require a restart, the dashboard offers **Restart child bridge** when available. Click it to request the restart; editing is temporarily disabled while the dashboard checks for reconnection. Sign in again if prompted. Changing a setting by itself never restarts the bridge.

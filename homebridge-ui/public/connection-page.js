@@ -1,8 +1,8 @@
 import { setupDraft, validateSetup } from './connection-config.js';
 
-export function mountConnectionPage(root, { host, confirm, saved }) {
+export function mountConnectionPage(root, { host, confirm }) {
   let current; let draft; let dirty = false; let busy = false;
-  let username = 'admin'; let password = ''; let accountStatus = {}; let loadGeneration = 0;
+  let username = 'admin'; let password = ''; let accountStatus = {}; let loadGeneration = 0; let stageGeneration = 0;
   const node = (tag, text, className) => {
     const item = document.createElement(tag); if (text !== undefined) item.textContent = text;
     if (className) item.className = className; return item;
@@ -10,7 +10,21 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
   const message = node('p', '', 'callout'); message.hidden = true; message.setAttribute('role', 'status');
   const say = (text) => { message.textContent = text; message.hidden = !text; };
   const webLive = node('div', undefined, 'connection-web-status');
-  const changed = () => { dirty = true; say(''); };
+  const loginNeedsSave = () => draft.webDashboard.enabled && (Boolean(password) || !accountStatus.accountConfigured || username !== accountStatus.username);
+  async function stage() {
+    const generation = ++stageGeneration;
+    host.invalidateDraft('accounts');
+    try {
+      validateSetup(draft);
+      if (loginNeedsSave()) throw new Error('Save your web login here, then use Homebridge’s Save button at the bottom to save the connection settings.');
+      const result = await host.stageSetup(structuredClone(draft), current.revision);
+      if (result && generation === stageGeneration) say('Use Homebridge’s Save button at the bottom of this window, then follow its restart prompt. Your connection changes have not been saved yet.');
+    } catch (error) { if (generation === stageGeneration) say(error.message); }
+  }
+  const changed = () => {
+    dirty = true; stageGeneration++; host.invalidateDraft('accounts'); say('Checking connection settings…');
+    queueMicrotask(() => { const button = root.querySelector('[type="submit"]'); if (button) button.hidden = !loginNeedsSave(); stage(); });
+  };
   function field(parent, label, object, key, { type = 'text', choices, help, refresh = false } = {}) {
     const wrapper = node('label', undefined, 'field'); wrapper.append(node('span', label));
     const input = node(choices ? 'select' : 'input'); input.setAttribute('aria-label', label);
@@ -42,7 +56,7 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
     draft.accounts.forEach((account, index) => {
       const card = node('div', undefined, 'connection-account'); const heading = node('div', undefined, 'section-heading tight');
       heading.append(node('h4', 'Account ' + (index + 1)), action('Remove account ' + (index + 1), async () => {
-        if (!await confirm('Remove this account?', 'Save changes to disconnect this account from the plugin.', 'Remove account')) return;
+        if (!await confirm('Remove this account?', 'Use Homebridge’s Save button to disconnect this account from the plugin.', 'Remove account')) return;
         draft.accounts.splice(index, 1); changed(); render();
       }, 'button danger')); card.append(heading);
       const grid = node('div', undefined, 'form-grid');
@@ -77,15 +91,16 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
       web.append(node('h4', accountStatus.accountConfigured ? 'Web login configured' : 'Create your web login'), login);
     }
     fields.append(accounts, web);
-    const actions = node('div', undefined, 'connection-actions'); const save = node('button', busy ? 'Saving…' : 'Save changes', 'button primary'); save.type = 'submit';
+    const actions = node('div', undefined, 'connection-actions'); const save = node('button', busy ? 'Saving web login…' : 'Save web login', 'button primary'); save.type = 'submit'; save.hidden = !loginNeedsSave();
     actions.append(save, action('Discard changes', async () => {
       if (dirty && !await confirm('Discard account changes?', 'Your unsaved account and web access edits will be discarded.', 'Discard changes')) return;
       await load();
     })); fields.append(actions); form.append(fields); form.addEventListener('submit', saveChanges); root.append(form);
-    root.append(node('p', 'Account and web-server changes take effect after restarting Homebridge or this plugin’s child bridge.', 'small-note'));
+    root.append(node('p', 'Save account and web-server changes with Homebridge’s Save button at the bottom of this window. Homebridge will offer the appropriate restart. The web login is saved separately and does not start the web server.', 'small-note'));
   }
   async function load() {
     try {
+      stageGeneration++; await host.clearDraft('accounts');
       current = await host.loadSetup(); draft = setupDraft(current.blocks[0]); accountStatus = current.webAccount || {};
       username = accountStatus.username || 'admin'; password = ''; dirty = false;
       if (!current.configured && !draft.accounts.length) draft.accounts.push({ name: '', type: 'google', authMethod: 'issueTokenCookie' });
@@ -104,19 +119,17 @@ export function mountConnectionPage(root, { host, confirm, saved }) {
   }
   async function saveChanges(event) {
     event.preventDefault(); if (busy) return;
-    let configurationSaved = false;
     try {
       validateSetup(draft);
-      if (draft.webDashboard.enabled && accountStatus.accountConfigured && username !== accountStatus.username && !password) throw new Error('Enter a password to change the web login.');
-      const credentials = draft.webDashboard.enabled && (password || !accountStatus.accountConfigured);
-      if (credentials && (!/^[a-zA-Z0-9_.-]{1,64}$/.test(username) || password.length < 8 || password.length > 128)) throw new Error('Use a web username of 1–64 letters, numbers, dots, dashes or underscores, and a password of 8–128 characters.');
-      busy = true; render();
-      current = await host.saveSetup(draft, current.revision); configurationSaved = true;
-      if (credentials) await host.saveWebAccount({ username, password, revision: current.revision });
-      password = ''; dirty = false; await saved(); await load();
-      say('Saved. Restart Homebridge or this plugin’s child bridge to connect with these settings.');
-    } catch (error) { say((configurationSaved ? 'Connection settings were saved. Web login setup still needs attention. ' : '') + error.message); }
+      if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(username) || password.length < 8 || password.length > 128) throw new Error('Use a web username of 1–64 letters, numbers, dots, dashes or underscores, and a password of 8–128 characters.');
+      busy = true; host.invalidateDraft('accounts'); render();
+      await host.saveWebAccount({ username, password, revision: current.revision, draft });
+      accountStatus = { accountConfigured: true, username }; password = ''; dirty = true;
+      await stage();
+    } catch (error) { say(error.message); }
     finally { busy = false; if (current) render(); }
   }
-  return { load, hasEdits: () => dirty || busy };
+  const controls = { load, hasEdits: () => dirty || busy, restage: stage };
+  host.connectSetup(controls);
+  return controls;
 }

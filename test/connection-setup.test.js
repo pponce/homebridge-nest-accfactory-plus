@@ -68,8 +68,27 @@ test('first-install web login uses saved bridge identity and stores only a priva
   assert.equal(await fs.readFile(file, 'utf8'), bytes);
   await write([]);
   current = await setup.read();
-  await assert.rejects(setup.saveAccount({ ...credentials, revision: current.revision }), /Save your Nest/);
+  await assert.rejects(setup.saveAccount({ ...credentials, revision: current.revision }), /Configure your Nest/);
   await write([block, block]);
   current = await setup.read();
-  await assert.rejects(setup.saveAccount({ ...credentials, revision: current.revision }), /Save your Nest/);
+  await assert.rejects(setup.saveAccount({ ...credentials, revision: current.revision }), /single Climate platform/);
+});
+
+
+test('first install can prepare a web login without saving staged connection settings', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'climate-setup-draft-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const configPath = path.join(root, 'config.json');
+  const original = JSON.stringify({ platforms: [] });
+  await fs.writeFile(configPath, original);
+  const setup = new ConnectionSetup(configPath, root, () => {}, () => import('../src/web-dashboard-auth.js'));
+  const current = await setup.read();
+  const draft = setupDraft({ accounts: [account], webDashboard: { enabled: true } });
+  await setup.saveAccount({ username: 'climate', password: 'fixture-password', revision: current.revision, draft });
+  assert.equal(await fs.readFile(configPath, 'utf8'), original);
+  assert.deepEqual(await setup.accountStatus(), { accountConfigured: true, username: 'climate' });
+  await assert.rejects(setup.saveAccount({
+    username: 'climate', password: 'fixture-password', revision: current.revision,
+    draft: { ...draft, accounts: [] },
+  }), /account/);
 });

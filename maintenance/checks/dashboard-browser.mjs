@@ -1,3 +1,4 @@
+import { WebDashboardConfig } from '../../src/web-dashboard-config.js';
 import { checkRuleWindows } from './dashboard-rule-windows.mjs';
 // Browser fixture only. No Nest, Homebridge or other real device requests are made.
 import http from 'node:http';
@@ -94,6 +95,22 @@ const server = http.createServer(async (request, response) => {
     if (route === '/api/sources') { json(200, sourceData()); return; }
     if (route === '/api/heating-response' && request.method === 'GET') { json(200, { revision: String(revision), rules: [] }); return; }
     if (route === '/api/config' && request.method === 'GET') { json(200, envelope()); return; }
+    if (route === '/api/config/stage' && request.method === 'POST') {
+      if (conflict || body.revision !== String(revision)) { json(409, { error: 'Configuration changed elsewhere.' }); return; }
+      const blocks = structuredClone(body.blocks);
+      const oldDevices = Array.isArray(blocks[0].devices) ? blocks[0].devices : Object.entries(blocks[0].devices || {}).map(([serialNumber, options]) => ({ serialNumber, ...options }));
+      Object.assign(blocks[0], { name: config.name, options: config.options, dashboardTemperatureUnit: config.temperatureUnit,
+        devices: config.devices.map((device) => ({ ...oldDevices.find((old) => old.serialNumber === device.serialNumber), ...device })), climateRuleDrafts: config.rules });
+      const file = path.join(output, 'fixture-config.json');
+      await fs.writeFile(file, JSON.stringify({ platforms: blocks }));
+      const store = new WebDashboardConfig(file, blocks[0], { knownDevices: () => ['T1', 'T2'] });
+      try { json(200, await store.stage({ revision: (await store.snapshot()).revision, config: body.config })); }
+      catch (error) { json(error.status || 400, { error: error.message }); }
+      return;
+    }
+    if (route === '/api/native-save' && request.method === 'POST') {
+      config = structuredClone(body.config); revision++; json(200, envelope()); return;
+    }
     if (route === '/api/config' && request.method === 'PUT') {
       if (conflict || body.revision !== String(revision)) { json(409, { error: 'Configuration changed.' }); return; }
       saves.push(structuredClone(body)); config = structuredClone(body.config); revision++; json(200, envelope()); return;
@@ -141,10 +158,14 @@ try {
       disableSaveButton() { window.outerSave = false; }, enableSaveButton() { window.outerSave = true; },
       showSchemaForm() { window.schemaShown = true; }, hideSchemaForm() { window.schemaShown = false; },
       updatePluginConfig: async (blocks) => { window.staged = blocks; },
-      savePluginConfig: async () => {
+      savePluginConfig: async () => { throw new Error('The embedded app must not save through the SDK'); },
+      clickHomebridgeSave: async () => {
+        if (!window.outerSave) throw new Error('Native Save is disabled');
         if (window.failSave) throw new Error('Fixture save failed');
         window.savedBlocks = structuredClone(window.staged); window.configRevision += '-saved';
         sessionStorage.setItem('saved-blocks', JSON.stringify(window.savedBlocks));
+        if (window.stagedClimate) await fetch('/api/native-save', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-csrf-token': 'fixture-csrf' }, body: JSON.stringify({ config: window.stagedClimate }) });
+        window.restartPrompts = (window.restartPrompts || 0) + 1;
       },
       request: async (route, payload) => {
         if (route === '/plugin-config') return { revision: window.configRevision, blocks: structuredClone(window.savedBlocks) };
@@ -159,9 +180,10 @@ try {
         if (sessionStorage.getItem('runtime-inactive')) throw new Error('Fixture runtime inactive.');
         const response = await fetch('/api' + payload.route, { method: payload.method,
           headers: { 'Content-Type': 'application/json', 'x-csrf-token': 'fixture-csrf' },
-          body: payload.body === undefined ? undefined : JSON.stringify(payload.body) });
+          body: payload.body === undefined ? undefined : JSON.stringify(payload.route === '/config/stage' ? { ...payload.body, blocks: window.savedBlocks } : payload.body) });
         const body = await response.json();
         if (!response.ok) { const error = new Error(body.error); error.error = { status: response.status }; throw error; }
+        if (payload.route === '/config/stage') { body.revision = window.configRevision; window.stagedClimate = body.restartRequired ? payload.body.config : null; }
         return body;
       },
     };
@@ -192,6 +214,30 @@ try {
   await page.waitForFunction(() => document.querySelector('#save-bar').hidden);
   assert.equal(config.options.pauseOnRestart, true);
   assert.equal(config.devices[0].homeKitRoomTemperature, true);
+  // Restart-required edits stage automatically; the plugin never writes them before native Save.
+  const priorSaves = saves.length;
+  const humidity = page.getByRole('switch', { name: 'Separate humidity sensor', exact: false }).first();
+  await humidity.uncheck();
+  await page.waitForFunction(() => window.outerSave);
+  assert.equal(config.devices[0].humiditySensor, true);
+  assert.equal(saves.length, priorSaves);
+  assert.equal(await page.locator('#save').isVisible(), false);
+  assert.match(await page.locator('#save-detail').textContent(), /Homebridge’s Save button/);
+  await page.screenshot({ path: path.join(output, 'native-save-desktop.png'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: path.join(output, 'native-save-mobile.png'), fullPage: true });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await humidity.check();
+  await page.waitForFunction(() => !window.outerSave && !document.querySelector('#save').disabled);
+  await humidity.uncheck();
+  await page.waitForFunction(() => window.outerSave);
+  await page.evaluate(() => window.homebridge.clickHomebridgeSave());
+  assert.equal(await page.evaluate(() => window.restartPrompts), 1);
+  assert.equal(config.devices[0].humiditySensor, false);
+  assert.equal(saves.length, priorSaves);
+  await page.reload();
+  await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor();
   await navigate(page, 'Climate rules');
   await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -217,26 +263,30 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.screenshot({ path: path.join(output, 'accounts-mobile.png'), fullPage: true });
   await page.setViewportSize({ width: 1280, height: 1000 });
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Saved. Restart Homebridge', { exact: false }).waitFor();
+  await page.getByRole('button', { name: 'Save web login', exact: true }).click();
+  await page.waitForFunction(() => window.outerSave);
   assert.equal(await page.evaluate(() => window.webAccounts.length), 1);
   assert.equal(await page.getByLabel('Web password', { exact: true }).inputValue(), '');
-  assert.equal(await page.evaluate(() => window.savedBlocks[0].devices.T1.custom), 'keep');
+  assert.equal(await page.evaluate(() => window.savedBlocks[0].webDashboard?.enabled === true), false);
+  await page.evaluate(() => window.homebridge.clickHomebridgeSave());
+  assert.equal(await page.evaluate(() => window.savedBlocks[0].devices[0].custom), 'keep');
   assert.equal(await page.evaluate(() => window.savedBlocks[0].rules.temperature[0].id), 'preserved');
   assert.equal(await page.evaluate(() => window.savedBlocks[0]._bridge.username), 'AA:BB:CC:DD:EE:FF');
   assert.equal(await page.evaluate(() => JSON.stringify(window.savedBlocks).includes('fixture-password')), false);
-  await page.getByLabel('Account name', { exact: true }).fill('Edited account');
+  await page.reload();
+  await navigate(page, 'Accounts & web access');
   await page.evaluate(() => { window.configRevision = 'disk-conflict'; });
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.getByLabel('Account name', { exact: true }).fill('Edited account');
   await page.getByText('Configuration changed elsewhere.', { exact: false }).waitFor();
   assert.equal(await page.getByLabel('Account name', { exact: true }).inputValue(), 'Edited account');
   assert.equal(await page.evaluate(() => window.savedBlocks[0].accounts[0].name), 'Home');
+  assert.equal(await page.evaluate(() => window.outerSave), false);
   await page.reload();
   await navigate(page, 'Settings');
-  await page.locator('#dashboard-name').fill('A conflicting edit');
   conflict = true;
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Newer configuration found', { exact: true }).waitFor();
+  await page.locator('#dashboard-name').fill('A conflicting edit');
+  await page.getByText('Configuration changed elsewhere.', { exact: false }).waitFor();
+  assert.equal(await page.evaluate(() => window.outerSave), false);
   assert.equal(config.name, 'A little more comfort.');
   conflict = false;
   // An asset failure must keep connection setup available without claiming the package is missing.
@@ -268,14 +318,14 @@ try {
   await page.getByLabel('Account name', { exact: true }).fill('My Nest home');
   await page.getByLabel('Account type', { exact: true }).selectOption('nest');
   await page.getByLabel('Nest access token', { exact: true }).fill('fixture-access-token');
+  await page.waitForFunction(() => window.outerSave);
+  assert.equal(await page.evaluate(() => window.savedBlocks.length), 0);
   await page.evaluate(() => { window.failSave = true; });
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Fixture save failed', { exact: true }).waitFor();
+  assert.match(await page.evaluate(() => window.homebridge.clickHomebridgeSave().catch((error) => error.message)), /Fixture save failed/);
   assert.equal(await page.getByLabel('Account name', { exact: true }).inputValue(), 'My Nest home');
   assert.equal(await page.evaluate(() => window.savedBlocks.length), 0);
   await page.evaluate(() => { window.failSave = false; });
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Saved. Restart Homebridge', { exact: false }).waitFor();
+  await page.evaluate(() => window.homebridge.clickHomebridgeSave());
   assert.equal(await page.evaluate(() => window.savedBlocks[0].webDashboard.enabled), false);
   assert.equal(await page.evaluate(() => window.webAccounts.length), 0);
   await page.reload();
@@ -284,8 +334,9 @@ try {
   await navigate(page, 'Accounts & web access');
   await page.getByRole('switch', { name: 'Enable standalone web dashboard', exact: true }).check();
   await page.getByLabel('Web password', { exact: true }).fill('fixture-first-login');
-  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await page.getByText('Saved. Restart Homebridge', { exact: false }).waitFor();
+  await page.getByRole('button', { name: 'Save web login', exact: true }).click();
+  await page.waitForFunction(() => window.outerSave);
+  await page.evaluate(() => window.homebridge.clickHomebridgeSave());
   assert.equal(await page.evaluate(() => window.webAccounts.length), 1);
   assert.deepEqual(errors, []);
   console.log('Homebridge shared climate UI: restricted assets, load failure, settings, rules, persistence, conflicts, setup and offline access passed.');

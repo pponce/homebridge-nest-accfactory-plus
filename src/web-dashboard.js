@@ -476,7 +476,7 @@ export class WebDashboard {
   }
 
   // Shared climate routes: web sessions and authenticated Homebridge IPC use the same handlers.
-  async handleClimate(request, response, route) {
+  async handleClimate(request, response, route, homebridgeUi = false) {
     const mutation = !['GET', 'HEAD'].includes(request.method);
     if (request.method === 'GET' && route === '/api/status') {
       this.send(response, 200, this.dashboard.snapshot());
@@ -514,6 +514,10 @@ export class WebDashboard {
     }
     if (request.method === 'GET' && route === '/api/config') {
       this.send(response, 200, await this.configuration());
+      return;
+    }
+    if (homebridgeUi && request.method === 'POST' && route === '/api/config/stage') {
+      this.send(response, 200, await this.config.stage(await this.body(request)));
       return;
     }
     if (request.method === 'PUT' && route === '/api/config') {
