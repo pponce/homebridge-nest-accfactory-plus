@@ -387,6 +387,7 @@ function route(focus = true) {
     if (node.dataset.page === state.page) node.setAttribute('aria-current', 'page'); else node.removeAttribute('aria-current');
   });
   [$('page-eyebrow').textContent, $('page-title').textContent] = pageDetails[state.page];
+  if (state.page === 'accounts' && connectionPage && !connectionPage.hasEdits()) connectionPage.load();
   if (state.page === 'rules') renderRules();
   if (state.page === 'settings' && state.config) refreshHeating();
   if (focus) { $('page-title').focus({ preventScroll: true }); window.scrollTo({ top: 0, behavior: 'auto' }); }

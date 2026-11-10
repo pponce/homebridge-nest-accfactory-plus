@@ -99,6 +99,8 @@ export function mountConnectionPage(root, { host, confirm }) {
     root.append(node('p', 'Save account and web-server changes with Homebridge’s Save button at the bottom of this window. Homebridge will offer the appropriate restart. The web login is saved separately and does not start the web server.', 'small-note'));
   }
   async function load() {
+    if (busy) return;
+    busy = true; if (current) render();
     try {
       stageGeneration++; await host.clearDraft('accounts');
       current = await host.loadSetup(); draft = setupDraft(current.blocks[0]); accountStatus = current.webAccount || {};
@@ -116,9 +118,11 @@ export function mountConnectionPage(root, { host, confirm }) {
         } catch { /* Invalid runtime URLs are not displayed. */ }
       }).catch(() => { /* Account editing does not require a running bridge. */ });
     } catch { root.replaceChildren(node('p', 'Account settings could not be read. Refresh Homebridge and try again.', 'callout danger')); }
+    finally { busy = false; if (current) render(); }
   }
   async function saveChanges(event) {
     event.preventDefault(); if (busy) return;
+    if (!loginNeedsSave()) { await stage(); return; }
     try {
       validateSetup(draft);
       if (!/^[a-zA-Z0-9_.-]{1,64}$/.test(username) || password.length < 8 || password.length > 128) throw new Error('Use a web username of 1–64 letters, numbers, dots, dashes or underscores, and a password of 8–128 characters.');
