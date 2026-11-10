@@ -4,10 +4,6 @@
 
 **Nest Climate Cntrl is climate automation plugin for Homebridge.** Use Nest thermostats with temperature sensors (can be nest or any homebridge exposed temp sensor), room fans and presence sensors exposed by other Homebridge plugins. Manage your climate rules through a Homebridge configuration interface or a standalone web dashboard.
 
-This project builds on the Nest/Google integrations in [Nest Accfactory](https://github.com/n0rt0nthec4t/homebridge-nest-accfactory), with its own climate rule engine, interfaces, package and platform identity. It is maintained and supported separately by [pponce](https://github.com/pponce). Upstream authors retain credit for their contributions; this is an independent fork, not an official Nest Accfactory edition.
-
-[Sponsor pponce on GitHub](https://github.com/sponsors/pponce) · [Support via PayPal](https://paypal.me/pponcedeleon)
-
 **Stable release:** install `homebridge-nest-climate-cntrl` from npm. Climate rules are optional and disabled until you enable and save them.
 
 **Moving from Nest Accfactory or Nest Accfactory Plus requires fresh setup and pairing.** The package is `homebridge-nest-climate-cntrl` and the platform is **`NestClimateCntrl`**. Recreate affected Apple Home room assignments, scenes and automations; follow the [cutover instructions](MIGRATION.md). Existing Climate Cntrl installations can update normally.
@@ -19,6 +15,7 @@ Temperature groups and fan rules can run all day or be set to run at certain tim
 The focus is **temperature, heating, room airflow and occupancy-based climate automation**. Camera, doorbell and floodlight-camera accessories, video streaming and HomeKit Secure Video are outside this plugin's supported scope. Nest × Yale lock and weather accessories are also excluded.
 
 The climate features extend the underlying Nest integration to coordinate devices across Homebridge plugins:
+While it might be possible to create complicated automations with other temp sensors in homekit to change the nest temp this plugin makes it much easier to create climate rules to control the target temp based on multiple sensors, expose a home accupancy sensor based on states of other occupancy sensors in your home and also motion based on cameras etc and also create fan controls based on temp.  These rules can also vary by time of day.
 
 | Feature | What you can do |
 | --- | --- |
