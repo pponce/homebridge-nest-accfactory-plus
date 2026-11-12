@@ -24,7 +24,7 @@ Release v0.6.3 of `pponce/homebridge-nest-climate-cntrl` with recovery for accep
 
 ## Validation and limitations
 
-The new recovery tests failed on the original implementation and pass with the changes. Local focused automation, dashboard, command, source, native sensor and web tests pass. Local npm dependency installation is denied by the network policy; Chromium cannot create its required socket. Transport, full platform, coverage, lint and browser checks must complete on GitHub before release. Hardware confirmation remains outstanding; the evidence establishes stale plugin feedback but does not identify why the original stream stopped reporting.
+The new recovery tests failed on the original implementation and pass with the changes. All 187 focused local tests and 37 publisher/installer scenarios pass. GitHub validated code commit `9210500be9c3cdc3552b4d3eb018f2cc6f20fab1`: all six Node/Homebridge combinations, full tests, lint, coverage floors, migration checks, package checks and both browser suites passed. Runs: https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/43128879305 and https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/43128879283. PR: https://github.com/pponce/homebridge-nest-climate-cntrl/pull/27. Local dependency installation and Chromium are unavailable in this environment; the full checks ran in GitHub. Hardware confirmation remains outstanding; the evidence establishes stale plugin feedback but does not identify why the original stream stopped reporting.
 
 ## Decisions
 
@@ -35,8 +35,7 @@ The new recovery tests failed on the original implementation and pass with the c
 
 ## Next steps
 
-1. Finish helper validation and inspect the diff.
-2. Push a branch commit and open a PR; run the full GitHub test matrix and browser suite, fixing any failures.
-3. Fast-forward main only after validation, retaining the release workflow's test gates.
-4. Verify the v0.6.3 GitHub release, its notes and package/checksum assets.
-5. Provide the complete SSH-safe npm publication launcher. No npm publication or live Homebridge installation has been performed.
+1. Merge the validated change to main, retaining the release workflow's test gates.
+2. Verify the v0.6.3 GitHub release, notes and package/checksum assets.
+3. Provide `maintenance/publish-0.6.3.sh`, which verifies and publishes the tested release archive and prints a browser sign-in URL when needed.
+4. After installation, resume an intentionally paused temperature group and verify that Nest feedback matches the app. No npm publication or live Homebridge installation has been performed by the agent.
