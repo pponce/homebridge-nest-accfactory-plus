@@ -23,6 +23,7 @@ let statusAvailable = true;
 let conflict = false;
 let ecoEnabled = false;
 let manualRoomTarget = null;
+let feedbackFixture = null;
 const commands = [];
 const saves = [];
 const ruleActions = [];
@@ -31,7 +32,8 @@ const automation = () => ({ available: true, rules: Object.values(config.rules).
   ...(rule.kind === 'temperature' && manualRoomTarget !== null ? { desiredTemperature: manualRoomTarget,
     savedDesiredTemperature: rule.desiredTemperature, targetSource: 'manual', hasSchedule: true, nestTarget: 24 } : {}),
   paused: pausedRules.has(rule.id), phase: !rule.enabled ? 'disabled' : pausedRules.has(rule.id) ? 'paused' : 'active',
-  reason: !rule.enabled ? 'Rule is disabled.' : pausedRules.has(rule.id) ? 'Paused by you.' : 'Automatic rule is running.' })) });
+  reason: !rule.enabled ? 'Rule is disabled.' : pausedRules.has(rule.id) ? 'Paused by you.' : 'Automatic rule is running.',
+  ...(rule.kind === 'temperature' && feedbackFixture ? feedbackFixture : {}) })) });
 const day = 86400000;
 const runtime = Array.from({ length: 7 }, (_, index) => ({ date: new Date(Date.now() - (6 - index) * day).toISOString().slice(0, 10), heating: [4700, 6500, 3800, 7200, 5100, 6100, 4200][index], cooling: [0, 900, 1200, 0, 600, 0, 700][index], observed: index === 6 ? 33000 : 86400 }));
 const snapshot = () => ({
@@ -243,6 +245,25 @@ try {
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('#save-bar').hidden);
   assert.equal(config.rules.temperature[0].manualTargetBehavior, 'pause');
+  const beforeFeedbackCommands = commands.length;
+  feedbackFixture = { enabled: true, phase: 'paused', paused: true, desiredTemperature: 22.22222222,
+    nestTarget: 19, nestUpdatedAt: Date.now() - 1800000,
+    reason: 'Nest feedback did not confirm the heating target within two minutes.',
+    lastAction: { at: Date.now() - 120000, value: 22.22222222, message: 'Heating target accepted; awaiting device feedback.' } };
+  await page.locator('#refresh-status').click();
+  await page.waitForFunction(() => document.querySelector('#rule-runtime')?.textContent.includes('Reported Nest target: 19'));
+  assert.match(await page.locator('#rule-runtime').textContent(), /Last requested Nest target: 22\.2/);
+  assert.match(await page.locator('#rule-runtime').textContent(), /Last Nest device update:/);
+  assert.equal((await page.locator('#rule-runtime').textContent()).includes('awaiting device feedback'), false);
+  feedbackFixture.nestTarget = 22;
+  feedbackFixture.lastAction.status = 'unconfirmed';
+  feedbackFixture.lastAction.message = 'Heating command accepted, but its target was not confirmed. Automatic control is paused.';
+  await page.locator('#refresh-status').click();
+  await page.waitForFunction(() => document.querySelector('#rule-runtime')?.textContent.includes('Reported Nest target: 22'));
+  assert.equal(commands.length, beforeFeedbackCommands, 'Status checks never send temperature commands');
+  await page.screenshot({ path: path.join(output, 'temperature-feedback-paused.png'), fullPage: true });
+  feedbackFixture = null;
+  await page.locator('#refresh-status').click();
   await page.locator('[data-kind="fan"]').click();
   await page.getByText('Set rule priority', { exact: false }).waitFor();
   await page.locator('[data-kind="presence"]').click();
@@ -347,3 +368,4 @@ try {
 } finally {
   await browser?.close(); await new Promise((resolve) => server.close(resolve));
 }
+

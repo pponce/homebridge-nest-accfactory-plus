@@ -101,6 +101,47 @@ test('configured startup is idempotent and standalone web access remains off by 
   assert.equal(normalizeWebDashboard({ enabled: true }).enabled, true);
 });
 
+test('dashboard recovery refreshes the active Google observer and invalidates its cached devices without commands', async (t) => {
+  const f = await fixture(t, { options: { useNestAPI: false, eveHistory: false } });
+  let authorise;
+  let consume;
+  let refreshed = 0;
+  let canRefresh = true;
+  const pending = Promise.withResolvers();
+  const connection = {
+    name: 'Fixture', type: 'Google', authorised: true,
+    grpcTransport: {
+      observe: (...args) => { consume = args.at(-1); return pending.promise; },
+      refreshObserve: () => { refreshed += 1; return canRefresh; },
+      command: () => assert.fail('Refreshing observation must not send a thermostat command'),
+    },
+  };
+  const connections = new Map([['A', connection]]);
+  connections.start = () => {};
+  connections.shutdown = () => { connection.authorised = false; pending.resolve({ status: 0 }); };
+  t.mock.method(Connections, 'fromConfig', (config, supplied) => {
+    authorise = supplied.onAuthorised;
+    return connections;
+  });
+  await f.callbacks.get('didFinishLaunching')();
+  await authorise('A', connection);
+  await consume({ traitStates: [{ traitId: { resourceId: 'DEVICE_T', traitLabel: 'target_temperature_settings' },
+    stateTypes: ['ACCEPTED'], patch: { values: { enabled: { value: true } } } }] });
+  const dashboard = f.platform.dashboard;
+  dashboard.update('T', 'Thermostat', { nest_google_device_uuid: 'DEVICE_T', hvac_state: 'off' }, 'A');
+  assert.equal(dashboard.refreshFeedback('T'), true);
+  assert.equal(connection.climateObserving, false);
+  assert.equal(dashboard.devices.get('T').needsUpdate, true);
+  assert.equal(connection.authorised, true);
+  assert.equal(refreshed, 1);
+  canRefresh = false;
+  assert.equal(dashboard.refreshFeedback('T'), false);
+  assert.equal(dashboard.refresh('unknown'), false);
+  connection.authorised = false;
+  assert.equal(dashboard.refresh('DEVICE_T'), false);
+  assert.equal(refreshed, 2);
+});
+
 test('connection preparation failures are caught at the Homebridge event boundary', async (t) => {
   const f = await fixture(t);
   t.mock.method(Connections, 'fromConfig', () => {
@@ -197,3 +238,4 @@ test('cached accessory restoration errors are logged and do not escape into Home
   assert.ok(f.logs.some((entry) => entry[0] === 'warn' && entry[1].includes('cached Nest accessory')));
   assert.ok(!JSON.stringify(f.logs).includes('SENSITIVE-FIXTURE'));
 });
+

@@ -136,6 +136,39 @@ test('unary timeout cancels just its request and preserves the pooled session', 
   assert.equal(flow.requests[0].destroyed, true);
   assert.notEqual(flow.sessions[0].destroyed, true);
 });
+
+test('feedback refresh closes only this transport’s Observe request and preserves commands and other observers', async (context) => {
+  let flow = setup(context, () => {});
+  let second = new Grpc({ protoPath, endpointHost: 'https://grpc.invalid', getAuthHeader: () => 'fixture' });
+  context.after(() => second.release());
+  assert.equal(flow.transport.refreshObserve(), false);
+  let observed = flow.transport.observe(prefix, 'ResourceApi', 'SendCommand', {}, () => {});
+  let unary = flow.transport.command(prefix, 'ResourceApi', 'SendCommand', {});
+  let other = second.observe(prefix, 'ResourceApi', 'SendCommand', {}, () => {});
+  await setImmediate();
+  assert.equal(flow.requests.length, 3);
+  assert.equal(flow.transport.refreshObserve(), true);
+  assert.equal(flow.transport.refreshObserve(), false, 'A closing observer is not refreshed again');
+  assert.equal((await observed).status, Grpc.STATUS.OK);
+  assert.equal(flow.requests[0].closed, true);
+  assert.notEqual(flow.requests[1].closed, true);
+  assert.notEqual(flow.requests[2].closed, true);
+  assert.notEqual(flow.sessions[0].destroyed, true);
+  flow.requests[1].emit('trailers', { 'grpc-status': '0' });
+  flow.requests[1].close();
+  assert.equal((await unary).status, Grpc.STATUS.OK);
+  assert.equal(second.refreshObserve(), true);
+  assert.equal((await other).status, Grpc.STATUS.OK);
+  assert.equal(flow.transport.refreshObserve(), false);
+  let replacement = flow.transport.observe(prefix, 'ResourceApi', 'SendCommand', {}, () => {});
+  await setImmediate();
+  assert.equal(flow.requests.length, 4);
+  flow.requests[3].emit('data', Buffer.alloc(5));
+  flow.requests[3].emit('trailers', { 'grpc-status': '0' });
+  flow.requests[3].close();
+  assert.equal((await replacement).status, Grpc.STATUS.OK);
+  assert.equal(flow.sessions.length, 1);
+});
 for (let observe of [false, true]) {
   test((observe === true ? 'Observe' : 'unary') + ' transient failure retries after backoff', async (context) => {
     let flow = setup(context, (request, count) => {
@@ -340,3 +373,4 @@ test('gRPC stale session close and release cannot evict its pooled replacement',
   assert.equal(flow.sessions.length, 2);
   assert.notEqual(flow.sessions[1].destroyed, true);
 });
+

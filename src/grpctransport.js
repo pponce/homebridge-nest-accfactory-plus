@@ -78,6 +78,7 @@ export default class GrpcTransport {
   #session = undefined;
   #sessionKey = '';
   #attachedSessionKey = '';
+  #observeRefreshers = new Set();
 
   #endpointHost = '';
   #userAgent = '';
@@ -137,6 +138,16 @@ export default class GrpcTransport {
     // Load protobuf schema once via the shared protobuf helper.
     // Session creation is lazy and happens on first request.
     this.#protobufRoot = getProtoRoot(options?.protoPath, this.log);
+  }
+
+  // Restart only observation through the caller's existing reconnect loop.
+  // Unary commands and the shared authenticated session remain untouched.
+  refreshObserve() {
+    let refreshed = false;
+    for (let refresh of this.#observeRefreshers) {
+      refreshed = refresh() || refreshed;
+    }
+    return refreshed;
   }
 
   release() {
@@ -354,6 +365,7 @@ export default class GrpcTransport {
     let authHeader = this.#getAuthHeader?.();
     let request = undefined;
     let requestTimeout = undefined;
+    let refreshObserve;
     let timeout = Number.isFinite(Number(options?.timeout)) && Number(options.timeout) > 0 ? Number(options.timeout) : 0;
     let isObserveStream = timeout === 0;
     let errorCode = undefined;
@@ -447,6 +459,20 @@ export default class GrpcTransport {
       }
 
       request = this.#session.request(requestHeaders);
+
+      if (isObserveStream) {
+        refreshObserve = () => {
+          if (isTerminal || request.closed || request.destroyed) {
+            return false;
+          }
+          result.status = GrpcTransport.STATUS.CANCELLED;
+          result.message = 'Refreshing observation';
+          isTerminal = true;
+          request.close(http2.constants.NGHTTP2_CANCEL);
+          return true;
+        };
+        this.#observeRefreshers.add(refreshObserve);
+      }
 
       request.on('response', (headers) => {
         httpStatus = Number(headers?.[':status']);
@@ -760,6 +786,7 @@ export default class GrpcTransport {
     } finally {
       // Request cleanup must also run after write/errors; leave the shared HTTP/2 session reusable.
       isTerminal = true;
+      this.#observeRefreshers.delete(refreshObserve);
       clearTimeout(requestTimeout);
       try {
         request?.destroy();
@@ -886,3 +913,4 @@ export default class GrpcTransport {
     return result;
   }
 }
+

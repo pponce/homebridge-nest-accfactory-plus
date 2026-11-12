@@ -198,6 +198,17 @@ export default class NestAccfactory {
               lastUpdate: account.climateLastUpdate ?? null,
             })),
           command: (id, values, origin) => this.#set(this.#rawData?.[id]?.connection, id, values, origin),
+          refresh: (id) => {
+            const raw = this.#rawData?.[id];
+            const connection = this.#connections?.get(raw?.connection);
+            if (this.#stopping || raw?.source !== DATA_SOURCE.GOOGLE || !connection?.authorised ||
+                connection.grpcTransport?.refreshObserve?.() !== true) {
+              return false;
+            }
+            connection.climateObserving = false;
+            this.dashboard?.invalidate(raw.connection);
+            return true;
+          },
           log: this.log,
         });
         await this.dashboard.start();
@@ -1593,3 +1604,4 @@ export default class NestAccfactory {
   }
 
 }
+

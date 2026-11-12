@@ -1,4 +1,11 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.3
+
+- Refresh Nest observation once when an accepted automatic heating target remains unconfirmed for 30 seconds. Keep the original temperature command and update interval; do not resend the command.
+- Continue temperature-group control when matching Nest feedback returns. Wait for room sensors during recovery, preserve manual target changes, and pause if confirmation remains unavailable after two minutes.
+- Distinguish a feedback timeout from a conflicting Nest target. Show the requested target, latest reported target and last device-update time, including while a group is paused.
+- Report heating commands as awaiting confirmation, confirmed or unconfirmed so the execution status reflects the command outcome.
+
 ## v0.6.2
 
 - Remove unsupported camera, doorbell and floodlight implementations, video assets, camera-only protocol definitions and streaming dependencies from the source and published package.
@@ -623,5 +630,6 @@ Apologies for this change, as I can understand what an inconvience and frustrati
 
 - Inital re-coding from Nest_accfactory code base. These projects will now share a common code base
 - Camera/Doorbell support currently removed will re-worked
+
 
 

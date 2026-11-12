@@ -86,10 +86,11 @@ export class RuntimeLedger {
 }
 
 export class ClimateDashboard {
-  constructor(storage, { accounts, command, log }) {
+  constructor(storage, { accounts, command, refresh, log }) {
     this.directory = path.join(storage, 'nest-climate');
     this.accounts = accounts;
     this.command = command;
+    this.refresh = refresh;
     this.log = log;
     this.devices = new Map();
     this.ledger = new RuntimeLedger();
@@ -320,6 +321,19 @@ export class ClimateDashboard {
     }
   }
 
+  refreshFeedback(serial) {
+    const device = this.devices.get(serial);
+    if (device?.type !== 'Thermostat' || !this.accounts().some((account) => account.id === device.account && account.authorised)) {
+      return false;
+    }
+    try {
+      return this.refresh?.(device.id) === true;
+    } catch {
+      this.log?.warn?.('Nest feedback could not be refreshed. Check the thermostat connection.');
+      return false;
+    }
+  }
+
   async setAutomationTarget(serial, value, expected, permitted = () => true) {
     const ready = () => {
       const device = this.devices.get(serial);
@@ -483,4 +497,5 @@ export class ClimateDashboard {
     }
   }
 }
+
 

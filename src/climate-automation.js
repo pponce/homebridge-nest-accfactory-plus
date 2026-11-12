@@ -13,6 +13,7 @@ import { TemperatureSensorSetup, nativeSensorAllowsHeating } from './temperature
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
+const FEEDBACK_REFRESH_DELAY = 30000;
 // Nest's mapped feedback is rounded to 0.5 °C, including whole-Fahrenheit targets.
 // A 0.26 °C tolerance accepts that rounding while detecting the next reported half-degree step.
 const equal = (a, b) => (typeof a === 'number' && typeof b === 'number' ? Math.abs(a - b) < 0.26 : a === b);
@@ -289,7 +290,8 @@ export class ClimateAutomation {
         targetSource: state.roomTarget?.source ?? 'rule',
         manualTargetBehavior: state.rule.kind === 'temperature' ? state.rule.manualTargetBehavior ?? 'follow' : undefined,
         hasSchedule: state.scheduleKey !== undefined && state.scheduleKey !== null,
-        nestTarget: state.nestTarget,
+        nestTarget: target(this.dashboard.devices.get(state.rule.thermostatId)) ?? state.nestTarget,
+        nestUpdatedAt: this.dashboard.devices.get(state.rule.thermostatId)?.lastUpdate,
         proposedTarget: state.proposedTarget,
         nextChangeAt: state.nextChangeAt,
         home: state.home,
@@ -1001,6 +1003,10 @@ export class ClimateAutomation {
 
   observe(key, lease, value, state) {
     if (equal(value, lease.expected)) {
+      if (lease.kind === 'temperature' && lease.pending && state.lastAction) {
+        state.lastAction = { ...state.lastAction, status: 'confirmed', confirmedAt: this.now(),
+          message: 'Heating target confirmed by Nest.' };
+      }
       const fan = lease.kind === 'fan' ? this.sources.get(lease.targetId) : undefined;
       if (fan?.speedAvailable && !lease.pending && Number.isFinite(lease.speedExpected) &&
           Math.abs(fan.speed - lease.speedExpected) >= 0.001) {
@@ -1015,17 +1021,37 @@ export class ClimateAutomation {
       return true;
     }
     if (lease.pending && equal(value, lease.before) && this.now() - lease.sentAt < ACK_TIMEOUT) {
+      if (lease.kind === 'temperature' && !lease.feedbackRefreshAttempted &&
+          this.now() - lease.sentAt >= FEEDBACK_REFRESH_DELAY) {
+        lease.feedbackRefreshAttempted = true;
+        lease.feedbackRefreshed = this.dashboard.refreshFeedback(lease.targetId);
+        // A refresh invalidates the account for all rules until new observations arrive.
+        this.refreshSnapshot();
+      }
       state.phase = 'waiting';
-      state.reason = 'Waiting for the device to report the accepted command.';
+      state.reason = lease.feedbackRefreshed ?
+        'Refreshing Nest feedback to confirm the accepted heating target. The temperature command is not repeated.' :
+        'Waiting for the device to report the accepted command.';
       return false;
     }
     this.leases.delete(key);
     if (lease.kind === 'fan') {
       this.manualFan(lease.targetId, 'The fan changed or did not confirm a command. Review it, then Resume automatic control.');
     } else {
-      this.pause(state, 'The device target/state changed or did not confirm a command. Review it, then Resume automatic control.');
+      this.unconfirmedHeating(state, key, equal(value, lease.before) ?
+        'Nest feedback did not confirm the heating target within two minutes. Check Nest, then Resume automatic control.' :
+        'Nest reported a different heating target from the requested command. Review it, then Resume automatic control.');
     }
     return false;
+  }
+
+  unconfirmedHeating(state, key, reason) {
+    this.leases.delete(key);
+    if (state.lastAction) {
+      state.lastAction = { ...state.lastAction, status: 'unconfirmed',
+        message: 'Heating command accepted, but its target was not confirmed. Automatic control is paused.' };
+    }
+    this.pause(state, reason);
   }
 
   async temperature(state) {
@@ -1038,8 +1064,16 @@ export class ClimateAutomation {
     state.nestTarget = target(device);
     state.roomTemperature = this.temperatureInputs(rule);
     if (!this.connected(device)) {
+      if (lease?.pending && this.now() - lease.sentAt >= ACK_TIMEOUT) {
+        this.unconfirmedHeating(state, key,
+          'Nest feedback was unavailable for two minutes after the heating command. Check Nest, then Resume automatic control.');
+        return;
+      }
       state.phase = 'waiting';
-      state.reason = 'Thermostat connection unavailable. Nest may retain its last target.';
+      state.temperatureControl = lease?.pending ? 'updating' : 'waiting';
+      state.reason = lease?.feedbackRefreshed ?
+        'Refreshing Nest feedback to confirm the accepted heating target. The temperature command is not repeated.' :
+        'Thermostat connection unavailable. Nest may retain its last target.';
       return;
     }
     if (!this.sensorSetup.permits(rule)) {
@@ -1105,6 +1139,16 @@ export class ClimateAutomation {
       return;
     }
     lease = this.leases.get(key);
+    // A refreshed account delivers thermostat and room-sensor traits separately.
+    // Keep the accepted target while those inputs return, without masking a conflicting target.
+    if (lease?.feedbackRefreshed && state.roomTemperature === null && this.now() - lease.sentAt < ACK_TIMEOUT) {
+      if (Number.isFinite(target(device)) && !this.temperatureFeedback(state, device, lease)) {
+        return;
+      }
+      state.phase = 'waiting';
+      state.reason = 'Waiting for selected temperature readings after refreshing Nest feedback.';
+      return;
+    }
     if (
       state.roomTemperature === null ||
       !Number.isFinite(device.data.physical_temperature) ||
@@ -1169,6 +1213,8 @@ export class ClimateAutomation {
     lease.sentAt = this.now();
     state.lastWriteAt = lease.sentAt;
     lease.pending = true;
+    delete lease.feedbackRefreshAttempted;
+    delete lease.feedbackRefreshed;
     this.leases.set(key, lease);
     const epoch = state.targetEpoch;
     await this.persist();
@@ -1192,7 +1238,7 @@ export class ClimateAutomation {
       }
       throw error;
     }
-    state.lastAction = { at: this.now(), value: proposed, message: 'Heating target accepted; awaiting device feedback.' };
+    state.lastAction = { at: this.now(), value: proposed, status: 'accepted', message: 'Heating target accepted; awaiting device feedback.' };
     state.phase = 'waiting';
     state.temperatureControl = 'updating';
   }
@@ -1617,4 +1663,5 @@ export class ClimateAutomation {
     await this.heatingResponse.persist(true);
   }
 }
+
 

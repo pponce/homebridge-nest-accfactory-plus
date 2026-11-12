@@ -1431,7 +1431,9 @@ function renderRuleRuntime(rule) {
   if (runtime.error) host.append(el('p', runtime.error));
   if (runtime.pendingRestorations) host.append(el('p', 'Some owned settings are waiting to be restored. Check equipment connectivity.'));
   host.append(el('strong', current?.phase || 'Not saved'), el('p', current?.reason || 'Save this rule to apply its settings.'));
-  if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Desired room temperature: ' + formatTemp(current.desiredTemperature) + ' · Nest target (adjusted): ' + formatTemp(current.nestTarget)));
+  if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Desired room temperature: ' + formatTemp(current.desiredTemperature) + ' · Reported Nest target: ' + formatTemp(current.nestTarget)));
+  if (current?.kind === 'temperature' && Number.isFinite(current.lastAction?.value)) host.append(el('p', 'Last requested Nest target: ' + formatTemp(current.lastAction.value)));
+  if (Number.isFinite(current?.nestUpdatedAt)) host.append(el('p', 'Last Nest device update: ' + new Date(current.nestUpdatedAt).toLocaleTimeString()));
   if (current?.kind === 'temperature' && current.targetSource === 'manual') host.append(el('p', current.hasSchedule ?
     'Manual room-temperature adjustment · until the next confirmed Nest schedule target.' : 'Manual room-temperature adjustment · until another target change or Resume.'));
   if (current?.kind === 'temperature' && current.targetSource === 'schedule') host.append(el('p', 'Following Nest’s scheduled room temperature.'));
@@ -1440,7 +1442,12 @@ function renderRuleRuntime(rule) {
   for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Manual override · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
   if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
-  if (current?.lastAction) host.append(el('p', current.lastAction.message + ' ' + new Date(current.lastAction.at).toLocaleTimeString()));
+  if (current?.lastAction) {
+    const message = current.kind === 'temperature' && current.phase === 'paused' &&
+      (!current.lastAction.status || current.lastAction.status === 'accepted') ?
+      'Last heating command was accepted. Automatic control is paused; review Nest’s reported target.' : current.lastAction.message;
+    host.append(el('p', message + ' ' + new Date(current.lastAction.confirmedAt || current.lastAction.at).toLocaleTimeString()));
+  }
   renderSensorSetup(host, rule.id, current?.sensorSetup);
   if (current?.enabled) {
     const actions = el('div', undefined, 'timer-buttons');
@@ -1643,3 +1650,4 @@ if (host) {
   await connectionPage.load();
 }
 checkSession();
+

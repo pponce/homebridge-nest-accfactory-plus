@@ -28,6 +28,25 @@ test('dashboard units convert absolute temperatures separately from gaps and pre
 });
 
 const start = Date.parse('2026-11-06T23:59:30Z');
+test('feedback refresh is read-only and limited to an authorised thermostat account', () => {
+  const accounts = [{ id: 'A', authorised: true }];
+  const calls = [];
+  const dashboard = new ClimateDashboard('/tmp/unused-feedback', {
+    accounts: () => accounts,
+    command: () => assert.fail('Feedback refresh must not write a device command'),
+    refresh: (id) => { calls.push(id); return true; },
+  });
+  dashboard.update('T', 'Thermostat', { nest_google_device_uuid: 'DEVICE_T' }, 'A');
+  dashboard.update('S', 'TemperatureSensor', { nest_google_device_uuid: 'DEVICE_S' }, 'A');
+  assert.equal(dashboard.refreshFeedback('missing'), false);
+  assert.equal(dashboard.refreshFeedback('S'), false);
+  accounts[0].authorised = false;
+  assert.equal(dashboard.refreshFeedback('T'), false);
+  accounts[0].authorised = true;
+  assert.equal(dashboard.refreshFeedback('T'), true);
+  assert.deepEqual(calls, ['DEVICE_T']);
+});
+
 test('unexpected request handler errors return a failure without rejecting into the HTTP event loop', async (t) => {
   const f = await fixture(t);
   const warnings = [];
@@ -423,3 +442,4 @@ test('web Nest temperature commands validate modes, limits, capability and stale
   assert.equal(dashboard.temperatureTarget('T').available, false);
   assert.equal(dashboard.temperatureTarget('missing').available, false);
 });
+

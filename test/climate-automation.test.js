@@ -578,7 +578,8 @@ test('Eco, Off, native sensor changes and loss of observation never trigger comp
   f.advance(5 * minute);
   await f.engine.tick();
   assert.equal(f.commands.length, 1);
-  assert.match(f.rule('rooms').reason, /connection unavailable/);
+  assert.match(f.rule('rooms').reason, /feedback was unavailable/);
+  assert.equal(f.rule('rooms').paused, true);
 });
 
 test('schedule boundaries use the scheduled room target even when the numeric Nest target has not changed', async (t) => {
@@ -627,6 +628,115 @@ test('failed or unacknowledged writes pause without repeated cloud commands', as
   await g.engine.tick();
   assert.equal(g.rule('rooms').paused, true);
   assert.equal(g.commands.length, 1);
+});
+
+test('missing heating feedback refreshes observation once and confirms without repeating the command', async (t) => {
+  const f = await fixture(t, {});
+  let refreshes = 0;
+  f.dashboard.refresh = (id) => {
+    assert.equal(id, 'thermostat');
+    refreshes += 1;
+    f.accounts[0].observing = false;
+    f.dashboard.invalidate('A');
+    return true;
+  };
+  f.noAck();
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  f.advance(15000);
+  await f.engine.tick();
+  assert.equal(refreshes, 0);
+  f.advance(15000);
+  await f.engine.tick();
+  assert.equal(refreshes, 1);
+  assert.match(f.rule('rooms').reason, /Refreshing Nest feedback/);
+  assert.equal(f.rule('rooms').paused, false);
+  f.advance(15000);
+  await f.engine.tick();
+  assert.equal(f.commands.length, 1);
+  f.accounts[0].observing = true;
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5, hvac_state: 'off' }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').phase, 'waiting');
+  assert.match(f.rule('rooms').reason, /selected temperature readings/);
+  assert.equal(f.commands.length, 1, 'Partial recovery must not restore the old target before sensors report');
+  f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 20 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').phase, 'active');
+  assert.equal(f.rule('rooms').lastAction.status, 'confirmed');
+  assert.match(f.rule('rooms').lastAction.message, /confirmed by Nest/);
+  assert.equal(f.commands.length, 1);
+  assert.equal(refreshes, 1);
+});
+
+test('feedback refresh cannot extend the heating timeout or resend a command while disconnected', async (t) => {
+  const f = await fixture(t, {});
+  let refreshes = 0;
+  f.dashboard.refresh = () => {
+    refreshes += 1;
+    f.accounts[0].observing = false;
+    f.dashboard.invalidate('A');
+    return true;
+  };
+  f.noAck();
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  f.advance(30000);
+  await f.engine.tick();
+  f.advance(90000);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.match(f.rule('rooms').reason, /feedback.*two minutes/);
+  assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
+  assert.equal(f.engine.leases.size, 0);
+  f.accounts[0].observing = true;
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5, hvac_state: 'off' }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true, 'Late feedback must not silently resume a paused rule');
+  assert.equal(f.rule('rooms').nestTarget, 22.5, 'Paused rule reporting still shows current Nest feedback');
+  assert.equal(f.commands.length, 1);
+  assert.equal(refreshes, 1);
+});
+
+test('a failed feedback refresh remains bounded and does not expose connection details', async (t) => {
+  const f = await fixture(t, {});
+  let refreshes = 0;
+  f.dashboard.refresh = () => {
+    refreshes += 1;
+    throw new Error('SENSITIVE-CONNECTION');
+  };
+  f.noAck();
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  f.advance(30000);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, false);
+  f.advance(30000);
+  await f.engine.tick();
+  assert.equal(refreshes, 1);
+  f.advance(60000);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
+  assert.equal(JSON.stringify(f.engine.snapshot()).includes('SENSITIVE-CONNECTION'), false);
+  assert.equal(f.commands.length, 1);
+});
+
+test('conflicting Nest feedback pauses immediately without a refresh or another temperature write', async (t) => {
+  const f = await fixture(t, {});
+  let refreshes = 0;
+  f.dashboard.refresh = () => { refreshes += 1; return true; };
+  f.noAck();
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 20 }, 'A');
+  f.advance(30000);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.match(f.rule('rooms').reason, /different heating target/);
+  assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
+  assert.equal(refreshes, 0);
+  assert.equal(f.commands.length, 1);
 });
 
 test('room fan hysteresis avoids chatter and respects manual changes', async (t) => {
@@ -1991,3 +2101,4 @@ test('cancelling a subsequent adjustment keeps the original restoration baseline
   assert.equal(f.engine.leases.get('temperature:T').owner, 'day');
   assert.equal(f.engine.leases.get('temperature:T').baseline, 19);
 });
+

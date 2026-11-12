@@ -137,6 +137,8 @@ At the next reported Nest schedule event, the group waits for Nest to confirm it
 
 Off, Eco, heating-mode changes, temperature locks and native sensor changes still take priority. Failed commands, conflicting feedback during a pending adjustment and unconfirmed schedule targets pause control for review. The plugin recognizes its own accepted target writes and does not reinterpret them as manual adjustments.
 
+When an automatic heating command remains unconfirmed for 30 seconds, the plugin refreshes Nest's update stream once. It keeps the original command and waits for the thermostat and selected sensors to report. Matching feedback allows control to continue; a different target or missing confirmation after two minutes pauses the group for review. The command is never resent as part of this recovery. **Execution status** shows the last requested target separately from the latest reported Nest target, the last device-update time, and the command's confirmation outcome. Paused groups keep displaying new Nest readings without resuming automatically.
+
 ### Show the room target in Apple Home
 
 In **Settings → your thermostat → Apple Home temperature display**, enable **Show climate rule temperature in Apple Home**. This setting is **off by default for each thermostat** and takes effect after saving on the next automation check, without restarting the bridge.
@@ -446,3 +448,4 @@ In **Homebridge plugin Settings**, rule edits, time windows, temperature units, 
 Account and web-server settings also use Homebridge’s bottom Save button. **Save web login** writes the separate private login credentials immediately; it does not save or enable the web server. Discarding connection edits does not undo a saved web login.
 
 In the **standalone dashboard**, use **Save changes**. If the saved settings require a restart, the dashboard offers **Restart child bridge** when available. Click it to request the restart; editing is temporarily disabled while the dashboard checks for reconnection. Sign in again if prompted. Changing a setting by itself never restarts the bridge.
+
