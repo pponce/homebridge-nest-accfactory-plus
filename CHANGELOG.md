@@ -1,4 +1,10 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## Unreleased
+
+- Show each rule-assigned room fan on Overview with reported power and speed, the selected rule, individual temperature inputs, their average, run thresholds, speed calculations and pending feedback.
+- Explain combined presence with each source’s current contribution, last observed activity, motion holds, Away delay and manual overrides. Identify unavailable inputs and retain the distinction between current and last-known status.
+- Expand thermostat rule details with sensor readings, the room average, temperature compensation and adjustment limits, target origin and update timing.
+
 ## v0.6.3
 
 - Refresh Nest observation once when an accepted automatic heating target remains unconfirmed for 30 seconds. Keep the original temperature command and update interval; do not resend the command.

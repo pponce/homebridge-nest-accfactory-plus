@@ -1,4 +1,5 @@
 import { WebDashboardConfig } from '../../src/web-dashboard-config.js';
+import { checkRuleExplanations } from './dashboard-rule-explanations.mjs';
 import { checkRuleWindows } from './dashboard-rule-windows.mjs';
 // Browser fixture only. No Nest, Homebridge or other real device requests are made.
 import http from 'node:http';
@@ -198,6 +199,7 @@ try {
   });
   await page.goto(embeddedUrl);
   await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor();
+  await checkRuleExplanations(page, output, 'embedded');
   assert.deepEqual(nestedHtmlRequests, []);
   await checkCompactNavigation(page, output, 'embedded-desktop');
   await page.emulateMedia({ colorScheme: 'dark' });

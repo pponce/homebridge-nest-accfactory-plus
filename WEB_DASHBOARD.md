@@ -12,7 +12,7 @@ The standalone dashboard provides a visual interface for daily use and supported
 
 | Area | What to use it for |
 | --- | --- |
-| **Overview** | Check temperatures, targets, heating/cooling activity and account connectivity. Use supported native Nest controls and inspect schedules and observed runtime. |
+| **Overview** | Check temperatures, targets, heating/cooling activity and account connectivity. See each rule-assigned room fan and combined presence sensor with an explanation of its state. Use supported native Nest controls and inspect schedules and observed runtime. |
 | **Sensors & fans** | Discover configured Homebridge main and child bridges. Search and filter temperature, motion, occupancy and fan sources; inspect their readings and availability. |
 | **Climate rules** | Build named temperature groups, Home/Away rules and room-fan rules with source pickers and current-signal previews. Enable selected rules and inspect their live execution status, timers and pause/resume controls. |
 | **Accounts & web access** | View account and web access status. Manage credentials, optional web access and initial setup from this page in Homebridge Settings. |
@@ -25,6 +25,16 @@ The runtime starts only with a usable, non-excluded Nest or Google account. With
 Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
 
 ## Navigate on phones and in Homebridge
+
+### Understand automatic decisions
+
+**Your room fans** shows one card per fan assigned to a saved rule, including its reported power and speed. Expand **Why this fan and speed?** to see the selected rule and competing rules, individual sensor readings, their equal average, start and stop thresholds, and the speed calculation. Temperature-based speeds include the configured curve and the nearest supported fan setting. The details identify pending device confirmation, update intervals, small speed changes that are held, manual overrides and restoration of the previous setting. A clear run condition can leave a fan on when its previous setting was on.
+
+**Home & away** shows the combined output of each saved presence rule. Expand **Why this presence status?** to see whether each selected motion or occupancy source currently counts toward Home. Motion can continue contributing after the sensor reports clear: the details show the last time the rule observed motion and when the hold expires. Once the combined Home condition clears, the separate Away countdown appears. An unavailable source cannot confirm Away. Manual overrides display their expiry and take priority over sensor contributions.
+
+Under each thermostat, expand **Temperature controlled by** for individual rule calculations: selected sensor readings, room average, desired room target and its origin, Nest’s built-in temperature, the bounded compensation, and the calculated target. Reported and requested Nest targets remain separate, with the minimum adjustment interval shown.
+
+These explanations reflect saved rules and a completed engine evaluation. They do not use unsaved rule edits or send equipment commands. Every explanation includes its evaluation time; stale or disconnected status is identified as unavailable. Source-read times describe when the plugin read a source, and activity times describe what the rule observed, rather than a sensor’s complete event history.
 
 Use **☰ Menu** to switch between **Overview**, **Sensors & fans**, **Climate rules**, **Settings** and **Accounts & web access**. In Homebridge Settings and on narrow web screens, navigation starts collapsed so the page can use the available width. The menu opens over the page and closes when you select a destination, click outside, press Escape or move keyboard focus out of it. The current page is highlighted. On the standalone mobile dashboard, the menu also includes **Sign out**.
 

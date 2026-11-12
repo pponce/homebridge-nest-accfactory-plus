@@ -10,6 +10,7 @@ import { scheduleTimeZone, selectedNestSensor } from '../homebridge-ui/public/cl
 import { normalizeFanRule } from '../homebridge-ui/public/fan-speed.js';
 import { runFanSpeed, releaseFanSpeed, validSpeedLease, prepareFanRules, handoffFanLease } from './fan-speed-control.js';
 import { TemperatureSensorSetup, nativeSensorAllowsHeating } from './temperature-sensor-setup.js';
+import { explainRule } from './climate-explanations.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
@@ -113,6 +114,7 @@ export class ClimateAutomation {
     this.log = log;
     this.onState = onState;
     this.states = new Map();
+    this.explanations = new Map();
     this.leases = new Map();
     this.fanOverrides = new Map();
     this.fanObservations = new Map();
@@ -299,6 +301,7 @@ export class ClimateAutomation {
         override: state.override,
         lastAction: state.lastAction,
         sensorSetup: this.sensorSetup.status(state.rule),
+        explanation: this.explanations.get(state.rule.id),
       })),
       pendingRestorations: [...this.leases.values()].filter((lease) => lease.restoring).length,
       sensorSetups: this.sensorSetup.snapshot(),
@@ -389,6 +392,7 @@ export class ClimateAutomation {
       }
       if (old && JSON.stringify(old.rule.sourceIds) !== JSON.stringify(rule.sourceIds)) {
         state.holds = {};
+        state.lastDetectedAt = {};
         state.awaySince = null;
         state.demand = false;
       }
@@ -433,6 +437,17 @@ export class ClimateAutomation {
       }
     }
     this.refreshSnapshot();
+    for (const state of this.states.values()) {
+      if (state.rule.kind !== 'presence') {
+        continue;
+      }
+      for (const id of state.rule.sourceIds) {
+        const source = this.sources.get(id);
+        if (fresh(source, this.now()) && ['motion', 'occupancy'].includes(source.kind) && source.detected === true) {
+          (state.lastDetectedAt ??= {})[id] = this.now();
+        }
+      }
+    }
     await this.sensorSetup.observe();
     this.presence?.sync(this.rules.filter((rule) => rule.kind === 'presence' && rule.enabled));
     // Persist configuration intent before permitting any side effects.
@@ -532,6 +547,7 @@ export class ClimateAutomation {
     }
     await this.observeHeating();
     await this.persist();
+    this.explanations = new Map([...this.states].map(([id, state]) => [id, explainRule(this, state, heatingTarget)]));
   }
 
   prepareWindows() {

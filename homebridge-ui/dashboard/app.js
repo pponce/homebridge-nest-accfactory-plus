@@ -744,6 +744,166 @@ function renderThermostats() {
   for (const device of (state.status.devices || []).filter((entry) => entry.type === 'Heatlink')) {
     const card = el('article', undefined, 'panel'); card.append(el('h3', device.data.description || 'Heat Link'), el('p', 'Hot-water boost ' + (device.data.hot_water_boost_active ? 'active' : 'inactive')), el('span', 'Updated ' + when(device.lastUpdate), 'subtle')); $('heat-links').append(card);
   }
+  renderAutomationOverview();
+}
+
+function evidenceTime(at) {
+  return Number.isFinite(at) ? new Date(at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : 'unknown';
+}
+function evidenceTimer(at) {
+  const seconds = Math.max(0, Math.ceil((at - Date.now()) / 1000));
+  return evidenceTime(at) + (seconds ? ' · ' + Math.ceil(seconds / 60) + ' min remaining' : ' · awaiting the next rule check');
+}
+function evidenceNote(host, text) { host.append(el('p', text, 'small-note')); }
+function evidenceCurrent(runtime) {
+  return state.live && !state.restarting && state.status.automation?.available && !state.status.automation.error &&
+    Number.isFinite(runtime?.explanation?.evaluatedAt) && runtime.explanation.evaluatedAt <= Date.now() + 1000 &&
+    Date.now() - runtime.explanation.evaluatedAt <= 90000;
+}
+function evidenceStamp(host, runtime) {
+  const at = runtime.explanation?.evaluatedAt;
+  evidenceNote(host, (evidenceCurrent(runtime) ? 'Rule checked ' : 'Last rule check · ') + evidenceTime(at) +
+    (evidenceCurrent(runtime) ? '. Readings reflect that check.' : '. Current automation status is unavailable; these details may be out of date.'));
+}
+function evidenceSources(host, report, presence = false) {
+  const list = el('ul', undefined, 'evidence-sources');
+  for (const source of report.sources || []) {
+    const row = el('li'); row.append(el('strong', source.name));
+    let detail = !source.available ? 'Unavailable · not used as a confirmed reading' : presence ?
+      source.detected ? source.kind === 'motion' ? 'Motion detected' : 'Occupied / Home' :
+        source.kind === 'motion' ? 'No motion now' : 'Not occupied / Away' : formatTemp(source.temperature);
+    if (presence && source.available) {
+      if (!source.detected && source.effective) detail += ' · still counts as Home because the motion hold is active';
+      else detail += source.effective ? ' · counts toward Home' : ' · does not currently count toward Home';
+    }
+    row.append(el('span', detail));
+    if (presence && Number.isFinite(source.lastDetectedAt)) {
+      const minutes = Math.max(0, Math.floor((report.evaluatedAt - source.lastDetectedAt) / 60000));
+      row.append(el('small', 'Last observed ' + (source.kind === 'motion' ? 'motion' : 'occupied') + ': ' +
+        evidenceTime(source.lastDetectedAt) + ' · ' + (minutes ? minutes + ' min before this check' : 'at this check')));
+    }
+    if (presence && source.kind === 'motion' && source.holdUntil && source.available) {
+      row.append(el('small', 'Motion hold until ' + evidenceTimer(source.holdUntil) +
+        (source.detected ? '. Continued motion extends the hold.' : '.')));
+    }
+    row.append(el('small', 'Source read: ' + evidenceTime(source.lastReadAt)));
+    list.append(row);
+  }
+  host.append(list);
+  if (!presence && report.sources?.length) evidenceNote(host, Number.isFinite(report.average) ?
+    'Equal average: (' + report.sources.map((source) => formatTemp(source.temperature)).join(' + ') + ') ÷ ' +
+      report.sources.length + ' = ' + formatTemp(report.average) + '. Calculations use unrounded readings.' :
+    'The average is unavailable until every selected temperature source has a current reading.');
+}
+function fanEvidence(host, runtime, fan) {
+  const report = runtime.explanation;
+  const condition = report.condition;
+  evidenceSources(host, report);
+  if (condition.action === 'temperature') {
+    evidenceNote(host, 'Run when the average is ' + (condition.inclusive ? 'at or above ' : 'above ') +
+      formatTemp(condition.threshold) + '; clear the run condition at or below ' + formatTemp(condition.stopThreshold) + '.');
+    if (Number.isFinite(report.average) && report.average <= condition.threshold && report.average > condition.stopThreshold &&
+      !(condition.inclusive && report.average >= condition.threshold)) evidenceNote(host,
+      'The average is between the start and stop thresholds. The rule keeps its previous ' + (condition.demand ? 'running' : 'off') +
+      ' demand to prevent repeated switching.');
+  } else evidenceNote(host, 'Run during ' + condition.action + '. ' + report.thermostat.name + ' currently reports ' +
+    (report.thermostat.hvacState || 'an unavailable HVAC state') + '.');
+  evidenceNote(host, condition.demand === null ? 'The run condition is not currently being applied or cannot be evaluated.' :
+    condition.demand ? 'The run condition is met.' : 'The run condition is clear. An owned fan returns to its previous setting; it may remain on.');
+  const speed = report.speed;
+  if (speed.mode === 'curve') {
+    evidenceNote(host, 'Temperature-based speed: comfort target ' + formatTemp(speed.comfort) + '. Speed rises from ' +
+      speed.minimum + '% at ' + formatTemp(speed.startsAt) + ' to ' + speed.maximum + '% at ' + formatTemp(speed.fullAt) + '.');
+    if (Number.isFinite(speed.calculated)) evidenceNote(host, 'Linear calculation at ' + formatTemp(report.average) + ': ' +
+      speed.calculated.toFixed(1) + '%. Supported fan setting: ' + (Number.isFinite(fan.supportedSpeed) ? fan.supportedSpeed + '%' : 'unavailable') + '.');
+    if (fan.holdingSpeed) evidenceNote(host, 'Keeping the reported speed because the calculated change is less than 5 percentage points and is not at a curve endpoint.');
+  } else if (speed.mode === 'fixed') evidenceNote(host, 'Fixed speed: ' + speed.fixed + '%. Supported fan setting: ' +
+    (Number.isFinite(fan.supportedSpeed) ? fan.supportedSpeed + '%' : 'not currently requested or unavailable') + '.');
+  else evidenceNote(host, 'Use the fan’s last speed setting. This rule controls power without choosing a new speed.');
+  if (fan.pending) {
+    const requested = typeof fan.requested === 'boolean' ? (fan.requested ? 'on' : 'off') :
+      (fan.requested?.running ? 'on' : 'off') + (Number.isFinite(fan.requested?.speed) ? ' · speed setting ' + fan.requested.speed + '%' : '');
+    evidenceNote(host, 'Command awaiting device feedback: ' + requested + '. The reported setting above is not a confirmation of this request.');
+  }
+  if (fan.restoring) evidenceNote(host, 'Returning the fan to its previous setting, within the controlling rule’s speed cap.');
+  if (fan.nextEligibleAt) evidenceNote(host, 'Next normal speed or power update eligible at ' + evidenceTimer(fan.nextEligibleAt) + '.');
+}
+function renderAutomationOverview() {
+  const rules = state.status.automation?.rules || [];
+  for (const [containerId, kind] of [['overview-fans', 'fan'], ['overview-presence', 'presence']]) {
+    const host = $(containerId);
+    const expanded = new Set([...host.querySelectorAll('details[open]')].map((node) => node.dataset.evidence));
+    const focused = host.contains(document.activeElement) ? document.activeElement.closest('details')?.dataset.evidence : null;
+    host.replaceChildren();
+    const matching = rules.filter((runtime) => runtime.kind === kind);
+    const entries = kind === 'fan' ? [...new Map(matching.flatMap((runtime) => (runtime.explanation?.fans || [])
+      .map((fan) => [fan.id, fan]))).values()] : matching;
+    if (!entries.length) evidenceNote(host, matching.length ? 'Waiting for the first rule evaluation and its device readings.' :
+      kind === 'fan' ? 'No saved fan rules. Add one in Climate rules to see its fans here.' : 'No saved presence rules. Add one in Climate rules to see its combined sensor here.');
+    for (const entry of entries) {
+      const candidates = kind === 'fan' ? matching.filter((runtime) => runtime.explanation?.fans.some((fan) => fan.id === entry.id)) : [];
+      const runtime = kind === 'fan' ? candidates.find((runtime) => runtime.id === entry.controllerId) ||
+        candidates.find((runtime) => runtime.id === entry.ownerId) || candidates[0] : entry;
+      const card = el('article', undefined, 'panel automation-card');
+      const top = el('div', undefined, 'card-top'); top.append(el('h3', entry.name));
+      const current = evidenceCurrent(runtime);
+      const known = current && entry.available;
+      const label = kind === 'fan' ? !known ? 'Unavailable' : entry.running ? 'On' + (Number.isFinite(entry.speed) ? ' · ' + entry.speed + '%' : '') : 'Off' :
+        !entry.enabled ? 'Disabled' : !current ? 'Unknown / last known' : typeof entry.home === 'boolean' ? entry.home ? 'Home · occupied' : 'Away · unoccupied' : 'Unknown';
+      top.append(pill(label, kind === 'fan' ? known && entry.running ? 'good' : 'neutral' : current && entry.home && !entry.fault ? 'good' : 'neutral'));
+      card.append(top);
+      if (kind === 'fan') {
+        const controller = candidates.find((rule) => rule.id === entry.controllerId);
+        evidenceNote(card, entry.override ? 'Automatic control paused: ' + entry.override : controller ?
+          (current ? 'Selected rule: ' : 'Last selected rule: ') + controller.name + '. ' + controller.reason : entry.restoring ? 'Restoring the previous fan setting.' :
+            'No rule currently requests this fan to run. Its reported setting may remain on.');
+      } else evidenceNote(card, entry.reason || 'Waiting for rule evaluation.');
+      const details = el('details', undefined, 'automation-evidence'); details.dataset.evidence = entry.id; details.open = expanded.has(entry.id);
+      const summary = el('summary', kind === 'fan' ? 'Why this fan and speed?' : 'Why this presence status?'); details.append(summary);
+      evidenceStamp(details, runtime);
+      if (kind === 'fan') {
+        evidenceNote(details, 'Fan feedback read: ' + evidenceTime(entry.lastReadAt));
+        for (const candidate of candidates) {
+          evidenceNote(details, candidate.name + ' · ' + candidate.phase + (candidate.id === entry.controllerId ? ' · selected for this fan' : '') +
+            ' · ' + (candidate.reason || 'Waiting for evaluation.'));
+        }
+        if (runtime?.explanation?.condition) fanEvidence(details, runtime, runtime.explanation.fans.find((fan) => fan.id === entry.id));
+      } else if (runtime.explanation?.presence) {
+        const report = runtime.explanation; const presence = report.presence;
+        if (typeof entry.home === 'boolean') evidenceNote(details, (current && entry.enabled && !entry.paused ? 'Combined sensor: ' : 'Last known combined sensor: ') +
+          (entry.home ? 'occupied / Home.' : 'unoccupied / Away.') + (entry.fault ? ' Source attention required; this is not a fully confirmed fresh result.' : ''));
+        evidenceNote(details, presence.logic === 'all' ? 'All selected sources must count toward Home.' : 'Any selected source can establish Home.');
+        if (presence.overrideUntil) evidenceNote(details, 'Manual ' + (entry.home ? 'Home' : 'Away') + ' override until ' +
+          evidenceTimer(presence.overrideUntil) + '. Sensor contributions below do not determine the output while this override is active.');
+        if (!entry.enabled || entry.paused) evidenceNote(details, 'Automatic presence evaluation is ' + (!entry.enabled ? 'disabled' : 'paused') + '. Sensor readings do not establish a new output.');
+        evidenceSources(details, report, true);
+        evidenceNote(details, 'Motion holds last ' + presence.holdMinutes + ' min after the rule last observes motion. Occupancy sources use their reported state directly.');
+        evidenceNote(details, 'Away delay: ' + presence.awayDelayMinutes + ' min after the combined Home condition clears with every source available.');
+        if (presence.awayAt) evidenceNote(details, 'Away countdown started ' + evidenceTime(presence.awaySince) + '; eligible for Away at ' +
+          evidenceTimer(presence.awayAt) + '. The previous confirmed state remains in effect during this delay.');
+        if (entry.fault) evidenceNote(details, 'Unavailable sources cannot confirm Away. Review the source readings above.');
+      }
+      card.append(details); host.append(card);
+      if (focused === entry.id) summary.focus({ preventScroll: true });
+    }
+  }
+}
+function temperatureEvidence(host, runtime) {
+  const report = runtime.explanation;
+  if (!report?.heating) return;
+  const heat = report.heating;
+  evidenceStamp(host, runtime); evidenceNote(host, runtime.reason || 'Waiting for evaluation.');
+  evidenceSources(host, report);
+  evidenceNote(host, 'Desired room temperature: ' + formatTemp(heat.desired) + ' · ' +
+    ({ rule: 'saved rule target', schedule: 'Nest schedule target', manual: 'manual room target' }[heat.targetSource] || 'room target') + '.');
+  if (Number.isFinite(heat.rawOffset)) evidenceNote(host, 'Nest built-in sensor ' + formatTemp(heat.physical) + ' − room average ' +
+    formatTemp(report.average) + ' = ' + formatDifference(heat.rawOffset) + ' offset. Allowed adjustment: ±' +
+    formatDifference(heat.maximumOffset) + '. Desired room target + bounded offset, rounded to Nest’s temperature steps: ' +
+    formatTemp(heat.calculatedTarget) + '. This is the calculated target; rule status determines whether it can be sent.');
+  evidenceNote(host, 'Reported Nest target: ' + formatTemp(runtime.nestTarget) + '. Last requested target: ' +
+    formatTemp(runtime.lastAction?.value) + (runtime.lastAction?.status ? ' · ' + runtime.lastAction.status : '') + '.');
+  evidenceNote(host, 'Minimum adjustment interval: ' + heat.minimumIntervalMinutes + ' min.' +
+    (heat.nextEligibleAt > Date.now() ? ' Next eligible update: ' + evidenceTimer(heat.nextEligibleAt) + '.' : ''));
 }
 
 function renderTemperatureController(device, expanded) {
@@ -774,6 +934,12 @@ function renderTemperatureController(device, expanded) {
   };
   group('Nest temperature sensors', view.sensors);
   group('Climate temperature rules', view.rules);
+  for (const entry of view.rules) {
+    const runtime = state.status.automation?.rules?.find((rule) => rule.id === entry.id);
+    if (!runtime?.explanation?.heating) continue;
+    body.append(el('h4', entry.name + ' · temperature calculation'));
+    temperatureEvidence(body, runtime);
+  }
   if (!view.rules.length) body.append(el('p', 'No temperature rules are assigned to this thermostat.', 'small-note'));
   body.append(el('p', 'Use Climate rules to manage temperature rules, including rules that use other Homebridge sensors.', 'small-note'));
   section.append(summary, body); return section;

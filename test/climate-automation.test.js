@@ -58,6 +58,110 @@ const presenceRule = {
   awayDelayMinutes: 3,
 };
 
+test('overview explains the observed fan separately from the pending temperature-based speed command', async (t) => {
+  const rule = { ...fanRule, sourceIds: ['nest:S', 'room'], speedMode: 'curve', desiredTemperature: 22,
+    startGap: 1, fullSpeedGap: 5, minimumSpeed: 25, maximumSpeed: 75 };
+  const f = await fixture(t, {});
+  f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 25 }, 'A');
+  f.source('room').temperature = 26;
+  f.source('fan').name = 'Living room fan';
+  f.source('fan').running = true;
+  f.source('fan').speed = 25;
+  f.source('fan').speedCapabilities = speedCapabilities({ perms: ['pr', 'pw'], minStep: 25 });
+  f.rules({ fans: [rule] });
+  f.noAck();
+  await f.engine.tick();
+  const report = f.rule('fans').explanation;
+  assert.equal(report.average, 25.5);
+  assert.deepEqual(report.sources.map((source) => source.temperature), [25, 26]);
+  assert.equal(report.condition.demand, true);
+  assert.equal(report.speed.calculated, 56.25);
+  assert.equal(report.fans[0].speed, 25);
+  assert.equal(report.fans[0].supportedSpeed, 50);
+  assert.equal(report.fans[0].pending, true);
+  assert.equal(report.fans[0].requested.speed, 50);
+  assert.equal(report.fans[0].controllerId, 'fans');
+  const writes = f.fanSpeedCommands.length;
+  for (let index = 0; index < 3; index++) {
+    assert.deepEqual(f.rule('fans').explanation, report);
+  }
+  assert.equal(f.fanSpeedCommands.length, writes, 'Reading explanations never sends commands');
+});
+
+test('overview retains a clear motion sensor contribution through its hold and then explains the Away delay', async (t) => {
+  const f = await fixture(t, {});
+  f.source('motion').detected = true;
+  f.rules({ occupancy: [{ ...presenceRule, holdMinutes: 10 }] });
+  await f.engine.tick();
+  const detectedAt = f.now();
+  f.source('motion').detected = false;
+  f.advance(5 * minute);
+  await f.engine.tick();
+  let report = f.rule('presence').explanation;
+  assert.equal(f.rule('presence').home, true);
+  assert.equal(report.sources[0].detected, false);
+  assert.equal(report.sources[0].effective, true);
+  assert.equal(report.sources[0].lastDetectedAt, detectedAt);
+  assert.equal(report.sources[0].holdUntil, detectedAt + 10 * minute);
+  assert.equal(report.sources[1].effective, false);
+  assert.equal(report.presence.awayAt, null);
+  f.advance(5 * minute);
+  await f.engine.tick();
+  report = f.rule('presence').explanation;
+  assert.equal(report.sources[0].effective, false);
+  assert.equal(report.sources[0].holdUntil, null);
+  assert.equal(report.presence.awaySince, f.now());
+  assert.equal(report.presence.awayAt, f.now() + 3 * minute);
+  assert.equal(f.rule('presence').home, true);
+  f.advance(3 * minute);
+  await f.engine.tick();
+  assert.equal(f.rule('presence').home, false);
+  assert.equal(f.rule('presence').explanation.presence.awayAt, null);
+});
+
+test('overview marks unavailable presence inputs unknown and keeps a manual override explicit', async (t) => {
+  const f = await fixture(t, {});
+  f.source('motion').detected = true;
+  f.rules({ occupancy: [presenceRule] });
+  await f.engine.tick();
+  f.source('motion').available = false;
+  await f.engine.tick();
+  assert.equal(f.rule('presence').explanation.sources[0].effective, null);
+  assert.equal(f.rule('presence').explanation.presence.awayAt, null);
+  assert.equal(f.rule('presence').fault, true);
+  await f.engine.control({ id: 'presence', action: 'away', minutes: 60 });
+  assert.equal(f.rule('presence').home, false);
+  assert.equal(f.rule('presence').explanation.presence.overrideUntil, f.now() + 60 * minute);
+});
+
+test('overview uses the selected fan controller and does not report a paused plan as active demand', async (t) => {
+  const f = await fixture(t, {});
+  const high = { ...fanRule, id: 'high', name: 'Priority rule', priority: 90 };
+  f.source('room').temperature = 27;
+  f.rules({ fans: [fanRule, high] });
+  await f.engine.tick();
+  assert.equal(f.rule('fans').explanation.fans[0].controllerId, 'high');
+  await f.engine.control({ id: 'high', action: 'pause' });
+  assert.equal(f.rule('high').explanation.condition.demand, null);
+  assert.equal(f.rule('fans').explanation.fans[0].controllerId, 'fans');
+});
+
+test('overview explains bounded thermostat compensation and removes unavailable temperatures from its calculation', async (t) => {
+  const f = await fixture(t);
+  const report = f.rule('rooms').explanation;
+  assert.equal(report.average, 20);
+  assert.equal(report.heating.physical, 22);
+  assert.equal(report.heating.rawOffset, 2);
+  assert.equal(report.heating.maximumOffset, 1.5);
+  assert.equal(report.heating.calculatedTarget, 22.5);
+  assert.equal(report.heating.targetSource, 'rule');
+  f.source('room').stale = true;
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').explanation.average, null);
+  assert.equal(f.rule('rooms').explanation.heating.calculatedTarget, null);
+  assert.equal(f.rule('rooms').explanation.sources[1].temperature, null);
+});
+
 async function fixture(t, initial = { temperature: [temperatureRule] }) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'climate-engine-'));
   let clock = Date.parse('2026-11-02T10:00:00Z');
