@@ -248,7 +248,7 @@ try {
   assert.equal(commands.length, 0);
   manualRoomTarget = 23;
   await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
-  await page.locator('#rule-runtime').getByText('Desired room temperature: 23.0°C · Nest target (adjusted): 24.0°C', { exact: true }).waitFor();
+  await page.locator('#rule-runtime').getByText('Desired room temperature: 23.0°C · Reported Nest target: 24.0°C', { exact: true }).waitFor();
   assert.equal(await page.getByLabel('Desired room temperature (°C)', { exact: true }).inputValue(), '22', 'runtime targets never rewrite the saved editor value');
   assert.equal(await page.getByRole('switch', { name: 'Pause after a manual Nest target change', exact: false }).isChecked(), true);
   manualRoomTarget = null;
@@ -471,4 +471,5 @@ try {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));
 }
+
 

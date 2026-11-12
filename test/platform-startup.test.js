@@ -111,14 +111,23 @@ test('dashboard recovery refreshes the active Google observer and invalidates it
   const connection = {
     name: 'Fixture', type: 'Google', authorised: true,
     grpcTransport: {
-      observe: (...args) => { consume = args.at(-1); return pending.promise; },
-      refreshObserve: () => { refreshed += 1; return canRefresh; },
+      observe: (...args) => {
+        consume = args.at(-1);
+        return pending.promise;
+      },
+      refreshObserve: () => {
+        refreshed += 1;
+        return canRefresh;
+      },
       command: () => assert.fail('Refreshing observation must not send a thermostat command'),
     },
   };
   const connections = new Map([['A', connection]]);
   connections.start = () => {};
-  connections.shutdown = () => { connection.authorised = false; pending.resolve({ status: 0 }); };
+  connections.shutdown = () => {
+    connection.authorised = false;
+    pending.resolve({ status: 0 });
+  };
   t.mock.method(Connections, 'fromConfig', (config, supplied) => {
     authorise = supplied.onAuthorised;
     return connections;

@@ -1139,12 +1139,19 @@ export class ClimateAutomation {
       return;
     }
     lease = this.leases.get(key);
+    if (validTarget(target(device))) {
+      if (!this.temperatureFeedback(state, device, lease)) {
+        return;
+      }
+      lease = this.leases.get(key);
+    } else if (lease?.pending && this.now() - lease.sentAt >= ACK_TIMEOUT) {
+      this.unconfirmedHeating(state, key,
+        'Nest feedback did not confirm the heating target within two minutes. Check Nest, then Resume automatic control.');
+      return;
+    }
     // A refreshed account delivers thermostat and room-sensor traits separately.
     // Keep the accepted target while those inputs return, without masking a conflicting target.
     if (lease?.feedbackRefreshed && state.roomTemperature === null && this.now() - lease.sentAt < ACK_TIMEOUT) {
-      if (Number.isFinite(target(device)) && !this.temperatureFeedback(state, device, lease)) {
-        return;
-      }
       state.phase = 'waiting';
       state.reason = 'Waiting for selected temperature readings after refreshing Nest feedback.';
       return;
@@ -1163,9 +1170,6 @@ export class ClimateAutomation {
       if (lease && !state.recovering) {
         await this.release(key, lease);
       }
-      return;
-    }
-    if (!this.temperatureFeedback(state, device, lease)) {
       return;
     }
     delete state.recovering;
@@ -1238,7 +1242,8 @@ export class ClimateAutomation {
       }
       throw error;
     }
-    state.lastAction = { at: this.now(), value: proposed, status: 'accepted', message: 'Heating target accepted; awaiting device feedback.' };
+    state.lastAction = { at: this.now(), value: proposed, status: 'accepted',
+      message: 'Heating target accepted; awaiting device feedback.' };
     state.phase = 'waiting';
     state.temperatureControl = 'updating';
   }

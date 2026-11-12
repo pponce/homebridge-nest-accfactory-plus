@@ -725,7 +725,10 @@ test('a failed feedback refresh remains bounded and does not expose connection d
 test('conflicting Nest feedback pauses immediately without a refresh or another temperature write', async (t) => {
   const f = await fixture(t, {});
   let refreshes = 0;
-  f.dashboard.refresh = () => { refreshes += 1; return true; };
+  f.dashboard.refresh = () => {
+    refreshes += 1;
+    return true;
+  };
   f.noAck();
   f.rules({ temperature: [temperatureRule] });
   await f.engine.tick();
@@ -737,6 +740,30 @@ test('conflicting Nest feedback pauses immediately without a refresh or another 
   assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
   assert.equal(refreshes, 0);
   assert.equal(f.commands.length, 1);
+});
+
+test('missing room-sensor readings cannot hide a target conflict or extend confirmation after refresh', async (t) => {
+  for (const reported of [19, 20]) {
+    const f = await fixture(t, {});
+    f.dashboard.refresh = () => {
+      f.dashboard.invalidate('A');
+      return true;
+    };
+    f.noAck();
+    f.rules({ temperature: [temperatureRule] });
+    await f.engine.tick();
+    f.advance(30000);
+    await f.engine.tick();
+    f.dashboard.update('T', 'Thermostat', { target_temperature_low: reported, hvac_state: 'off' }, 'A');
+    // The selected Nest room sensor has not reappeared in this observation yet.
+    if (reported === 19) {
+      f.advance(90000);
+    }
+    await f.engine.tick();
+    assert.equal(f.rule('rooms').paused, true);
+    assert.equal(f.commands.length, 1);
+    assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
+  }
 });
 
 test('room fan hysteresis avoids chatter and respects manual changes', async (t) => {

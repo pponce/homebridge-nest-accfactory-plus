@@ -34,7 +34,10 @@ test('feedback refresh is read-only and limited to an authorised thermostat acco
   const dashboard = new ClimateDashboard('/tmp/unused-feedback', {
     accounts: () => accounts,
     command: () => assert.fail('Feedback refresh must not write a device command'),
-    refresh: (id) => { calls.push(id); return true; },
+    refresh: (id) => {
+      calls.push(id);
+      return true;
+    },
   });
   dashboard.update('T', 'Thermostat', { nest_google_device_uuid: 'DEVICE_T' }, 'A');
   dashboard.update('S', 'TemperatureSensor', { nest_google_device_uuid: 'DEVICE_S' }, 'A');
