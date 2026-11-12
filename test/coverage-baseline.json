@@ -145,6 +145,11 @@
     "branches": 80,
     "functions": 85
   },
+  "src/climate-explanations.js": {
+    "lines": 100,
+    "branches": 90,
+    "functions": 100
+  },
   "src/climate-presence.js": {
     "lines": 95,
     "branches": 85,
@@ -181,3 +186,4 @@
     "functions": 100
   }
 }
+

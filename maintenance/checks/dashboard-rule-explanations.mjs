@@ -47,7 +47,7 @@ export async function checkRuleExplanations(page, output, label) {
   await page.route('**/api/status', handler);
   const refresh = async () => {
     await page.locator('#refresh-status').click();
-    await page.waitForTimeout(200);
+    await page.waitForFunction(() => !document.getElementById('refresh-status').disabled);
   };
   try {
     await refresh();
