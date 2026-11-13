@@ -29,12 +29,14 @@ Show why each rule-assigned fan is on or off and at its reported speed, why each
 - New explanation module coverage: 100% lines, 94.53% branches, 100% functions. Reviewed floor: 100/90/100.
 - Local Chromium cannot launch because its required socket is unavailable; local Homebridge accessory tests lack the Homebridge package. CI supplies these dependencies.
 - Browser regression fixture checks both hosts, mobile overflow, safe sensor-name rendering, reported/requested settings, holds, Away delay, overrides, unavailable/stale status, refresh persistence and absence of control requests.
-- Full CI must be green before considering the branch ready.
+- Full CI passed at `fc161fe632f6820edb90b9947a8930ac69d3bd07`: all six Node/Homebridge combinations, lint, coverage, migration restoration, production package checks, and both browser suites.
+- Validation runs: https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/43333774570 and https://github.com/pponce/homebridge-nest-climate-cntrl/actions/runs/43333774771.
+- The runtime persistence test now uses a fixed clock and checks runtime split across UTC midnight, removing a wall-clock-dependent assertion. Production runtime behavior is unchanged.
 
 ## Decisions and remaining work
 
 1. Use only saved rules and completed evaluation evidence. Do not recompute runtime decisions from unsaved UI drafts.
 2. Source read timestamps and observed activity timestamps are not complete physical-device event history.
 3. Preserve existing automation behavior. No live-device commands or installation changes were made.
-4. Finish GitHub checks and resolve failures. Hardware behavior remains unverified until installation.
+4. Automated checks are complete. Hardware behavior remains unverified until installation.
 5. This feature is not yet versioned or published to npm. Prepare a versioned release and publication helper when requested.
