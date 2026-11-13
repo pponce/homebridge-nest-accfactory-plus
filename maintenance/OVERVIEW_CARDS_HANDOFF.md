@@ -41,3 +41,10 @@ Use compact thermostat-sized fan and occupancy cards with matching icons. Show d
 - First release run 43344523075 passed browser validation and five compatibility jobs; Node 24 / Homebridge 1.11.4 hit upstream HomeKitHistory test A1 at line 2196. Its full Eve Aqua response comparison crossed a one-second wall-clock boundary (only timestamp byte 16 changed).
 - No upstream submodule, application code or test assertions are changed. Re-trigger the existing release-intent path for the same 0.6.5 version, since this connection does not expose the Actions rerun endpoint. All release gates remain required.
 - Remaining: verify the retriggered workflow, tag and release assets, then return the npm launcher.
+
+## Upstream test correction
+
+- Retry run 43345170260 reproduced the same timestamp-only upstream assertion in Node 24 / Homebridge 2.5.0.
+- Upstream commit a5d9bb1106f05ea971b11f94040d39d856c7f725 contains the exact deterministic-clock correction and is one commit ahead of the pinned 113789b639d15b8b20b49a7bc31eb6ba3cac07f0. GitHub compare shows only HomeKitHistory.test.js changed: the affected test enables its own Date mock. Runtime code is identical.
+- Update the HomeKitHistory gitlink to the upstream fix. All assertions and compatibility/browser gates remain enabled; do not apply a custom dependency patch.
+- Remaining: verify the release run from the new main commit, tag and all release assets, then return the npm launcher.
