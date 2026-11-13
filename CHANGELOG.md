@@ -1,4 +1,11 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.5
+
+- Show compact fan and presence cards with matching icons and the same desktop card width as thermostats. Cards use a single column on narrow phone screens, and expanded details do not stretch adjacent cards.
+- Include discovered Homebridge room fans on Overview even when Off or without a climate rule. Show current power, speed and saved mapped setting independently of rule activity; identify unavailable readings and retain known fans when a bridge drops out during the dashboard session.
+- Refresh fan cards as source discovery completes. Keep live fan status separate from the saved rule explanation and retain expanded details across refreshes.
+- Show Home & away only when a presence rule is saved. Keep disabled rules and rules awaiting engine feedback visible; raw presence sensors alone do not show this section.
+
 ## v0.6.4
 
 - Show each rule-assigned room fan on Overview with reported power and speed, the selected rule, individual temperature inputs, their average, run thresholds, speed calculations and pending feedback.

@@ -78,10 +78,12 @@
           </div>
           <div class="section-heading"><div><h2>Your thermostats</h2><p>Current readings and direct Nest controls.</p></div><span id="last-updated" class="subtle">Waiting for an update</span></div>
           <div id="thermostats" class="thermostat-grid"><div class="empty-state"><span class="loading-ring" aria-hidden="true"></span><p>Loading your thermostats…</p></div></div>
-          <div class="section-heading"><div><h2>Your room fans</h2><p>Reported fan settings and the saved rules behind them.</p></div></div>
+          <div class="section-heading"><div><h2>Your room fans</h2><p>Current fan status, with the saved rules behind automatic control.</p></div><span data-icon="fan"></span></div>
           <div id="overview-fans" class="automation-grid"></div>
-          <div class="section-heading"><div><h2>Home &amp; away</h2><p>Combined presence, contributing sensors and active timers.</p></div></div>
-          <div id="overview-presence" class="automation-grid"></div>
+          <section id="overview-presence-section" aria-labelledby="overview-presence-heading" hidden>
+            <div class="section-heading"><div><h2 id="overview-presence-heading">Home &amp; away</h2><p>Combined presence, contributing sensors and active timers.</p></div><span data-icon="user"></span></div>
+            <div id="overview-presence" class="automation-grid"></div>
+          </section>
           <div class="section-heading insights-heading"><div><h2>A week of comfort</h2><p>Observed heating and cooling. Missing coverage is unknown.</p></div><label class="compact-label insights-selector">Selected thermostat<select id="runtime-device" aria-describedby="insights-selection-help"></select><span id="insights-selection-help">Applies to the runtime chart and Coming up.</span></label></div>
           <div class="insight-grid"><article class="panel runtime-panel"><div id="runtime-summary" class="runtime-summary"></div><div id="runtime-chart" class="runtime-chart"></div><div class="chart-legend"><span class="legend heating">Heating</span><span class="legend cooling">Cooling</span><span>UTC days · not energy consumption</span></div><details><summary>View runtime and coverage</summary><div id="runtime-table" class="table-scroll"></div></details></article><article class="panel schedule-panel" aria-labelledby="schedule-thermostat">
               <div class="section-heading tight"><div id="schedule-heading"></div><span data-icon="calendar"></span></div>

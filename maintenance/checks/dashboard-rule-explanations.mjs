@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import { navigate } from './dashboard-navigation.mjs';
 
 export async function checkRuleExplanations(page, output, label) {
   let mode = 'hold';
@@ -42,20 +43,58 @@ export async function checkRuleExplanations(page, output, label) {
           heating: { desired: 22, physical: 27.5, rawOffset: 2, maximumOffset: 1.5, calculatedTarget: 23.5,
             targetSource: 'rule', minimumIntervalMinutes: 5, nextEligibleAt: now + 60000 } } },
     ] };
+    if (mode === 'no-presence') snapshot.automation.rules = snapshot.automation.rules.filter((rule) => rule.kind !== 'presence');
+    if (mode === 'no-engine' || mode === 'no-rules') snapshot.automation = { available: mode === 'no-rules', rules: [] };
     await route.fulfill({ response, json: snapshot });
   };
+  const sourceHandler = async (route) => {
+    const response = await route.fetch(); const data = await response.json(); const now = Date.now();
+    const living = data.sources.find((source) => source.id === 'living-fan');
+    Object.assign(living, { name: 'Living room fan', running: mode !== 'source-off', speed: 50, speedAvailable: true, lastReadAt: now });
+    data.sources.push(
+      { id: 'guest-fan', kind: 'fan', name: 'Guest fan', running: false, available: true, lastReadAt: now },
+      { id: 'office-fan', kind: 'fan', name: 'Office fan', running: true, speed: 71, speedAvailable: true, available: true, lastReadAt: now },
+      { id: 'stale-fan', kind: 'fan', name: 'Stale fan', running: true, available: true, lastReadAt: now - 120000 },
+    );
+    if (mode === 'missing-fan') data.sources = data.sources.filter((source) => source.id !== 'office-fan');
+    await route.fulfill({ response, json: data });
+  };
+  const configHandler = async (route) => {
+    const response = await route.fetch(); const data = await response.json();
+    data.config.fanMappings = [{ sourceId: 'office-fan', ranges: [{ label: 'Speed 5', min: 65, max: 78 }] }];
+    if (mode === 'no-presence' || mode === 'no-rules') data.config.rules.occupancy = [];
+    if (mode === 'no-rules') data.config.rules.fans = [];
+    await route.fulfill({ response, json: data });
+  };
   await page.route('**/api/status', handler);
+  await page.route('**/api/sources', sourceHandler);
+  await page.route('**/api/config', configHandler);
+  const card = (id) => page.locator('#overview-fans .automation-card[data-source-id="' + id + '"]');
   const refresh = async () => {
     await page.locator('#refresh-status').click();
     await page.waitForFunction(() => !document.getElementById('refresh-status').disabled);
   };
   try {
+    await page.reload();
+    await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor();
     await refresh();
-    await page.getByRole('heading', { name: 'Living room fan', exact: true }).waitFor();
-    await page.locator('#overview-fans summary').click();
+    await card('living-fan').getByRole('heading', { name: 'Living room fan', exact: true }).waitFor();
+    assert.equal(await card('living-fan').count(), 1, 'Discovery and rules share one fan card');
+    assert.equal(await card('living-fan').locator('.device-symbol[data-icon="fan"] svg').count(), 1);
+    assert.equal(await page.locator('#overview-presence .device-symbol[data-icon="user"] svg').count(), 1);
+    assert.equal(await card('guest-fan').locator('.status-pill').innerText(), 'Off');
+    assert.match(await card('guest-fan').textContent(), /No fan rule assigned/);
+    assert.equal(await card('office-fan').locator('.status-pill').innerText(), 'On · Speed 5 · 71%');
+    assert.equal(await card('stale-fan').locator('.status-pill').innerText(), 'Unavailable');
+    const thermostatWidth = (await page.locator('#thermostats .thermostat-card').first().boundingBox()).width;
+    assert.ok((await card('living-fan').boundingBox()).width <= thermostatWidth + 1);
+    assert.ok((await page.locator('#overview-presence .automation-card').boundingBox()).width <= thermostatWidth + 1,
+      'A single presence card keeps the thermostat card width');
+    await page.screenshot({ path: path.join(output, label + '-compact-overview.png'), fullPage: true });
+    await card('living-fan').locator('summary').click();
     await page.locator('#overview-presence summary').click();
     await page.locator('.temperature-controller').first().locator('summary').click();
-    const fanText = () => page.locator('#overview-fans').textContent();
+    const fanText = () => card('living-fan').textContent();
     assert.match(await fanText(), /On · 50%/);
     assert.match(await fanText(), /Equal average:.*25\.0.*26\.0.*25\.5/);
     assert.match(await fanText(), /56\.3%.*Supported fan setting: 50%/);
@@ -82,10 +121,32 @@ export async function checkRuleExplanations(page, output, label) {
       assert.equal(await page.locator(selector + ' details').first().getAttribute('open') !== null, true,
         'Open explanations survive status refreshes');
     }
+    mode = 'missing-fan'; await refresh();
+    assert.equal(await card('office-fan').locator('.status-pill').innerText(), 'Unavailable', 'A missing bridge retains a known fan as unavailable');
+    mode = 'source-off';
+    await navigate(page, 'Sensors & fans');
+    await page.getByRole('button', { name: 'Discover sources', exact: true }).click();
+    await page.waitForFunction(() => !document.getElementById('refresh-sources').disabled);
+    await navigate(page, 'Overview');
+    assert.equal(await card('living-fan').locator('.status-pill').innerText(), 'Off', 'A source refresh updates Overview independently of rule evaluation');
+    assert.equal(await card('office-fan').locator('.status-pill').innerText(), 'On · Speed 5 · 71%');
+    for (const nextMode of ['no-presence', 'no-engine', 'no-rules']) {
+      mode = nextMode; await page.reload();
+      await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor(); await refresh();
+      assert.equal(await page.locator('#overview-presence-section').isVisible(), mode === 'no-engine',
+        'Presence is shown only for saved presence rules, including disabled rules while the engine is unavailable');
+      assert.equal(await card('guest-fan').locator('.status-pill').innerText(), 'Off');
+      assert.equal(await card('office-fan').locator('.status-pill').innerText(), 'On · Speed 5 · 71%');
+      if (mode === 'no-rules') assert.match(await card('living-fan').textContent(), /No fan rule assigned/);
+    }
     assert.equal(requests.length, 0, 'Overview inspection never sends a control or configuration request');
   } finally {
     page.off('request', record);
     await page.unroute('**/api/status', handler);
+    await page.unroute('**/api/sources', sourceHandler);
+    await page.unroute('**/api/config', configHandler);
+    await page.reload();
+    await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor();
     await refresh();
   }
 }

@@ -253,7 +253,7 @@ function deviceOptions(serial, create = false) {
   if (!options && create) { options = { serialNumber: serial }; (state.config.devices ??= []).push(options); }
   return options || {};
 }
-function sources() {
+function sources(configuration = state.config) {
   const current = state.live ? state.status : { ...state.status, accounts: [] };
   const temperature = sensorSources(current, state.external);
   const nativeSerials = new Set((current.devices || []).map((device) => String(device.serial).toUpperCase()));
@@ -262,11 +262,11 @@ function sources() {
     !(source.kind === 'fan' && (nativeSerials.has(String(source.serial).toUpperCase()) || /nest|google/i.test(source.manufacturer || ''))));
   const homeAway = presenceSources(current, state.external);
   const now = Date.now();
-  const missing = (state.config?.fanMappings || []).filter((mapping) => !external.some((source) => source.id === mapping.sourceId))
+  const missing = (configuration?.fanMappings || []).filter((mapping) => !external.some((source) => source.id === mapping.sourceId))
     .map((mapping) => ({ id: mapping.sourceId, name: 'Saved fan mapping', bridgeName: mapping.sourceId, kind: 'fan', provider: 'homebridge', available: false }));
   return [...temperature, ...homeAway, ...external, ...missing].map((source) => ({
     ...source,
-    speedMapping: source.kind === 'fan' ? state.config?.fanMappings?.find((mapping) => mapping.sourceId === source.id)?.ranges : undefined,
+    speedMapping: source.kind === 'fan' ? configuration?.fanMappings?.find((mapping) => mapping.sourceId === source.id)?.ranges : undefined,
     available: Boolean(source.available && Number.isFinite(source.lastReadAt) && now - source.lastReadAt <= 90000 && source.lastReadAt <= now + 1000),
   }));
 }
@@ -381,6 +381,7 @@ async function signOut() {
   state.session = null; state.config = null; state.envelope = null; state.dirty = false; state.live = false;
   state.heating = null;
   state.status = { accounts: [], devices: [] }; state.external = { sources: [], bridges: [] };
+  overviewFanSources.clear();
   $('save-bar').hidden = true; showLogin(); $('username').focus();
 }
 $('sign-out').addEventListener('click', signOut);
@@ -767,7 +768,7 @@ function evidenceCurrent(runtime) {
     Date.now() - runtime.explanation.evaluatedAt <= 90000;
 }
 function evidenceStamp(host, runtime) {
-  const at = runtime.explanation?.evaluatedAt;
+  const at = runtime?.explanation?.evaluatedAt;
   evidenceNote(host, (evidenceCurrent(runtime) ? 'Rule checked ' : 'Last rule check · ') + evidenceTime(at) +
     (evidenceCurrent(runtime) ? '. Readings reflect that check.' : '. Current automation status is unavailable; these details may be out of date.'));
 }
@@ -835,6 +836,34 @@ function fanEvidence(host, runtime, fan) {
   if (fan.restoring) evidenceNote(host, 'Returning the fan to its previous setting, within the controlling rule’s speed cap.');
   if (fan.nextEligibleAt) evidenceNote(host, 'Next normal speed or power update eligible at ' + evidenceTimer(fan.nextEligibleAt) + '.');
 }
+const overviewFanSources = new Map();
+function overviewFans(rules) {
+  const fans = new Map();
+  const fresh = (fan) => fan.available && typeof fan.running === 'boolean' && Number.isFinite(fan.lastReadAt) &&
+    fan.lastReadAt <= Date.now() + 1000 && Date.now() - fan.lastReadAt <= 90000 && !state.restarting;
+  for (const runtime of rules) {
+    for (const fan of runtime.explanation?.fans || []) fans.set(fan.id, { ...fan,
+      feedbackCurrent: evidenceCurrent(runtime) && fresh(fan) });
+    for (const id of runtime.targetIds || []) if (!fans.has(id)) fans.set(id, { id, name: 'Room fan', feedbackCurrent: false });
+  }
+  const discovered = new Set((state.external.sources || []).map((source) => source.id));
+  // Keep a known fan visible as unavailable if its bridge drops out of discovery.
+  // Use saved mappings; edits in Sensors & fans do not change live Overview labels.
+  for (const source of sources(state.envelope?.config ?? null)) {
+    if (source.kind === 'fan' && discovered.has(source.id)) overviewFanSources.set(source.id, source);
+  }
+  for (const [id, source] of overviewFanSources) {
+    const previous = fans.get(id);
+    const available = discovered.has(id) && fresh(source);
+    const useSource = !previous?.feedbackCurrent || !available || source.lastReadAt >= previous.lastReadAt;
+    const ranges = state.envelope?.config?.fanMappings?.find((mapping) => mapping.sourceId === id)?.ranges;
+    const feedback = useSource ? { available, feedbackCurrent: available, running: source.running,
+      speed: source.speedAvailable && Number.isFinite(source.speed) ? source.speed : null,
+      setting: mappedSpeed(ranges, source.speed)?.label ?? null, lastReadAt: source.lastReadAt } : {};
+    fans.set(id, { ...previous, id, name: source.name || previous?.name || 'Room fan', ...feedback });
+  }
+  return [...fans.values()];
+}
 function renderAutomationOverview() {
   const rules = state.status.automation?.rules || [];
   for (const [containerId, kind] of [['overview-fans', 'fan'], ['overview-presence', 'presence']]) {
@@ -842,34 +871,48 @@ function renderAutomationOverview() {
     const expanded = new Set([...host.querySelectorAll('details[open]')].map((node) => node.dataset.evidence));
     const focused = host.contains(document.activeElement) ? document.activeElement.closest('details')?.dataset.evidence : null;
     host.replaceChildren();
-    const matching = rules.filter((runtime) => runtime.kind === kind);
-    const entries = kind === 'fan' ? [...new Map(matching.flatMap((runtime) => (runtime.explanation?.fans || [])
-      .map((fan) => [fan.id, fan]))).values()] : matching;
+    const saved = state.envelope?.config?.rules?.[ruleKey[kind]];
+    const reported = rules.filter((runtime) => runtime.kind === kind);
+    const fallback = (rule) => ({ ...rule, phase: rule.enabled ? 'waiting' : 'disabled',
+      reason: rule.enabled ? 'Waiting for rule evaluation.' : 'Rule is disabled.' });
+    const matching = kind === 'presence' && saved ? saved.map((rule) => ({ ...fallback(rule),
+      ...reported.find((runtime) => runtime.id === rule.id) })) : [
+      ...reported.map((runtime) => ({ ...saved?.find((rule) => rule.id === runtime.id), ...runtime })),
+      ...(saved || []).filter((rule) => !reported.some((runtime) => runtime.id === rule.id)).map(fallback),
+    ];
+    const entries = kind === 'fan' ? overviewFans(matching) : matching;
+    if (kind === 'presence') $('overview-presence-section').hidden = !entries.length;
     if (!entries.length) evidenceNote(host, matching.length ? 'Waiting for the first rule evaluation and its device readings.' :
-      kind === 'fan' ? 'No saved fan rules. Add one in Climate rules to see its fans here.' : 'No saved presence rules. Add one in Climate rules to see its combined sensor here.');
+      kind === 'fan' ? 'No room fans discovered. Use Sensors & fans to discover Homebridge fans.' : 'No saved presence rules.');
     for (const entry of entries) {
-      const candidates = kind === 'fan' ? matching.filter((runtime) => runtime.explanation?.fans.some((fan) => fan.id === entry.id)) : [];
+      const candidates = kind === 'fan' ? matching.filter((runtime) => runtime.targetIds?.includes(entry.id) || runtime.explanation?.fans?.some((fan) => fan.id === entry.id)) : [];
       const runtime = kind === 'fan' ? candidates.find((runtime) => runtime.id === entry.controllerId) ||
         candidates.find((runtime) => runtime.id === entry.ownerId) || candidates[0] : entry;
-      const card = el('article', undefined, 'panel automation-card');
-      const top = el('div', undefined, 'card-top'); top.append(el('h3', entry.name));
+      const card = el('article', undefined, 'automation-card'); card.dataset.sourceId = entry.id;
+      const top = el('div', undefined, 'card-top'); const title = el('div', undefined, 'card-title');
+      const symbol = el('span', undefined, 'device-symbol'); symbol.dataset.icon = kind === 'fan' ? 'fan' : 'user';
+      symbol.append(icon(symbol.dataset.icon));
+      const text = el('div'); text.append(el('h3', entry.name), el('small', kind === 'fan' ? 'Room fan' : 'Combined presence'));
+      title.append(symbol, text); top.append(title);
       const current = evidenceCurrent(runtime);
-      const known = current && entry.available;
+      const known = kind === 'fan' ? entry.feedbackCurrent : current && entry.available;
       const label = kind === 'fan' ? !known ? 'Unavailable' : entry.running ? 'On' + (entry.setting ? ' · ' + entry.setting : '') + (Number.isFinite(entry.speed) ? ' · ' + entry.speed + '%' : '') : 'Off' :
         !entry.enabled ? 'Disabled' : !current ? 'Unknown / last known' : typeof entry.home === 'boolean' ? entry.home ? 'Home · occupied' : 'Away · unoccupied' : 'Unknown';
-      top.append(pill(label, kind === 'fan' ? known && entry.running ? 'good' : 'neutral' : current && entry.home && !entry.fault ? 'good' : 'neutral'));
+      top.append(pill(label, kind === 'fan' ? !known ? 'warn' : entry.running ? 'good' : 'neutral' : current && entry.enabled && !entry.paused && entry.home && !entry.fault ? 'good' : 'neutral'));
       card.append(top);
       if (kind === 'fan') {
         const controller = candidates.find((rule) => rule.id === entry.controllerId);
-        evidenceNote(card, entry.override ? 'Automatic control paused: ' + entry.override : controller ?
+        evidenceNote(card, !candidates.length ? 'No fan rule assigned.' : entry.override ? 'Automatic control paused: ' + entry.override : controller ?
           (current ? 'Selected rule: ' : 'Last selected rule: ') + controller.name + '. ' + controller.reason : entry.restoring ? 'Restoring the previous fan setting.' :
-            'No rule currently requests this fan to run. Its reported setting may remain on.');
+            current ? 'No rule currently requests this fan to run.' : 'Rule status is unavailable.');
       } else evidenceNote(card, entry.reason || 'Waiting for rule evaluation.');
       const details = el('details', undefined, 'automation-evidence'); details.dataset.evidence = entry.id; details.open = expanded.has(entry.id);
-      const summary = el('summary', kind === 'fan' ? 'Why this fan and speed?' : 'Why this presence status?'); details.append(summary);
-      evidenceStamp(details, runtime);
+      const summary = el('summary', kind === 'fan' ? candidates.length ? 'Why this fan and speed?' : 'Fan status details' : 'Why this presence status?'); details.append(summary);
+      if (runtime) evidenceStamp(details, runtime);
       if (kind === 'fan') {
         evidenceNote(details, 'Fan feedback read: ' + evidenceTime(entry.lastReadAt));
+        if (!known) evidenceNote(details, 'A current fan reading is unavailable. Check its Homebridge connection.');
+        if (!candidates.length) evidenceNote(details, 'This fan has no saved climate rule. Its reported status comes from Homebridge.');
         for (const candidate of candidates) {
           evidenceNote(details, candidate.name + ' · ' + candidate.phase + (candidate.id === entry.controllerId ? ' · selected for this fan' : '') +
             ' · ' + (candidate.reason || 'Waiting for evaluation.'));
@@ -1016,7 +1059,7 @@ async function discoverSources(explicit = true) {
   state.discovering = true; $('refresh-sources').disabled = true; $('source-summary').textContent = 'Discovering configured Homebridge sources…';
   try { const external = await api('/sources'); if (state.session === session) { state.external = external; if (explicit) toast('Sources refreshed.'); } }
   catch (error) { if (state.session === session) { state.external.sources = (state.external.sources || []).map((entry) => ({ ...entry, available: false })); state.external.error = error.message; } }
-  finally { state.discovering = false; $('refresh-sources').disabled = false; renderSources(); renderRulePickers(); renderRulePreview(); }
+  finally { state.discovering = false; $('refresh-sources').disabled = false; renderSources(); renderAutomationOverview(); renderRulePickers(); renderRulePreview(); }
 }
 $('refresh-sources').addEventListener('click', () => discoverSources());
 $('source-search').addEventListener('input', renderSources);

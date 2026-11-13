@@ -114,7 +114,7 @@ svg { display: block; }
 .section-heading p { color: var(--muted); font-size: 12px; margin: 5px 0 0; }
 .section-heading.tight { margin-top: 0; }
 .thermostat-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-.thermostat-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
+.thermostat-card, .automation-card { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
 .thermostat-main { padding: 23px 25px 20px; }
 .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .card-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
@@ -204,10 +204,10 @@ svg { display: block; }
   .insights-selector { width: 100%; }
 }
 .supporting-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
-.automation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+.automation-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
 .automation-card { padding: 20px; min-width: 0; overflow-wrap: anywhere; }
 .automation-card .card-top { gap: 12px; flex-wrap: wrap; }
-.automation-card h3 { font-size: 1rem; }
+.automation-card .device-symbol { flex-shrink: 0; }
 .automation-evidence { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .automation-evidence summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
 .automation-card .small-note, .controller-details .small-note { line-height: 1.6; }
@@ -448,7 +448,7 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .section-heading h2 { font-size: 17px; }
   .section-heading p { font-size: 11px; }
   #last-updated { display: none; }
-  .thermostat-grid { gap: 14px; }
+  .thermostat-grid, .automation-grid { gap: 14px; }
   .thermostat-main { padding: 18px; }
   .thermostat-controls { padding: 14px 18px; }
   .card-title { gap: 8px; }
@@ -506,7 +506,7 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
   .page-header h1 { font-size: 25px; }
   .header-actions .status-pill { font-size: 0; padding: 8px; gap: 0; }
   .header-actions .status-pill::before { width: 6px; height: 6px; }
-  .thermostat-grid { grid-template-columns: 1fr; }
+  .thermostat-grid, .automation-grid { grid-template-columns: 1fr; }
   .thermostat-main { padding: 22px; }
   .thermostat-controls { padding: 15px 22px; }
   .card-top { flex-wrap: nowrap; }
