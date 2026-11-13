@@ -1,5 +1,5 @@
 import { windowDays, windowError, windowSummary, ruleWindow } from '/shared/rule-window.js';
-import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
+import { scheduleOverview, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
 import { mountTimeZonePicker, timeZoneChoices } from '/shared/time-zone-picker.js';
 import { mountConnectionPage } from '/shared/connection-page.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
@@ -25,6 +25,7 @@ const iconPaths = {
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.1"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2m0 3v.1"/>',
   shield: '<path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
   draft: '<path d="m14 4 6 6-10 10H4v-6ZM12 6l6 6M4 14l6 6"/>',
   droplet: '<path d="M12 3S5 11 5 15a7 7 0 0 0 14 0c0-4-7-12-7-12Z"/>',
@@ -797,15 +798,45 @@ function renderRuntime() {
   renderSchedule(device);
 }
 $('runtime-device').addEventListener('change', renderRuntime);
+const scheduleHelp = fieldHelpLabel('Coming up', () =>
+  'This card and the runtime chart follow the selected thermostat above. Times use that thermostat’s Nest schedule time zone. Heat mode shows heating targets, Cool mode shows cooling targets, and Heat / Cool shows both.\n\n' +
+  'Built-in sensor only, without a climate temperature rule: Nest uses the scheduled target with its own temperature reading. If a Nest room sensor is selected, Nest uses that sensor instead.\n\n' +
+  'Active climate temperature rule: a confirmed Nest schedule target becomes the rule’s desired room temperature. The plugin then adjusts the actual Nest target using the selected sensor readings, adjustment limit and minimum update interval. For an equal-average rule, the desired temperature applies to the selected sensors’ average.\n\n' +
+  'The rule must still be controlling heating when the change occurs. Rule time windows can change which group is active. Eco, Off and holds can affect whether a scheduled target takes effect. A planned time does not confirm when a temporary adjustment ends.');
+scheduleHelp.querySelector('button').setAttribute('aria-label', 'Help for Nest temperature schedule');
+scheduleHelp.firstElementChild.replaceWith(el('h3', 'Coming up'));
+scheduleHelp.querySelector('button').replaceChildren(icon('help'));
+scheduleHelp.querySelector('.field-help-popup').classList.add('schedule-help');
+$('schedule-heading').append(scheduleHelp);
 function renderSchedule(device) {
-  const entries = []; for (const [day, points] of Object.entries(device?.data?.schedules || {})) for (const point of Object.values(points || {})) entries.push({ day: Number(day), ...point });
-  entries.sort((a, b) => a.day - b.day || a.time - b.time);
-  const zone = scheduleTimeZone(deviceOptions(device?.serial), device?.data); const next = nextSetpoint(entries, zone); const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const view = scheduleOverview(device, state.status, deviceOptions(device?.serial), Boolean(device && usable(device)));
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const time = (point) => String(Math.floor(point.time / 3600)).padStart(2, '0') + ':' + String(Math.floor(point.time % 3600 / 60)).padStart(2, '0');
-  $('schedule-next').textContent = next ? 'Next planned change · ' + days[next.day] + ' ' + time(next) + ' (' + zone + ')' : entries.length ? 'Choose this thermostat’s Nest schedule time zone in Settings to calculate the next change.' : 'No schedule has been reported for this thermostat’s current mode.';
+  $('schedule-thermostat').textContent = view.name;
+  $('schedule-mode').replaceChildren(pill(view.modeLabel), ...(view.eco ? [pill('Eco on', 'warn')] : []),
+    ...(!view.live && device ? [pill('Last reported · offline', 'warn')] : []));
+  $('schedule-next').textContent = view.points.length ? 'Next planned changes · ' + view.zone : view.empty;
   $('schedule-preview').replaceChildren();
-  const chosen = next ? [next, ...entries.filter((entry) => entry.day !== next.day || entry.time !== next.time)].slice(0, 3) : entries.slice(0, 3);
-  for (const point of chosen) { const row = el('div', undefined, 'schedule-row'); row.append(el('span', days[point.day] + ' · ' + time(point)), el('strong', formatTemp(point['temp-min']) + ' / ' + formatTemp(point['temp-max']))); $('schedule-preview').append(row); }
+  for (const [index, point] of view.points.entries()) {
+    const row = el('div', undefined, 'schedule-row');
+    const date = el('span', days[point.day] + ' · ' + time(point));
+    if (index === 0) date.append(el('small', 'Next change'));
+    const targets = el('div', undefined, 'schedule-targets');
+    for (const target of point.targets) targets.append(el('strong', target.label + ' ' + formatTemp(target.value)));
+    row.append(date, targets); $('schedule-preview').append(row);
+  }
+  const control = view.control; const heading = el('div', undefined, 'schedule-control-heading');
+  heading.append(el('strong', control.title), pill(control.label, control.tone));
+  const content = [heading, el('p', control.detail, 'small-note')];
+  if (Number.isFinite(control.runtime?.desiredTemperature)) content.push(el('p',
+    'Current room target: ' + formatTemp(control.runtime.desiredTemperature) +
+    (Number.isFinite(control.runtime.roomTemperature) ? ' · Selected rooms: ' + formatTemp(control.runtime.roomTemperature) : ''), 'small-note'));
+  if (control.rules.length && !control.runtime) {
+    const list = el('ul', undefined, 'schedule-rule-status');
+    for (const rule of control.rules) list.append(el('li', rule.name + ' · ' + rule.label));
+    content.push(list);
+  }
+  $('schedule-control').replaceChildren(...content);
 }
 async function discoverSources(explicit = true) {
   if (state.discovering || !state.session?.authenticated || (host && !host.initialConfigured)) return;
@@ -1650,4 +1681,5 @@ if (host) {
   await connectionPage.load();
 }
 checkSession();
+
 

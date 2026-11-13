@@ -24,6 +24,16 @@ The runtime starts only with a usable, non-excluded Nest or Google account. With
 
 Both interfaces use visual controls rather than requiring hand-edited JSON. The standalone dashboard adapts to desktop and phone screens and can be [added to an iPhone or iPad Home Screen](#add-to-your-phone).
 
+## Upcoming Nest schedule changes
+
+In **Overview → A week of comfort**, choose **Selected thermostat** to view that thermostat’s runtime chart and **Coming up** card. The card repeats the thermostat name, current mode and any active Eco setting. It lists the next three reported weekly schedule entries in upcoming order using the thermostat’s schedule time zone. Heat mode shows only heating targets, Cool mode shows only cooling targets, and Heat / Cool shows both with labels.
+
+The card also identifies the current climate temperature rule and its reported status. While a rule is controlling heating, a confirmed Nest scheduled heating target becomes its desired room temperature. The rule adjusts Nest’s actual target using its selected sensor readings, adjustment limit and minimum update interval. For equal averaging, the desired temperature applies to the selected sensors’ average. The target sent to Nest can differ from that desired temperature.
+
+Without an active climate temperature rule, Nest uses its selected native sensor. With the built-in sensor selected, the scheduled target applies to the thermostat’s own temperature reading. Paused, disabled, waiting and unavailable rules are labeled separately; an enabled rule alone does not confirm active control.
+
+Hover over, focus or tap the **?** beside **Coming up** for help comparing these setups. Escape, a second tap or clicking outside closes it. A rule must still be controlling heating when a schedule change occurs for it to adopt that target. Rule windows, Eco, Off and holds can affect the outcome, so a planned time does not confirm when a temporary adjustment ends. Offline values are marked as last reported.
+
 ## Navigate on phones and in Homebridge
 
 Use **☰ Menu** to switch between **Overview**, **Sensors & fans**, **Climate rules**, **Settings** and **Accounts & web access**. In Homebridge Settings and on narrow web screens, navigation starts collapsed so the page can use the available width. The menu opens over the page and closes when you select a destination, click outside, press Escape or move keyboard focus out of it. The current page is highlighted. On the standalone mobile dashboard, the menu also includes **Sign out**.
@@ -169,7 +179,7 @@ Displaying a known native sensor is separate from automatic sensor setup: missin
 
 **Heat mode** is required; the heating equipment does not need to be running. An idle thermostat can follow a temperature rule. A waiting rule names the specific requirement that prevents it from running.
 
-To investigate unavailable setup, open **Overview → Diagnose Nest sensor selection → Download sensor diagnostics**. The dashboard refreshes status and downloads one JSON report covering all thermostats. It includes thermostat names and models, connection and update status, selected sensor names, scheduling mode, and specific validation reasons such as missing scheduling mode, missing paired-sensor list, unknown selection, or an unsupported multi-sensor format. It excludes credentials, device IDs, signatures, temperatures and saved schedules. The download only reads status and does not change sensor selections, schedules or heating targets. Review the report before sharing it for support.
+To investigate unavailable setup, open **Settings → Diagnostics & troubleshooting → Diagnose Nest sensor selection → Download sensor diagnostics**. The dashboard refreshes status and downloads one JSON report covering all thermostats. It includes thermostat names and models, connection and update status, selected sensor names, scheduling mode, and specific validation reasons such as missing scheduling mode, missing paired-sensor list, unknown selection, or an unsupported multi-sensor format. It excludes credentials, device IDs, signatures, temperatures and saved schedules. The download only reads status and does not change sensor selections, schedules or heating targets. Review the report before sharing it for support.
 
 A group that selects both a Nest room sensor and a temperature source from another Homebridge accessory can offer **Prepare Nest for group** in **Execution status**. The action is available only after the rule is saved and enabled, while the thermostat is connected and its native sensor controls are recognized.
 
@@ -448,4 +458,5 @@ In **Homebridge plugin Settings**, rule edits, time windows, temperature units, 
 Account and web-server settings also use Homebridge’s bottom Save button. **Save web login** writes the separate private login credentials immediately; it does not save or enable the web server. Discarding connection edits does not undo a saved web login.
 
 In the **standalone dashboard**, use **Save changes**. If the saved settings require a restart, the dashboard offers **Restart child bridge** when available. Click it to request the restart; editing is temporarily disabled while the dashboard checks for reconnection. Sign in again if prompted. Changing a setting by itself never restarts the bridge.
+
 

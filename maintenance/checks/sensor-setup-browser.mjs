@@ -179,6 +179,9 @@ try {
   assert.equal(await upstairs.locator('.controller-name').textContent(), 'Bedroom sensor');
   assert.equal(await page.locator('.temperature-controller select, .temperature-controller button').count(), 0);
   assert.doesNotMatch(await page.locator('#thermostats').innerText(), /Automatic sensor setup unavailable/);
+  assert.equal(await page.locator('#page-overview #download-sensor-diagnostics').count(), 0);
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
+  await page.getByRole('heading', { name: 'Diagnostics & troubleshooting', exact: true }).waitFor();
   await page.getByText('Diagnose Nest sensor selection', { exact: true }).click();
   const methodsBefore = requestMethods.length;
   const downloadPromise = page.waitForEvent('download');
@@ -192,6 +195,7 @@ try {
   assert.deepEqual(report.thermostats.map((entry) => entry.checks.issues[0].code), ['mode_missing', 'mode_unknown']);
   assert.doesNotMatch(text, /PRIVATE-|fixture-csrf|resourceId|signature|rcsControlSchedule/);
   assert.ok(requestMethods.slice(methodsBefore).every((method) => method === 'GET'), 'Diagnostic download must only read status');
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
   diagnosticStates = [{ ...settings, associatedRcsSensors: undefined }, { ...settings, activeRcsSelection: undefined }];
   await refreshDashboard();
   assert.equal(await downstairs.locator('.controller-name').textContent(), 'Thermostat sensor');
@@ -242,6 +246,7 @@ try {
   await page.setViewportSize({ width: 1440, height: 1100 });
   await page.screenshot({ path: path.join(output, 'sensor-selection-desktop.png'), fullPage: true });
   failStatus = true;
+  await page.getByRole('link', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Download sensor diagnostics', exact: true }).click();
   await page.getByText('Refresh the dashboard connection before downloading sensor diagnostics.', { exact: true }).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Download sensor diagnostics', exact: true }).isDisabled(), true);
@@ -251,3 +256,4 @@ try {
 } finally {
   await browser?.close(); server.closeAllConnections(); await new Promise((resolve) => server.close(resolve));
 }
+

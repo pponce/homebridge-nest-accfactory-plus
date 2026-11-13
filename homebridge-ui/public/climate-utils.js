@@ -125,9 +125,9 @@ export function editableConfig(input) {
   return config;
 }
 
-export function nextSetpoint(entries, timeZone, now = new Date()) {
+export function upcomingSetpoints(entries, timeZone, now = new Date()) {
   if (!timeZone || !entries.length) {
-    return null;
+    return [];
   }
   let parts;
   try {
@@ -144,7 +144,7 @@ export function nextSetpoint(entries, timeZone, now = new Date()) {
         .map((part) => [part.type, part.value]),
     );
   } catch {
-    return null;
+    return [];
   }
   const day = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday);
   const current = day * 86400 + Number(parts.hour) * 3600 + Number(parts.minute) * 60 + Number(parts.second);
@@ -163,6 +163,61 @@ export function nextSetpoint(entries, timeZone, now = new Date()) {
         ...entry,
         distance: (((entry.day * 86400 + entry.time - current) % 604800) + 604800) % 604800 || 604800,
       }))
-      .sort((a, b) => a.distance - b.distance)[0] ?? null
+      .sort((a, b) => a.distance - b.distance)
   );
 }
+
+export function nextSetpoint(entries, timeZone, now = new Date()) {
+  return upcomingSetpoints(entries, timeZone, now)[0] ?? null;
+}
+
+// Describe the selected thermostat using reported mode and running-rule feedback.
+export function scheduleOverview(device, snapshot, options = {}, live = true, now = new Date()) {
+  const data = device?.data || {};
+  const normalizeMode = (value) => ['range', 'heatcool'].includes(value?.toLowerCase()) ? 'range' : value?.toLowerCase();
+  const mode = normalizeMode(data.hvac_mode);
+  const modeLabel = { heat: 'Heat mode', cool: 'Cool mode', range: 'Heat / Cool mode', off: 'Off' }[mode] || 'Mode unavailable';
+  const zone = scheduleTimeZone(options, data);
+  const entries = ['heat', 'cool', 'range'].includes(mode) ? Object.entries(data.schedules || {}).flatMap(([day, points]) =>
+    Object.values(points || {}).filter((point) => (!point.type || normalizeMode(point.type) === mode) &&
+      (!point.entry_type || point.entry_type === 'setpoint')).map((point) => ({ ...point, day: Number(day), targets: [
+      ...(mode !== 'cool' ? [{ label: 'Heat', value: point['temp-min'] ?? (mode === 'heat' ? point.temp : undefined) }] : []),
+      ...(mode !== 'heat' ? [{ label: 'Cool', value: point['temp-max'] ?? (mode === 'cool' ? point.temp : undefined) }] : []),
+    ] }))) : [];
+  const points = upcomingSetpoints(entries, zone, now).slice(0, 3);
+  const empty = !device ? 'Select a thermostat to see its Nest schedule.' : mode === 'off' ?
+    'The thermostat is off. No temperature schedule is active.' : !['heat', 'cool', 'range'].includes(mode) ?
+      'Nest has not reported a usable mode for this thermostat.' : !entries.length ?
+        'No schedule has been reported for this thermostat’s current mode.' : !zone ?
+          'Choose this thermostat’s Nest schedule time zone in Settings to calculate upcoming changes.' :
+          'No usable schedule times have been reported for this thermostat.';
+  const view = device ? temperatureControlView(device, snapshot, live) : null;
+  const unknown = !device || !snapshot.automation || view?.label === 'Unknown';
+  const controller = !unknown && view.rules.find((rule) => ['active', 'interval', 'updating', 'restoring'].includes(rule.status));
+  const heating = mode === 'heat' && data.eco_mode === false;
+  let title = 'Nest sensor control';
+  let label = 'Native control';
+  let tone = 'neutral';
+  let detail = selectedNestSensor(data) === '' ? 'Nest uses its built-in temperature sensor for scheduled targets.' :
+    'Nest uses its selected temperature sensor for scheduled targets.';
+  let runtime = null;
+  if (unknown) {
+    title = 'Control status unavailable'; label = 'Unknown'; tone = 'warn';
+    detail = 'Current climate-rule control cannot be confirmed. Reconnect or check Climate rules before relying on this preview.';
+  } else if (controller && heating) {
+    title = 'Climate rule · ' + controller.name; label = controller.label; tone = controller.tone;
+    runtime = snapshot.automation.rules.find((rule) => rule.id === controller.id);
+    detail = controller.status === 'restoring' ? 'This rule is returning its previous heating target to Nest; it is not applying a new room target.' :
+      'If this rule is still controlling heating at the scheduled change, the confirmed Nest heating target becomes its desired room temperature. ' +
+      'It then adjusts Nest’s target using the selected sensor readings, adjustment limit and minimum update interval. Nest’s target may differ from the room target.';
+    if (controller.status === 'updating') detail = (runtime.reason || 'Waiting for Nest to confirm a target.') + ' ' + detail;
+  } else if (view.rules.length) {
+    title = 'Climate rules inactive'; label = 'Not adjusting';
+    detail = 'No climate temperature rule is adjusting this thermostat now. ' + detail;
+  }
+  if (data.eco_mode === true) detail = 'Eco is on. These are the normal Nest schedule targets; Eco can prevent them from taking effect. ' + detail;
+  else if (mode === 'off') detail = 'Turn on a supported mode to use its Nest temperature schedule. Climate temperature rules require Heat mode with Eco off.';
+  return { name: data.description || (device ? 'Thermostat' : 'No thermostat selected'), modeLabel, mode, zone, points, empty,
+    eco: data.eco_mode === true, live, control: { title, label, tone, detail, rules: view?.rules || [], runtime } };
+}
+

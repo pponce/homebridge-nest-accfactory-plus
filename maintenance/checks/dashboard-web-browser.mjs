@@ -1,4 +1,5 @@
 import { checkRuleWindows } from './dashboard-rule-windows.mjs';
+import { checkScheduleOverview } from './dashboard-schedule.mjs';
 // Browser fixture only. No Nest, Homebridge or other real device requests are made.
 import http from 'node:http';
 import fs from 'node:fs/promises';
@@ -154,6 +155,7 @@ try {
     for (const result of results) assert.ok(result.ratio >= 4.5, result.name + ' text contrast must reach 4.5:1; received ' + result.ratio.toFixed(2));
   };
   const base = 'http://127.0.0.1:' + server.address().port;
+  await checkScheduleOverview(browser, base, output);
   await checkSourceRefresh(browser, base);
   await checkEcoFeedback(browser, base);
   await checkTemperatureEditor(browser, base, output);
@@ -471,5 +473,6 @@ try {
   await browser?.close();
   await new Promise((resolve) => server.close(resolve));
 }
+
 
 
