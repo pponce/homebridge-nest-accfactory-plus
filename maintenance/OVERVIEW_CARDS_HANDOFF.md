@@ -34,3 +34,10 @@ Use compact thermostat-sized fan and occupancy cards with matching icons. Show d
 2. Fast-forward main to the tested candidate using the expected current main SHA.
 3. Wait for the release workflow and verify v0.6.5 assets, tag and publisher checksum.
 4. Return release/changelog links and maintenance/publish-0.6.5.sh as a complete SSH-safe brace block.
+
+## Release validation follow-up
+
+- PR #31 merged as 0523f19a9f9494174cfa4e1f8f65af0b5e2abe6d after all six compatibility combinations and both dashboard browser workflows passed.
+- First release run 43344523075 passed browser validation and five compatibility jobs; Node 24 / Homebridge 1.11.4 hit upstream HomeKitHistory test A1 at line 2196. Its full Eve Aqua response comparison crossed a one-second wall-clock boundary (only timestamp byte 16 changed).
+- No upstream submodule, application code or test assertions are changed. Re-trigger the existing release-intent path for the same 0.6.5 version, since this connection does not expose the Actions rerun endpoint. All release gates remain required.
+- Remaining: verify the retriggered workflow, tag and release assets, then return the npm launcher.
