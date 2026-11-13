@@ -434,6 +434,41 @@
                                     "minimum": 0,
                                     "maximum": 100,
                                     "description": "Higher numbers take priority. Enabled groups sharing a thermostat need different priorities."
+                                },
+                                "occupancyCondition": {
+                                    "title": "Occupancy requirement (optional)",
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "sourceType",
+                                        "sourceId",
+                                        "state"
+                                    ],
+                                    "properties": {
+                                        "sourceType": {
+                                            "type": "string",
+                                            "enum": [
+                                                "sensor",
+                                                "presenceRule"
+                                            ],
+                                            "title": "Occupancy source type"
+                                        },
+                                        "sourceId": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 256,
+                                            "title": "Occupancy source identifier"
+                                        },
+                                        "state": {
+                                            "type": "string",
+                                            "enum": [
+                                                "occupied",
+                                                "unoccupied"
+                                            ],
+                                            "title": "Required occupancy state"
+                                        }
+                                    },
+                                    "description": "Require an individual occupancy sensor or the evaluated state of a combined presence rule, in addition to the time window and run condition. Configure sources in Climate rules."
                                 }
                             },
                             "required": [
@@ -599,6 +634,41 @@
                                             "description": "Named zone such as America/Los_Angeles."
                                         }
                                     }
+                                },
+                                "occupancyCondition": {
+                                    "title": "Occupancy requirement (optional)",
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "sourceType",
+                                        "sourceId",
+                                        "state"
+                                    ],
+                                    "properties": {
+                                        "sourceType": {
+                                            "type": "string",
+                                            "enum": [
+                                                "sensor",
+                                                "presenceRule"
+                                            ],
+                                            "title": "Occupancy source type"
+                                        },
+                                        "sourceId": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 256,
+                                            "title": "Occupancy source identifier"
+                                        },
+                                        "state": {
+                                            "type": "string",
+                                            "enum": [
+                                                "occupied",
+                                                "unoccupied"
+                                            ],
+                                            "title": "Required occupancy state"
+                                        }
+                                    },
+                                    "description": "Require an individual occupancy sensor or the evaluated state of a combined presence rule, in addition to the time window and run condition. Configure sources in Climate rules."
                                 }
                             },
                             "required": [
@@ -1124,6 +1194,9 @@
                             "key": "climateRuleDrafts.temperature[].window"
                         },
                         {
+                            "key": "climateRuleDrafts.temperature[].occupancyCondition"
+                        },
+                        {
                             "key": "climateRuleDrafts.temperature[].priority"
                         }
                     ]
@@ -1196,6 +1269,9 @@
                         },
                         {
                             "key": "climateRuleDrafts.fans[].window"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].occupancyCondition"
                         }
                     ]
                 },

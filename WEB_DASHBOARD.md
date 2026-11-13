@@ -479,3 +479,18 @@ In **Homebridge plugin Settings**, rule edits, time windows, temperature units, 
 Account and web-server settings also use Homebridge’s bottom Save button. **Save web login** writes the separate private login credentials immediately; it does not save or enable the web server. Discarding connection edits does not undo a saved web login.
 
 In the **standalone dashboard**, use **Save changes**. If the saved settings require a restart, the dashboard offers **Restart child bridge** when available. Click it to request the restart; editing is temporarily disabled while the dashboard checks for reconnection. Sign in again if prompted. Changing a setting by itself never restarts the bridge.
+
+
+## Occupancy requirements for temperature and fan rules
+
+Under **When to run**, leave **Occupancy requirement** at **Any occupancy state** for unrestricted occupancy, or choose **Occupied / Home** or **Unoccupied / Away**. Then select one individual occupancy sensor or a saved combined presence rule. Nest Home/Away can be used as an individual occupancy source. Motion sensors can contribute through a combined presence rule, where motion holds and Away delays establish the effective occupancy state.
+
+The time window and occupancy requirement must both match. Fan rules also require their temperature or HVAC run condition. Combined presence is evaluated first, so its holds, Away delay and temporary Home/Away override apply to dependent rules in the same evaluation. A disabled, paused, unavailable or unreliable presence source cannot satisfy either occupancy state. An unknown higher-priority condition reserves the equipment until it can be evaluated; a known nonmatching condition allows another eligible rule to take over.
+
+When an occupancy condition stops matching, another eligible rule can take over, or settings owned by the outgoing rule return to their previous value when the device confirms its state. When the condition matches again, automatic control resumes subject to normal update intervals. Occupancy does not force off equipment that the rule did not turn on.
+
+## Fan feedback recovery
+
+An accepted fan command waits for the fan's reported power or speed. The rule shows **Recovering feedback** after two minutes if the previous state is still reported. It continues checking readings without repeating the accepted command and resumes when matching feedback arrives. A speed command may report power before speed; those separate updates are allowed. Saved speed ranges treat percentages within the same physical setting as equivalent.
+
+A conflicting setting suspends automatic control for that fan until **Resume**. A suspension created by an older release still requires one Resume after reviewing the reported settings, because it may represent a deliberate change. Confirmed and conflicting commands replace the pending message in execution status.

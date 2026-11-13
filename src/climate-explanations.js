@@ -25,7 +25,7 @@ export function explainRule(engine, state, heatingTarget) {
       lastDetectedAt: finite(state.lastDetectedAt?.[id]), holdUntil,
       effective: detected === null ? null : detected || (source.kind === 'motion' && holdUntil !== null) };
   });
-  const report = { evaluatedAt: now, sources };
+  const report = { evaluatedAt: now, sources, occupancyCondition: state.occupancyStatus };
   if (rule.kind === 'presence') {
     const known = sources.length > 0 && sources.every((source) => source.effective !== null);
     report.presence = { logic: rule.logic, holdMinutes: rule.holdMinutes ?? 10,
@@ -42,7 +42,7 @@ export function explainRule(engine, state, heatingTarget) {
   report.thermostat = { name: device?.data.description ?? 'Thermostat', available: connected,
     hvacState: connected ? device.data.hvac_state ?? null : null };
   if (rule.kind === 'fan') {
-    const eligible = rule.enabled && !state.paused && state.windowStatus?.active !== false;
+    const eligible = rule.enabled && !state.paused && state.windowStatus?.active !== false && state.occupancyStatus?.matches !== false;
     const plan = eligible ? state.fanPlan : null;
     report.condition = { action: rule.action, demand: plan?.demand ?? null,
       threshold: finite(rule.threshold), inclusive: rule.thresholdInclusive === true,
@@ -66,6 +66,8 @@ export function explainRule(engine, state, heatingTarget) {
         lastReadAt: finite(source?.lastReadAt), controllerId: engine.fanWinners.get(id) ?? null,
         ownerId: lease?.owner ?? null, pending: lease?.pending === true, restoring: lease?.restoring === true,
         requested: lease?.pending ? lease.expected : null,
+        recovering: lease?.pending === true && now - lease.sentAt >= 2 * MINUTE,
+        commandAt: finite(lease?.sentAt),
         supportedSpeed: speed, nextEligibleAt,
         setting: mappedSpeed(source?.speedMapping, source?.speed)?.label ?? null,
         proposedSetting: mappedSpeed(source?.speedMapping, speed)?.label ?? null,

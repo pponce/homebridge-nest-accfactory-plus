@@ -32,7 +32,7 @@ NODE
   }
   climate_install_release() {
     local project="$HOME/devProjects/homebridge-nest-climate-cntrl"
-    local version='0.6.6'
+    local version='0.6.7'
     local package='homebridge-nest-climate-cntrl'
     local directory="$project/maintenance/releases/v$version"
     local archive="$package-$version.tgz"

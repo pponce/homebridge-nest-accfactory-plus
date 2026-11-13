@@ -1416,7 +1416,7 @@ test('missing speed feedback or unsupported fans never fall back to unrestricted
   }
 });
 
-test('unconfirmed speed writes time out without turning on or retrying the fan', async (t) => {
+test('unconfirmed speed writes recover without turning on or retrying the fan', async (t) => {
   const f = await fixture(t, { fans: [speedRule] });
   f.noAck();
   fahrenheitRoom(f, 78);
@@ -1427,9 +1427,17 @@ test('unconfirmed speed writes time out without turning on or retrying the fan',
   f.advance(minute);
   await f.engine.tick();
   await f.engine.tick();
-  assert.equal(f.rule('fans').paused, true);
+  assert.equal(f.rule('fans').paused, false);
+  assert.equal(f.rule('fans').phase, 'recovering');
   assert.equal(f.fanSpeedCommands.length, 1);
   assert.equal(f.fanCommands.length, 0);
+  f.source('fan').speed = f.fanSpeedCommands[0].speed;
+  await f.engine.tick();
+  assert.equal(f.fanCommands.length, 1, 'Only confirmed speed permits the staged start');
+  f.source('fan').running = true;
+  await f.engine.tick();
+  assert.equal(f.rule('fans').lastAction.status, 'confirmed');
+  assert.equal(f.rule('fans').phase, 'active');
 });
 
 test('a failed speed command pauses, and a manual change before ownership is respected', async (t) => {
@@ -2612,4 +2620,195 @@ test('unmapped fan capability changes retain the normal update interval below th
   assert.match(f.rule('fans').reason, /one-minute/);
   f.advance(45000); await f.engine.tick();
   assert.equal(f.fanSpeedCommands.at(-1).speed, 50);
+});
+
+const occupancyGate = (state = 'occupied', sourceType = 'sensor', sourceId = 'occupancy') => ({ sourceType, sourceId, state });
+
+test('individual occupancy gates temperature and fan rules, restores ownership and resumes without an override', async (t) => {
+  const f = await fixture(t, {});
+  f.rules({ temperature: [{ ...temperatureRule, occupancyCondition: occupancyGate() }],
+    fans: [{ ...fanRule, speedMode: 'fixed', fixedSpeed: 40, occupancyCondition: occupancyGate() }] });
+  f.source('room').temperature = 27;
+  await f.engine.tick();
+  assert.equal(f.commands.length + f.fanSpeedCommands.length, 0);
+  assert.equal(f.rule('rooms').phase, 'idle');
+  f.source('occupancy').detected = true;
+  await f.engine.tick(); await f.engine.tick(); await f.engine.tick();
+  assert.equal(f.source('fan').running, true);
+  assert.equal(f.rule('rooms').occupancyCondition.matches, true);
+  f.source('occupancy').detected = false;
+  await f.engine.tick(); await f.engine.tick();
+  assert.equal(f.source('fan').running, false);
+  assert.equal(f.dashboard.devices.get('T').data.target_temperature_low, 19);
+  assert.equal(f.engine.leases.size, 0);
+  f.source('fan').speed = 60;
+  await f.engine.tick();
+  f.source('occupancy').detected = true;
+  f.advance(6 * minute); await f.engine.tick(); await f.engine.tick(); await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.size, 0);
+  assert.equal(f.source('fan').running, true);
+});
+
+test('combined presence gates include motion hold, Away delay and same-tick manual overrides', async (t) => {
+  const f = await fixture(t, {});
+  f.rules({ occupancy: [presenceRule], fans: [{ ...fanRule,
+    occupancyCondition: occupancyGate('occupied', 'presenceRule', 'presence') }] });
+  f.source('room').temperature = 27;
+  f.source('motion').detected = true;
+  await f.engine.tick();
+  assert.equal(f.fanCommands.length, 1, 'Home is usable in the first evaluation');
+  f.source('motion').detected = false;
+  f.advance(minute); await f.engine.tick();
+  assert.equal(f.rule('fans').occupancyCondition.matches, true, 'Motion hold is in effect');
+  f.advance(minute); await f.engine.tick();
+  assert.equal(f.rule('fans').occupancyCondition.matches, true, 'Away delay retains Home');
+  f.advance(3 * minute); await f.engine.tick();
+  assert.equal(f.rule('fans').occupancyCondition.matches, false);
+  assert.equal(f.source('fan').running, false);
+  await f.engine.tick();
+  await f.engine.control({ id: 'presence', action: 'home', minutes: 5 });
+  assert.equal(f.rule('fans').occupancyCondition.matches, true);
+  assert.match(f.rule('fans').occupancyCondition.detail, /Manual presence override/);
+  f.advance(minute); await f.engine.tick();
+  assert.equal(f.source('fan').running, true);
+});
+
+test('unknown occupancy reserves priority without treating missing input as Away', async (t) => {
+  for (const kind of ['temperature', 'fan']) {
+    const f = await fixture(t, {});
+    const base = kind === 'fan' ? fanRule : temperatureRule;
+    const high = { ...base, id: 'high', priority: 90, occupancyCondition: occupancyGate('unoccupied') };
+    const low = { ...base, id: 'low', priority: 10 };
+    f.rules({ [kind === 'fan' ? 'fans' : 'temperature']: [high, low] });
+    f.source('room').temperature = 27;
+    f.source('occupancy').available = false;
+    await f.engine.tick();
+    assert.equal(f.rule('high').occupancyCondition.matches, null);
+    assert.equal(f.commands.length + f.fanCommands.length, 0);
+    f.source('occupancy').available = true; f.source('occupancy').detected = true;
+    await f.engine.tick();
+    assert.equal(f.rule('high').phase, 'idle');
+    assert.equal(kind === 'fan' ? f.engine.fanWinners.get('fan') : f.engine.temperatureWinners.get('T'), 'low');
+    assert.equal(f.commands.length + f.fanCommands.length, 1);
+  }
+});
+
+test('stale, removed, disabled and paused presence sources cannot satisfy occupancy gates', async (t) => {
+  const f = await fixture(t, {});
+  f.source('room').temperature = 27;
+  for (const sourceType of ['sensor', 'presenceRule']) {
+    f.rules({ occupancy: [{ ...presenceRule, enabled: false }], fans: [{ ...fanRule,
+      occupancyCondition: occupancyGate('unoccupied', sourceType, sourceType === 'sensor' ? 'occupancy' : 'presence') }] });
+    f.source('occupancy').stale = true;
+    await f.engine.tick();
+    assert.equal(f.rule('fans').occupancyCondition.matches, null);
+    assert.equal(f.fanCommands.length, 0);
+  }
+  f.source('occupancy').stale = false;
+  f.rules({ occupancy: [{ ...presenceRule, awayDelayMinutes: 0 }], fans: [{ ...fanRule,
+    occupancyCondition: occupancyGate('unoccupied', 'presenceRule', 'missing') }] });
+  await f.engine.tick();
+  assert.equal(f.rule('fans').occupancyCondition.matches, null);
+  f.rules({ occupancy: [presenceRule], fans: [{ ...fanRule,
+    occupancyCondition: occupancyGate('unoccupied', 'presenceRule', 'presence') }] });
+  await f.engine.control({ id: 'presence', action: 'pause' });
+  assert.equal(f.rule('fans').occupancyCondition.matches, null);
+  assert.equal(f.fanCommands.length, 0);
+});
+
+test('a native-only temperature group still refreshes its external occupancy condition', async (t) => {
+  const f = await fixture(t, {});
+  f.rules({ temperature: [{ ...temperatureRule, sourceIds: ['nest:S'], occupancyCondition: occupancyGate() }] });
+  f.source('occupancy').detected = true;
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').occupancyCondition.matches, true);
+  assert.equal(f.commands.length, 1);
+});
+
+test('occupancy and window must both match and the final write guard rechecks occupancy', async (t) => {
+  for (const kind of ['temperature', 'fan']) {
+    const f = await fixture(t, {});
+    f.source('room').temperature = 27;
+    f.source('occupancy').detected = true;
+    const rule = { ...(kind === 'fan' ? fanRule : temperatureRule), occupancyCondition: occupancyGate() };
+    const key = kind === 'fan' ? 'fans' : 'temperature';
+    f.rules({ [key]: [{ ...rule, window: { days: [0, 1, 2, 3, 4, 5, 6], start: '11:00', end: '12:00', timeZone: 'UTC' } }] });
+    await f.engine.tick();
+    assert.equal(f.commands.length + f.fanCommands.length, 0);
+    f.rules({ [key]: [rule] });
+    const persist = f.engine.persist.bind(f.engine);
+    f.engine.persist = async () => {
+      await persist();
+      if (f.engine.leases.size) f.engine.sources.get('occupancy').detected = false;
+    };
+    await f.engine.tick();
+    assert.equal(f.commands.length + f.fanCommands.length, 0);
+    assert.equal(f.engine.leases.size, 0, 'No phantom command remains after the gate changes');
+  }
+});
+
+test('speed feedback tolerates power arriving first and mapped settlement, including restart', async (t) => {
+  const f = await fixture(t, {});
+  f.noAck(); await useFanMapping(f);
+  f.rules({ fans: [{ ...fanRule, speedMode: 'fixed', fixedSpeed: 31 }] });
+  f.source('room').temperature = 27;
+  await f.engine.tick();
+  f.source('fan').running = true;
+  await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.size, 0, 'A separate power report is expected during a speed write');
+  f.advance(3 * minute); await f.engine.tick();
+  assert.equal(f.rule('fans').phase, 'recovering');
+  assert.equal(f.rule('fans').lastAction.status, 'recovering');
+  await f.engine.persist(); f.engine.leases.clear(); await f.engine.start({ schedule: false });
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.length, 1);
+  f.source('fan').speed = 29;
+  await f.engine.tick();
+  assert.equal(f.rule('fans').phase, 'active');
+  assert.equal(f.rule('fans').lastAction.status, 'confirmed');
+  assert.equal(f.fanCommands.length, 0);
+  f.source('fan').speed = 43; await f.engine.tick();
+  assert.equal(f.rule('fans').paused, true, 'A different physical setting still suspends automatic control');
+  assert.equal(f.rule('fans').lastAction.status, 'conflict');
+});
+
+test('power-only fan feedback recovers after delays and compares mapped settled speeds', async (t) => {
+  const f = await fixture(t, {});
+  f.noAck(); await useFanMapping(f);
+  f.rules({ fans: [fanRule] });
+  f.source('room').temperature = 27; f.source('fan').speed = 31;
+  await f.engine.tick();
+  f.advance(5 * minute); await f.engine.tick();
+  assert.equal(f.rule('fans').phase, 'recovering');
+  assert.equal(f.fanCommands.length, 1);
+  f.source('fan').running = true; f.source('fan').speed = 29;
+  await f.engine.tick();
+  f.source('fan').speed = 28; await f.engine.tick();
+  assert.equal(f.rule('fans').paused, false);
+  assert.equal(f.rule('fans').lastAction.status, 'confirmed');
+  f.source('fan').speed = 43; await f.engine.tick();
+  assert.equal(f.rule('fans').paused, true);
+});
+
+test('saved manual fan overrides remain suspended across restart', async (t) => {
+  const f = await fixture(t, { fans: [fanRule] });
+  f.engine.manualFan('fan', 'A fan speed or power setting changed, or feedback was not confirmed. Review the fan, then Resume.');
+  await f.engine.persist(); await f.engine.start({ schedule: false });
+  f.source('room').temperature = 27; await f.engine.tick();
+  assert.equal(f.rule('fans').paused, true);
+  assert.equal(f.fanCommands.length, 0, 'Old overrides have no reliable command ownership and need Resume');
+});
+
+test('occupancy conditions validate optional configuration without allowing presence dependency cycles', () => {
+  for (const base of [temperatureRule, fanRule]) {
+    const key = base.kind === 'fan' ? 'fans' : 'temperature';
+    for (const condition of [occupancyGate(), occupancyGate('unoccupied', 'presenceRule', 'presence')]) {
+      assert.deepEqual(validateRuleDrafts({ [key]: [{ ...base, occupancyCondition: condition }] })[key][0].occupancyCondition, condition);
+    }
+    for (const condition of [null, {}, occupancyGate('invalid'), occupancyGate('occupied', 'motion'),
+      occupancyGate('occupied', 'sensor', ''), { ...occupancyGate(), extra: true }]) {
+      assert.throws(() => validateRuleDrafts({ [key]: [{ ...base, occupancyCondition: condition }] }), /occupancy/);
+    }
+  }
+  assert.throws(() => validateRuleDrafts({ occupancy: [{ ...presenceRule, occupancyCondition: occupancyGate() }] }), /temperature and fan/);
 });

@@ -124,8 +124,8 @@ svg { display: block; }
 .device-symbol { width: 34px; height: 34px; border-radius: 10px; color: var(--accent); background: var(--accent-wash); display: inline-flex; align-items: center; justify-content: center; }
 .card-title h3 { font-size: 15px; }
 .card-title small { display: block; color: var(--muted); font-size: 10px; margin-top: 3px; }
-.temperature-row { display: flex; align-items: flex-end; justify-content: space-between; margin: 21px 0 16px; gap: 12px; }
-.current-temperature { font-size: 58px; line-height: 1; font-weight: 400; letter-spacing: -3.3px; font-variant-numeric: tabular-nums; }
+.temperature-row { display: flex; align-items: flex-start; justify-content: space-between; margin: 21px 0 16px; gap: 12px; }
+.current-temperature { padding-top: 8px; font-size: 58px; line-height: 1; font-weight: 400; letter-spacing: -3.3px; font-variant-numeric: tabular-nums; }
 .current-temperature span { font-size: 24px; letter-spacing: -.5px; vertical-align: top; display: inline-block; margin-top: 8px; color: var(--muted); }
 .temperature-target { text-align: right; color: var(--muted); font-size: 10px; }
 .temperature-target strong { display: block; font-size: 19px; font-weight: 550; color: var(--text); margin-bottom: 1px; }
@@ -334,8 +334,8 @@ input[type="checkbox"] { accent-color: var(--accent); width: 17px; height: 17px;
 .editor-header h3 { font-size: 19px; }
 .editor-header .icon { color: var(--accent); }
 .editor-section { border-top: 1px solid var(--line); margin-top: 23px; padding-top: 21px; }
-.editor-section h4 { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
-.step-number { font-size: 9px; font-weight: 750; width: 20px; height: 20px; background: var(--accent-wash); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); }
+.editor-section h4 { font-size: 18px; font-weight: 750; color: var(--text); display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.step-number { font-size: 11px; font-weight: 750; width: 27px; height: 27px; flex-shrink: 0; background: var(--accent-wash); border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; color: var(--accent); }
 .editor-section > p { color: var(--muted); font-size: 11px; margin-bottom: 14px; }
 .source-picker { max-height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 11px; margin-top: 12px; }
 .pick-source { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); cursor: pointer; }
@@ -639,3 +639,8 @@ caption { text-align: left; color: var(--muted); padding-bottom: 10px; font-size
 .fan-mapping-row label:first-child { grid-column: 1 / -1; }
 .fan-mapping-row input { width: 100%; min-width: 0; box-sizing: border-box; }
 .fan-mapping > button { margin-top: 12px; }
+
+/* Share header, reading and facts tracks across adjacent thermostat cards. */
+.thermostat-card { display: grid; grid-template-rows: subgrid; grid-row: span 4; row-gap: 0; }
+.thermostat-main { display: grid; grid-template-rows: subgrid; grid-row: span 3; row-gap: 0; }
+.thermostat-card > .thermostat-controls { align-self: start; }

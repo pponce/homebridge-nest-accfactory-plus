@@ -1,4 +1,14 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.7
+
+- Add optional Occupied/Home or Unoccupied/Away requirements to temperature and fan rules under When to run. Select an individual occupancy sensor or a combined presence rule; combined outputs include motion holds, Away delays and manual presence overrides.
+- Evaluate presence before dependent rules, require both the time window and occupancy condition, and preserve rule priorities. Unknown or unavailable occupancy cannot establish Home or Away. Release owned settings when the condition clears and resume when it matches again.
+- Recover delayed fan speed and power feedback automatically without repeating accepted commands. Tolerate separate power and speed reports, retain pending ownership across restarts, and compare settled speeds using saved fan mappings for both speed and power-only rules.
+- Distinguish fan feedback recovery from conflicting settings. Update accepted commands when confirmed, keep conflicting device changes suspended for review, and show fan execution details without unrelated Nest room-target text.
+- Give rule setup sections larger, stronger headings. Align thermostat readings, humidity rows and controls across adjacent Overview cards, including cards with a desired room target and an additional reported Nest target.
+
+**Updating:** Existing rules keep their behavior until an occupancy requirement is selected. A fan already suspended by an earlier release still needs one explicit Resume after its reported power and speed have been reviewed; old suspended state does not contain enough command evidence to distinguish a timeout from an intentional change. Subsequent pending feedback can recover automatically. Existing user pauses remain in effect.
+
 ## v0.6.6
 
 - Recover automatically from delayed automatic heating-command and Nest schedule feedback. Refresh observation after 30 seconds, back off further refreshes to a maximum five-minute interval, and show Recovering feedback after two minutes while awaiting confirmation. Never resend an accepted heating command as part of recovery.

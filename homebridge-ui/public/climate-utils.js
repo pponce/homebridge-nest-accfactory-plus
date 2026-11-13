@@ -39,7 +39,7 @@ export function temperatureControlView(device, snapshot, live = true) {
       'Nest room sensor (name unavailable)';
   const labels = {
     active: 'Active', interval: 'Active · between updates', updating: 'Confirming target', recovering: 'Recovering feedback', restoring: 'Restoring Nest control',
-    scheduled: 'Scheduled', standby: 'Standby', waiting: 'Waiting', paused: 'Paused', disabled: 'Disabled', unavailable: 'Status unavailable',
+    idle: 'Occupancy not met', scheduled: 'Scheduled', standby: 'Standby', waiting: 'Waiting', paused: 'Paused', disabled: 'Disabled', unavailable: 'Status unavailable',
   };
   const automation = snapshot.automation;
   const engineAvailable = automation?.available !== false && !automation?.error;

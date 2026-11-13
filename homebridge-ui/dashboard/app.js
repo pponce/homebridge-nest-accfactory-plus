@@ -1,3 +1,4 @@
+import { occupancyConditionError, occupancyConditionStatus } from '/shared/occupancy-condition.js';
 import { windowDays, windowError, windowSummary, ruleWindow } from '/shared/rule-window.js';
 import { scheduleOverview, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
 import { mountTimeZonePicker, timeZoneChoices } from '/shared/time-zone-picker.js';
@@ -806,6 +807,7 @@ function fanEvidence(host, runtime, fan) {
   const report = runtime.explanation;
   const condition = report.condition;
   evidenceSources(host, report);
+  occupancyEvidence(host, report.occupancyCondition);
   if (condition.action === 'temperature') {
     evidenceNote(host, 'Run when the average is ' + (condition.inclusive ? 'at or above ' : 'above ') +
       formatTemp(condition.threshold) + '; clear the run condition at or below ' + formatTemp(condition.stopThreshold) + '.');
@@ -831,6 +833,7 @@ function fanEvidence(host, runtime, fan) {
   if (fan.pending) {
     const requested = typeof fan.requested === 'boolean' ? (fan.requested ? 'on' : 'off') :
       (fan.requested?.running ? 'on' : 'off') + (Number.isFinite(fan.requested?.speed) ? ' · speed setting ' + fan.requested.speed + '%' : '');
+    if (fan.recovering) evidenceNote(host, 'Recovering fan feedback automatically. The command will not be repeated while confirmation is missing.');
     evidenceNote(host, 'Command awaiting device feedback: ' + requested + '. The reported setting above is not a confirmation of this request.');
   }
   if (fan.restoring) evidenceNote(host, 'Returning the fan to its previous setting, within the controlling rule’s speed cap.');
@@ -951,6 +954,7 @@ function temperatureEvidence(host, runtime) {
     formatTemp(report.average) + ' = ' + formatDifference(heat.rawOffset) + ' offset. Allowed adjustment: ±' +
     formatDifference(heat.maximumOffset) + '. Desired room target + bounded offset, rounded to Nest’s temperature steps: ' +
     formatTemp(heat.calculatedTarget) + '. This is the calculated target; rule status determines whether it can be sent.');
+  occupancyEvidence(host, runtime.occupancyCondition);
   evidenceNote(host, 'Reported Nest target: ' + formatTemp(runtime.nestTarget) + '. Last requested target: ' +
     formatTemp(runtime.lastAction?.value) + (runtime.lastAction?.status ? ' · ' + runtime.lastAction.status : '') + '.');
   evidenceNote(host, 'Minimum adjustment interval: ' + heat.minimumIntervalMinutes + ' min.' +
@@ -1682,11 +1686,42 @@ function renderRuleWindow(host, rule) {
       { choices: timeZoneChoices(rule.window.timeZone) });
     section.append(fields, el('p', 'An end time earlier than the start continues into the following day. Friday 10 PM–6 AM ends Saturday morning. Start is included; end is excluded. Named time zones follow daylight-saving changes.', 'small-note'));
   }
+  renderOccupancyCondition(section, rule);
   if (rule.kind === 'temperature') {
     section.append(el('p', 'Drag temperature groups to set priority. At a window change, the next group takes over without restoring an intermediate target. Manual room targets follow the thermostat across groups until the next confirmed Nest schedule target. Pausing temperature automation pauses all groups for this thermostat.', 'small-note'));
   } else {
     section.append(el('p', 'The run condition must also be met. When this window ends, the next matching rule takes over, or the fan returns to its original state within its speed limit.', 'small-note'));
   }
+}
+
+function renderOccupancyCondition(section, rule) {
+  inputField(section, 'Occupancy requirement', rule.occupancyCondition?.state || 'any', (value) => {
+    if (value === 'any') delete rule.occupancyCondition;
+    else rule.occupancyCondition = { sourceType: 'sensor', sourceId: '', ...rule.occupancyCondition, state: value };
+    renderRules();
+  }, { choices: [['any', 'Any occupancy state'], ['occupied', 'Occupied / Home'], ['unoccupied', 'Unoccupied / Away']] });
+  if (!rule.occupancyCondition) return;
+  const condition = rule.occupancyCondition;
+  inputField(section, 'Occupancy source type', condition.sourceType, (value) => {
+    condition.sourceType = value; condition.sourceId = ''; renderRules();
+  }, { choices: [['sensor', 'Individual occupancy sensor'], ['presenceRule', 'Combined presence rule']] });
+  const available = condition.sourceType === 'presenceRule' ?
+    (state.config.rules.occupancy || []).map((entry) => [entry.id, entry.name + (entry.enabled ? '' : ' · disabled')]) :
+    sources().filter((entry) => entry.kind === 'occupancy').map((entry) => [entry.id, entry.name + (entry.available ? '' : ' · unavailable')]);
+  if (condition.sourceId && !available.some(([id]) => id === condition.sourceId)) available.push([condition.sourceId, 'Selected source · unavailable']);
+  inputField(section, 'Occupancy source', condition.sourceId, (value) => { condition.sourceId = value; },
+    { choices: [['', 'Choose an occupancy source'], ...available] });
+  section.append(el('p', 'The time window and occupancy requirement must both match. A combined presence rule includes its motion holds, Away delay and manual Home/Away override. An unknown, disabled or unavailable source cannot establish Home or Away. Use a combined presence rule for motion sensors.', 'small-note'));
+}
+function draftOccupancyStatus(rule) {
+  const runtime = new Map((state.status.automation?.rules || []).map((entry) => [entry.id, entry]));
+  const presence = new Map((state.config.rules.occupancy || []).map((entry) => [entry.id, { ...runtime.get(entry.id), rule: entry }]));
+  return occupancyConditionStatus(rule, new Map(sources().map((source) => [source.id, source])), presence, Date.now());
+}
+function occupancyEvidence(host, condition) {
+  if (!condition?.sourceId) return;
+  evidenceNote(host, condition.reason);
+  if (condition.detail) evidenceNote(host, condition.detail);
 }
 
 async function ruleCommand(id, action) {
@@ -1753,7 +1788,8 @@ function renderRuleRuntime(rule) {
   if (runtime.error) host.append(el('p', runtime.error));
   if (runtime.pendingRestorations) host.append(el('p', 'Some owned settings are waiting to be restored. Check equipment connectivity.'));
   host.append(el('strong', current?.phase || 'Not saved'), el('p', current?.reason || 'Save this rule to apply its settings.'));
-  if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Desired room temperature: ' + formatTemp(current.desiredTemperature) + ' · Reported Nest target: ' + formatTemp(current.nestTarget)));
+  occupancyEvidence(host, current?.occupancyCondition);
+  if (current?.kind === 'temperature' && Number.isFinite(current?.nestTarget)) host.append(el('p', 'Desired room temperature: ' + formatTemp(current.desiredTemperature) + ' · Reported Nest target: ' + formatTemp(current.nestTarget)));
   if (current?.kind === 'temperature' && Number.isFinite(current.lastAction?.value)) host.append(el('p', 'Last requested Nest target: ' + formatTemp(current.lastAction.value)));
   if (Number.isFinite(current?.nestUpdatedAt)) host.append(el('p', 'Last Nest device update: ' + new Date(current.nestUpdatedAt).toLocaleTimeString()));
   renderHeatingFeedback(host, current);
@@ -1764,13 +1800,15 @@ function renderRuleRuntime(rule) {
       'Retained schedule room target while awaiting Nest feedback.' : 'Following Nest’s scheduled room temperature.'));
   if (current?.kind === 'temperature' && current.targetSource && current.targetSource !== 'rule') host.append(el('p', 'Saved rule target: ' + formatTemp(current.savedDesiredTemperature) + '. Use the saved target to end this adjustment.'));
   for (const fan of current?.fanSpeeds || []) host.append(el('p', fan.name + ': current ' + (Number.isFinite(fan.currentSpeed) ? fan.currentSpeed + '%' : 'unavailable') + ' · requested ' + (Number.isFinite(fan.proposedSpeed) ? fan.proposedSpeed + '%' : 'unsupported') + ' · cap ' + fan.maximumSpeed + '%'));
-  for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Manual override · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
+  for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Suspended · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
   if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
   if (current?.lastAction) {
     const message = current.kind === 'temperature' && current.phase === 'paused' &&
       (!current.lastAction.status || ['accepted', 'recovering'].includes(current.lastAction.status)) ?
-      'Last heating command was accepted. Automatic control is paused; review Nest’s reported target.' : current.lastAction.message;
+      'Last heating command was accepted. Automatic control is paused; review Nest’s reported target.' :
+      current.kind === 'fan' && current.paused && (!current.lastAction.status || ['accepted', 'recovering'].includes(current.lastAction.status)) ?
+        'Last fan command was accepted. Automatic control is paused; review the fan’s reported setting, then Resume.' : current.lastAction.message;
     host.append(el('p', message + ' ' + new Date(current.lastAction.confirmedAt || current.lastAction.at).toLocaleTimeString()));
   }
   renderSensorSetup(host, rule.id, current?.sensorSetup);
@@ -1863,6 +1901,11 @@ function renderRulePreview() {
       }
     }
   }
+  if (rule.occupancyCondition) {
+    const condition = draftOccupancyStatus(rule);
+    occupancyEvidence(host, condition);
+    if (condition.matches !== true) headline = condition.matches === null ? 'Waiting for occupancy state' : 'Occupancy condition not met';
+  }
   host.append(el('strong', headline), el('p', detail), el('span', 'This preview sends no commands. Enabled rules execute separately; see Execution status. Sensor measurement age may be unknown.', 'preview-label'));
 }
 async function save() {
@@ -1871,6 +1914,8 @@ async function save() {
   if (invalid) { invalid.reportValidity(); return; }
   const mappingError = fanMappingsError(state.config.fanMappings || []);
   if (mappingError) { notice(mappingError, 'danger'); return; }
+  const occupancyError = [...state.config.rules.temperature, ...state.config.rules.fans].map((rule) => occupancyConditionError(rule.occupancyCondition, rule.kind)).find(Boolean);
+  if (occupancyError) { notice(occupancyError, 'danger'); return; }
   const curveError = (state.config.rules.fans || []).filter((rule) => rule.enabled).map((rule) => fanSpeedError(normalizeFanRule(rule))).find(Boolean);
   if (curveError) { notice(curveError, 'danger'); return; }
   if (host && await stageNativeClimate() !== false) return;

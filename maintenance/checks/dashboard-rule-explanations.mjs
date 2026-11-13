@@ -17,6 +17,18 @@ export async function checkRuleExplanations(page, output, label) {
     const fan = { id: 'living-fan', name: 'Living room fan', available: true, running: true, speed: 50,
       lastReadAt: now, controllerId: 'fan-1', ownerId: 'fan-1', supportedSpeed: 50,
       pending: mode === 'pending', requested: { running: true, speed: 75 } };
+    const thermostat = snapshot.devices.find((device) => device.type === 'Thermostat');
+    if (thermostat) {
+      thermostat.temperatureTarget = { available: true, source: 'native', mode: 'heat', fields: [] };
+      let second = snapshot.devices.find((device) => device.type === 'Thermostat' && device !== thermostat);
+      if (!second) {
+        second = { ...structuredClone(thermostat), serial: 'T-ALIGN', id: 'alignment' };
+        snapshot.devices.push(second);
+      }
+      second.data.description = 'Upstairs — Dining room with a longer thermostat name';
+      second.temperatureTarget = { available: true, source: 'room', mode: 'heat', ruleId: 'alignment', desired: 21,
+        reportedTarget: 19, fields: [{ key: 'value', value: 21, label: 'Desired room temperature' }] };
+    }
     snapshot.automation = { available: true, rules: [
       { id: 'fan-1', kind: 'fan', name: 'Warm rooms', enabled: true, phase: 'active', reason: 'Run condition is met.',
         explanation: { evaluatedAt, sources, average: 25.5, fans: [fan],
@@ -86,6 +98,10 @@ export async function checkRuleExplanations(page, output, label) {
     await page.reload();
     await page.getByRole('heading', { name: 'Your thermostats', exact: true }).waitFor();
     await refresh();
+    const aligned = await page.locator('#thermostats .thermostat-card').evaluateAll((cards) => cards.slice(0, 2).map((card) =>
+      ['.current-temperature', '.device-facts', '.thermostat-controls'].map((selector) => card.querySelector(selector).getBoundingClientRect().y)));
+    assert.equal(aligned.length, 2);
+    for (let index = 0; index < 3; index++) assert.ok(Math.abs(aligned[0][index] - aligned[1][index]) <= 1, 'Adjacent thermostat rows align');
     await card('living-fan').getByRole('heading', { name: 'Living room fan', exact: true }).waitFor();
     assert.equal(await card('living-fan').count(), 1, 'Discovery and rules share one fan card');
     assert.equal(await card('living-fan').locator('.device-symbol[data-icon="fan"] svg').count(), 1);

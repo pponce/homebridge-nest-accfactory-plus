@@ -38,7 +38,7 @@ export function prepareFanRules(engine) {
     const current = { running: source.running, speed: source.speedAvailable ? source.speed : undefined };
     const before = engine.fanObservations.get(id);
     const watched = states.some((state) => state.rule.enabled && !state.paused &&
-      state.windowStatus?.active !== false && state.rule.targetIds.includes(id));
+      state.windowStatus?.active !== false && state.occupancyStatus?.matches !== false && state.rule.targetIds.includes(id));
     if (watched && !engine.leases.has('fan:' + id) && before &&
         (before.running !== current.running || (Number.isFinite(before.speed) && Number.isFinite(current.speed) &&
           !sameFanSpeed(before.speed, current.speed, source.speedMapping)))) {
@@ -54,7 +54,7 @@ export function prepareFanRules(engine) {
   for (const state of states.sort((a, b) => b.rule.priority - a.rule.priority)) {
     state.fanTargets = [];
     state.fanSpeeds = [];
-    if (!state.rule.enabled || state.paused || state.windowStatus?.active === false) {
+    if (!state.rule.enabled || state.paused || state.windowStatus?.active === false || state.occupancyStatus?.matches === false) {
       continue;
     }
     const rule = state.rule;
@@ -63,6 +63,9 @@ export function prepareFanRules(engine) {
     const hvacState = engine.connected(thermostat) ? thermostat.data.hvac_state : undefined;
     state.roomTemperature = temperature;
     state.fanPlan = fanRulePlan(rule, { temperature, hvacState, previousDemand: state.demand === true });
+    if (state.occupancyStatus?.matches === null) {
+      state.fanPlan.demand = undefined;
+    }
     if (state.fanPlan.demand !== undefined) {
       state.demand = state.fanPlan.demand;
     } else if (rule.speedMode === 'curve') {
@@ -83,7 +86,7 @@ export function prepareFanRules(engine) {
         delete state.fanSpeedObserved?.[id];
       }
       const selected = !engine.fanOverrides.has(id) && (winner === state ||
-        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false &&
+        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false && state.occupancyStatus?.matches !== false &&
           engine.leases.get('fan:' + id)?.owner === state.rule.id));
       if (selected) {
         state.fanTargets.push(id);
@@ -130,6 +133,28 @@ export function validSpeedLease(lease) {
     ['speed', 'power'].includes(lease.step) && Number.isFinite(lease.maximum) && lease.maximum >= 1 && lease.maximum <= 100;
 }
 
+export function fanFeedbackAction(engine, lease, state, status, message) {
+  if (state?.lastAction?.targetId === lease.targetId ||
+      state?.lastAction && !state.lastAction.targetId && state.lastAction.at >= lease.sentAt) {
+    state.lastAction = { ...state.lastAction, targetId: lease.targetId, status, message,
+      ...(status === 'confirmed' ? { confirmedAt: engine.now() } : {}) };
+  }
+}
+
+export function waitFanFeedback(engine, lease, state) {
+  const recovering = engine.now() - lease.sentAt >= 2 * MINUTE;
+  if (state) {
+    state.phase = recovering ? 'recovering' : 'waiting';
+    state.reason = recovering ? 'Recovering fan feedback. Current readings are checked automatically; no repeat command is sent.' :
+      'Waiting for the fan to confirm its speed or power setting.';
+    if (recovering) {
+      fanFeedbackAction(engine, lease, state, 'recovering',
+        (engine.sources.get(lease.targetId)?.name || 'Room fan') + ': command accepted; recovering device feedback.');
+    }
+  }
+  return false;
+}
+
 function observe(engine, key, lease, source, state) {
   const current = fanState(source);
   const speedMatches = sameFanSpeed(current.speed, lease.expected.speed, source.speedMapping);
@@ -139,19 +164,23 @@ function observe(engine, key, lease, source, state) {
       ? speedMatches && (current.running === lease.before.running || current.running)
       : current.running === lease.expected.running && (current.running ? speedMatches : lease.pending || speedMatches);
   if (confirmed) {
+    if (lease.pending) {
+      fanFeedbackAction(engine, lease, state, 'confirmed', (source.name || 'Room fan') +
+        (lease.step === 'speed' ? ': speed confirmed by device.' : ': power confirmed by device.'));
+    }
     lease.expected = current;
     lease.pending = false;
     return true;
   }
-  if (lease.pending && sameFanState(current, lease.before, source.speedMapping) && engine.now() - lease.sentAt < 2 * MINUTE) {
-    if (state) {
-      state.phase = 'waiting';
-      state.reason = 'Waiting for the fan to confirm its speed or power setting.';
-    }
-    return false;
+  // Power and speed are separate HAP readings. A speed setter may turn power on first.
+  const intermediate = lease.step === 'speed' && !lease.before.running && current.running &&
+    sameFanSpeed(current.speed, lease.before.speed, source.speedMapping);
+  if (lease.pending && (sameFanState(current, lease.before, source.speedMapping) || intermediate)) {
+    return waitFanFeedback(engine, lease, state);
   }
   engine.leases.delete(key);
-  engine.manualFan(lease.targetId, 'A fan speed or power setting changed, or feedback was not confirmed. Review the fan, then Resume.');
+  fanFeedbackAction(engine, lease, state, 'conflict', (source.name || 'Room fan') + ': reported a conflicting setting; review and Resume.');
+  engine.manualFan(lease.targetId, 'The fan reported a different speed or power setting from the expected command. Review it, then Resume.');
   return false;
 }
 
@@ -200,7 +229,7 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
     const message = speedStep ? ': speed ' + desired.speed + '% accepted; awaiting feedback.' :
       desired.running ? ': on command accepted; awaiting feedback.' : ': off command accepted; awaiting feedback.';
     state.lastAction = {
-      at: engine.now(),
+      at: engine.now(), targetId: lease.targetId, status: 'accepted',
       value: desired.running ? desired.speed : 0,
       message: (source.name || 'Room fan') + message,
     };
