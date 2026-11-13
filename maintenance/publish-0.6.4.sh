@@ -29,7 +29,7 @@
     fi
 
     printf '%s  %s\n' \
-      'cace98fcb4378f8ebb245b26c5e1e319c6935a647be77c54b1bce2799a00aee4' \
+      '4848680d88417ac5590c525cb8e7de057e7a0253c1b1d77c91c08c6735439987' \
       "$runner.download" | sha256sum --check - || return 1
 
     mv "$runner.download" "$runner" || return 1

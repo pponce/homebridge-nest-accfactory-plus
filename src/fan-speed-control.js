@@ -1,4 +1,6 @@
-import { fanRulePlan, fanSpeedLimits, fanState, mappedSpeed, sameFanSpeed, sameFanState, supportedSpeed, speedWithinLimits, validFanState } from '../homebridge-ui/public/fan-speed.js';
+import {
+  fanRulePlan, fanSpeedLimits, fanState, mappedSpeed, sameFanSpeed, sameFanState, supportedSpeed, speedWithinLimits, validFanState,
+} from '../homebridge-ui/public/fan-speed.js';
 
 const MINUTE = 60000;
 const ready = (source, now) =>
@@ -173,7 +175,7 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
     return;
   }
   const options = {
-    minimum: 1,
+    minimum: restoring ? 1 : (fanSpeedLimits(state.rule)?.minimum ?? 1),
     maximum: lease.maximum,
     speedMapping: source.speedMapping,
     guard: () => restoring || engine.windowPermits(state, lease.targetId),
@@ -314,7 +316,8 @@ export async function runFanSpeed(engine, state, targetIds) {
     const atEnd = speed === supportedSpeed(source, limits.minimum, limits.minimum, limits.maximum) ||
       speed === supportedSpeed(source, limits.maximum, limits.minimum, limits.maximum);
     const mappedChange = mappedSpeed(source.speedMapping, source.speed) && mappedSpeed(source.speedMapping, speed);
-    if (!mappedChange && rule.speedMode === 'curve' && lease && source.running && !overCap && !atEnd && Math.abs(source.speed - speed) < 5) {
+    if (!mappedChange && rule.speedMode === 'curve' && lease && source.running && !overCap && !atEnd &&
+        Math.abs(source.speed - speed) < 5) {
       continue;
     }
     if (!lease) {

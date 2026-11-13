@@ -2305,3 +2305,21 @@ test('mapped restoration, restart recovery and mapping removal preserve feedback
   f.source('fan').speed = 71; await f.engine.tick();
   assert.equal(f.engine.fanOverrides.has('fan'), true, 'Removing mappings restores exact percentage comparisons');
 });
+
+
+test('a mapped range narrowed by the rule minimum keeps the same limits at the final adapter guard', async (t) => {
+  const f = await fixture(t, { fans: [{ ...speedRule, minimumSpeed: 75, maximumSpeed: 75 }] });
+  await useFanMapping(f);
+  const original = f.access.setFanSpeed;
+  f.access.setFanSpeed = async (id, speed, expected, options) => {
+    assert.equal(speed, 75);
+    assert.equal(options.minimum, 75);
+    assert.equal(options.maximum, 75);
+    await original(id, speed, expected, options);
+  };
+  await startSpeedFan(f, 80);
+  f.source('fan').speed = 71;
+  await f.engine.tick();
+  assert.equal(f.rule('fans').phase, 'active');
+  assert.equal(f.engine.fanOverrides.size, 0);
+});

@@ -1108,7 +1108,8 @@ test('fan mappings save and stage without a restart, preserve config and reject 
   const expected = structuredClone(state.root); expected.platforms[1].climateFanMappings = fanMappings;
   assert.deepEqual(JSON.parse(await fs.readFile(state.configPath)), expected);
   assert.deepEqual((await new WebDashboardConfig(state.configPath, state.block).snapshot()).config.fanMappings, fanMappings);
-  await assert.rejects(store.save({ revision: view.revision, config: { fanMappings: [{ sourceId: 'fan', ranges: [{ label: 'Bad', min: 80, max: 70 }] }] } }), /From no greater/);
+  await assert.rejects(store.save({ revision: view.revision,
+    config: { fanMappings: [{ sourceId: 'fan', ranges: [{ label: 'Bad', min: 80, max: 70 }] }] } }), /From no greater/);
   expected.platforms[1].climateFanMappings[0].ranges[0].min = 90;
   await fs.writeFile(state.configPath, JSON.stringify(expected));
   view = await store.snapshot();

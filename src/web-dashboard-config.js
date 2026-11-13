@@ -290,7 +290,9 @@ export class WebDashboardConfig {
     }
     const fanMappings = block.climateFanMappings ?? [];
     const mappingError = fanMappingsError(fanMappings);
-    if (mappingError) rulesError = 'Fan speed mappings need review: ' + mappingError;
+    if (mappingError) {
+      rulesError = 'Fan speed mappings need review: ' + mappingError;
+    }
     return {
       revision: state.revision,
       config: {

@@ -549,6 +549,9 @@ test('adapter accepts equivalent mapped feedback but still rejects changed level
   f.speedValue(86);
   await assert.rejects(f.access.setFanSpeed(id, 71, { running: true, speed: 75 }, options), { code: 'CLIMATE_CONFLICT' });
   f.speedValue(71);
+  await f.access.setFanSpeed(id, 75, { running: true, speed: 71 }, { ...options, minimum: 75 });
+  f.speedValue(71);
   await assert.rejects(f.access.setFanSpeed(id, 78, { running: true, speed: 71 }, options), { code: 'CLIMATE_CONFLICT' });
-  await assert.rejects(f.access.setFanSpeed(id, 71, { running: true, speed: 75 }, { minimum: 1, maximum: 75 }), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(f.access.setFanSpeed(id, 71, { running: true, speed: 75 }, { minimum: 1, maximum: 75 }),
+    { code: 'CLIMATE_CONFLICT' });
 });

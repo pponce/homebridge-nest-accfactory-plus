@@ -33,7 +33,7 @@ export function explainRule(engine, state, heatingTarget) {
       awayAt: state.phase === 'waiting' && known ? finite(state.nextChangeAt) : null,
       overrideUntil: state.phase === 'override' ? finite(state.override?.until) : null,
       matching: rule.logic === 'all' ? known && sources.every((source) => source.effective) :
-        sources.some((source) => source.effective === true) };
+          sources.some((source) => source.effective === true) };
     return report;
   }
   report.average = engine.temperatureInputs(rule);

@@ -20,13 +20,14 @@ Release v0.6.4 combining PR28 Overview explanations, PR29 thermostat schedule co
 - Adapter re-reads devices before each write and receives the mapping explicitly from the engine. Mappings cannot grant capabilities or bypass command limits and final guards.
 - Sensors & fans editor adds/removes rows, validates ambiguity and bounds, retains edits/expansion through source refresh, and saves live without restart. Rule tables/previews and saved Overview explanations include labels.
 - Combined schedule UI prominently identifies the thermostat and mode, shows relevant targets, explains rule impacts and moves diagnostics to Settings.
-- Package/root lock/release intent are 0.6.4. CHANGELOG contains exact release section and notes inherited v0.6.3 feedback recovery. Public usage is in WEB_DASHBOARD.md. maintenance/publish-0.6.4.sh launches the checksum-verified existing publisher.
+- Package/root lock/release intent are 0.6.4. CHANGELOG contains exact release section and notes inherited v0.6.3 feedback recovery. Public usage is in WEB_DASHBOARD.md. maintenance/publish-0.6.4.sh launches the checksum-verified 0.6.4 publisher; publisher and installer pins match the package.
 
 ## Validation checkpoint
 
-- Focused mapping/control/config/schedule tests pass, including accepted settled feedback, manual changes, restoration, saved-state reload, missing mappings and config preservation/staging.
+- 187 focused mapping/control/config/schedule/dashboard tests pass, including accepted settled feedback, manual changes, restoration, saved-state reload, missing mappings and config preservation/staging.
 - Focused coverage: climate-explanations 100% lines / 95% branches / 100% functions; fan-speed-control 97.87% / 98.25% / 100% (above existing floors).
 - Syntax and dashboard asset build pass. Local Chromium is unavailable due to socket sandbox restrictions; browser checks are delegated to GitHub Actions infrastructure, not treated as hardware validation.
+- Combined browser suite passed in GitHub Actions run 43339456198 at candidate 725b6245f465d0474de28faba2112418c0726626; subsequent candidate corrects lint formatting, release-helper pins and final-adapter minimum propagation for narrow mapped ranges. Publisher/installer success and failure-path checks pass locally.
 - Browser regression exercises add/remove/save/reload/overlap rejection/unsaved refresh/discard/mobile layout using the real dashboard config store.
 - No physical fan or thermostat commands have been sent by this development work.
 
