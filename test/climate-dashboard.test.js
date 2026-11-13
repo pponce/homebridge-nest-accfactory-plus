@@ -80,16 +80,16 @@ test('a failed handler closes a partially sent response without writing a second
 });
 
 test('runtime prunes old days and periodic sampling persists observed time', async (t) => {
-  t.mock.timers.enable({ apis: ['setInterval'] });
+  t.mock.timers.enable({ apis: ['Date', 'setInterval'], now: start + 15000 });
   const f = await fixture(t);
   f.dashboard.ledger.days['T/2020-01-01'] = { date: '2020-01-01', heating: 10, cooling: 0, observed: 10 };
-  const previous = f.dashboard.ledger.previous.get('T');
-  previous.time -= 30000;
   t.mock.timers.tick(30000);
   await f.dashboard.saving;
   assert.equal(f.dashboard.ledger.days['T/2020-01-01'], undefined);
   const saved = JSON.parse(await fs.readFile(path.join(f.storage, 'nest-climate/runtime.json')));
-  assert.ok(Object.values(saved).some((day) => day.observed >= 30));
+  assert.equal(Object.values(saved).reduce((seconds, day) => seconds + day.observed, 0), 30);
+  assert.equal(saved['T/2026-11-06'].observed, 15);
+  assert.equal(saved['T/2026-11-07'].observed, 15);
 });
 test('dashboard isolates non-climate resources and clears native sensor selection', async (t) => {
   const f = await fixture(t);
