@@ -1091,3 +1091,29 @@ test('temperature edits require an authenticated session, matching origin and CS
   };
   assert.equal((await call(server, '/api/temperature-target', request)).status, 409);
 });
+
+
+test('fan mappings save and stage without a restart, preserve config and reject invalid ranges', async (t) => {
+  const state = await fixture(t);
+  const store = new WebDashboardConfig(state.configPath, state.block);
+  let view = await store.snapshot();
+  assert.deepEqual(view.config.fanMappings, []);
+  const fanMappings = [{ sourceId: 'fan', ranges: [{ label: 'Speed 5', min: 65, max: 78 }] }];
+  const staged = await store.stage({ revision: view.revision, config: { fanMappings } });
+  assert.equal(staged.restartRequired, false);
+  assert.deepEqual(staged.blocks[0].climateFanMappings, fanMappings);
+  assert.deepEqual(JSON.parse(await fs.readFile(state.configPath)), state.root);
+  view = await store.save({ revision: view.revision, config: { fanMappings } });
+  assert.equal(view.restartRequired, false);
+  const expected = structuredClone(state.root); expected.platforms[1].climateFanMappings = fanMappings;
+  assert.deepEqual(JSON.parse(await fs.readFile(state.configPath)), expected);
+  assert.deepEqual((await new WebDashboardConfig(state.configPath, state.block).snapshot()).config.fanMappings, fanMappings);
+  await assert.rejects(store.save({ revision: view.revision, config: { fanMappings: [{ sourceId: 'fan', ranges: [{ label: 'Bad', min: 80, max: 70 }] }] } }), /From no greater/);
+  expected.platforms[1].climateFanMappings[0].ranges[0].min = 90;
+  await fs.writeFile(state.configPath, JSON.stringify(expected));
+  view = await store.snapshot();
+  assert.match(view.rulesError, /Fan speed mappings need review/);
+  assert.deepEqual(view.config.fanMappings, []);
+  view = await store.save({ revision: view.revision, config: { fanMappings: [] } });
+  assert.equal(view.rulesError, undefined);
+});

@@ -2233,3 +2233,75 @@ test('cancelling a subsequent adjustment keeps the original restoration baseline
   assert.equal(f.engine.leases.get('temperature:T').baseline, 19);
 });
 
+
+const sevenSpeedRanges = [[1, 21], [22, 35], [36, 49], [50, 64], [65, 78], [79, 92], [93, 100]]
+  .map(([min, max], index) => ({ label: 'Speed ' + (index + 1), min, max }));
+async function useFanMapping(f, ranges = sevenSpeedRanges) {
+  const snapshot = f.config.snapshot;
+  f.config.snapshot = async () => {
+    const view = await snapshot();
+    view.config.fanMappings = [{ sourceId: 'fan', ranges }];
+    return view;
+  };
+}
+
+test('mapped fixed speed accepts settled feedback, retains ownership and detects a different physical setting', async (t) => {
+  const rule = { ...fanRule, speedMode: 'fixed', fixedSpeed: 75 };
+  const f = await fixture(t, { fans: [rule] });
+  await useFanMapping(f);
+  f.source('room').temperature = 30;
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 71);
+  f.source('fan').speed = 75; // Same physical speed, different reported percentage.
+  await f.engine.tick(); await f.engine.tick();
+  assert.equal(f.rule('fans').phase, 'active');
+  assert.equal(f.fanCommands.at(-1).running, true);
+  const count = f.fanSpeedCommands.length;
+  f.source('fan').speed = 78;
+  f.advance(minute); await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.length, count);
+  assert.equal(f.engine.fanOverrides.size, 0);
+  const evidence = f.rule('fans').explanation.fans[0];
+  assert.equal(evidence.setting, 'Speed 5');
+  assert.equal(evidence.proposedSetting, 'Speed 5');
+  assert.equal(evidence.mappedRange.min, 65);
+  f.source('fan').speed = 86; await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.has('fan'), true);
+  assert.equal(f.fanSpeedCommands.length, count);
+});
+
+test('mapped curves suppress same-setting writes but allow small changes to a different mapped setting', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  await useFanMapping(f, [{ label: 'Low', min: 48, max: 49 }, { label: 'High', min: 50, max: 51 }]);
+  await startSpeedFan(f, 75.92); // 49%, mapped to Low at 48%.
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 48);
+  fahrenheitRoom(f, 76); f.advance(minute);
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 50, 'A real setting change bypasses the unmapped five-point deadband');
+  await f.engine.tick();
+  assert.equal(f.rule('fans').explanation.fans[0].holdingSpeed, false);
+});
+
+test('mapped restoration, restart recovery and mapping removal preserve feedback checks', async (t) => {
+  const f = await fixture(t, {});
+  f.rules({ fans: [speedRule] });
+  await useFanMapping(f);
+  f.source('fan').running = true; f.source('fan').speed = 71;
+  await startSpeedFan(f, 74);
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 28);
+  f.source('fan').speed = 29;
+  await f.engine.tick();
+  await f.engine.persist();
+  f.engine.leases.clear(); await f.engine.start({ schedule: false });
+  await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.size, 0, 'Saved leases accept the same mapped feedback after restart');
+  fahrenheitRoom(f, 70); f.advance(minute); await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 71);
+  f.source('fan').speed = 75; await f.engine.tick();
+  assert.equal(f.engine.leases.size, 0);
+  f.source('fan').speed = 78; await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.size, 0, 'Unowned observations compare mapped settings too');
+  f.config.snapshot = async () => ({ config: { rules: validateRuleDrafts({ fans: [speedRule] }), devices: [], options: {} } });
+  f.source('fan').speed = 71; await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.has('fan'), true, 'Removing mappings restores exact percentage comparisons');
+});

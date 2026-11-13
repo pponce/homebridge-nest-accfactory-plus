@@ -33,6 +33,25 @@ Both interfaces use visual controls rather than requiring hand-edited JSON. The 
 Under each thermostat, expand **Temperature controlled by** for individual rule calculations: selected sensor readings, room average, desired room target and its origin, Nest’s built-in temperature, the bounded compensation, and the calculated target. Reported and requested Nest targets remain separate, with the minimum adjustment interval shown.
 
 These explanations reflect saved rules and a completed engine evaluation. They do not use unsaved rule edits or send equipment commands. Every explanation includes its evaluation time; stale or disconnected status is identified as unavailable. Source-read times describe when the plugin read a source, and activity times describe what the rule observed, rather than a sensor’s complete event history.
+## Optional fan speed mappings
+
+In **Sensors & fans**, expand **Speed mapping · optional** on a fan card. Select **Add speed range** for each physical setting, enter a label such as **Speed 5**, and enter its **From %** and **To %**. Both endpoints are included. Ranges use whole percentages from 1 to 100; zero is always Off. Ranges on one fan must not overlap, and each label must be distinct. Save changes to apply the mapping without restarting the child bridge. Remove all rows to return to percentage-only behavior.
+
+Mappings belong to the individual fan and apply to every rule using it. Fixed-speed and temperature-based rules first calculate the requested percentage, then choose a supported command within the corresponding mapped range. They prefer the range midpoint while respecting the fan’s native supported values and the rule’s minimum/maximum command percentages. A range cannot add a speed that the fan does not support. The temperature curve retains its configured endpoints; lowering its maximum rescales that curve over the same temperature interval.
+
+A fan may report a different percentage for the same physical setting. With **65–78% = Speed 5**, a request in that range and settled feedback of 71% count as the same setting. Rules avoid redundant writes within a setting, accept equivalent feedback, and continue detecting changes to another setting or to power. Changes between mapped settings still respect the normal update interval; they are not suppressed by the five-percentage-point filter used for unmapped speeds. Previous settings are restored within the owning rule’s command cap. Reported percentages can differ from command limits when both represent the same physical setting.
+
+**Use last setting** continues to control power without selecting a new speed; the mapping helps identify equivalent feedback and label the reported setting. Overview details and rule previews show mapped labels alongside percentages. Overview reflects saved configuration; previews can reflect unsaved edits. Individual unmapped percentages and fans without mappings keep their normal behavior. Fractional feedback is compared exactly; whole-percentage ranges do not infer fractional rounding. Mappings are entered manually and are not imported by inspecting another plugin.
+
+## Upcoming Nest schedule changes
+
+In **Overview → A week of comfort**, choose **Selected thermostat** to view that thermostat’s runtime chart and **Coming up** card. The card repeats the thermostat name, current mode and any active Eco setting. It lists the next three reported weekly schedule entries in upcoming order using the thermostat’s schedule time zone. Heat mode shows only heating targets, Cool mode shows only cooling targets, and Heat / Cool shows both with labels.
+
+The card also identifies the current climate temperature rule and its reported status. While a rule is controlling heating, a confirmed Nest scheduled heating target becomes its desired room temperature. The rule adjusts Nest’s actual target using its selected sensor readings, adjustment limit and minimum update interval. For equal averaging, the desired temperature applies to the selected sensors’ average. The target sent to Nest can differ from that desired temperature.
+
+Without an active climate temperature rule, Nest uses its selected native sensor. With the built-in sensor selected, the scheduled target applies to the thermostat’s own temperature reading. Paused, disabled, waiting and unavailable rules are labeled separately; an enabled rule alone does not confirm active control.
+
+Hover over, focus or tap the **?** beside **Coming up** for help comparing these setups. Escape, a second tap or clicking outside closes it. A rule must still be controlling heating when a schedule change occurs for it to adopt that target. Rule windows, Eco, Off and holds can affect the outcome, so a planned time does not confirm when a temporary adjustment ends. Offline values are marked as last reported.
 
 ## Navigate on phones and in Homebridge
 
@@ -179,7 +198,7 @@ Displaying a known native sensor is separate from automatic sensor setup: missin
 
 **Heat mode** is required; the heating equipment does not need to be running. An idle thermostat can follow a temperature rule. A waiting rule names the specific requirement that prevents it from running.
 
-To investigate unavailable setup, open **Overview → Diagnose Nest sensor selection → Download sensor diagnostics**. The dashboard refreshes status and downloads one JSON report covering all thermostats. It includes thermostat names and models, connection and update status, selected sensor names, scheduling mode, and specific validation reasons such as missing scheduling mode, missing paired-sensor list, unknown selection, or an unsupported multi-sensor format. It excludes credentials, device IDs, signatures, temperatures and saved schedules. The download only reads status and does not change sensor selections, schedules or heating targets. Review the report before sharing it for support.
+To investigate unavailable setup, open **Settings → Diagnostics & troubleshooting → Diagnose Nest sensor selection → Download sensor diagnostics**. The dashboard refreshes status and downloads one JSON report covering all thermostats. It includes thermostat names and models, connection and update status, selected sensor names, scheduling mode, and specific validation reasons such as missing scheduling mode, missing paired-sensor list, unknown selection, or an unsupported multi-sensor format. It excludes credentials, device IDs, signatures, temperatures and saved schedules. The download only reads status and does not change sensor selections, schedules or heating targets. Review the report before sharing it for support.
 
 A group that selects both a Nest room sensor and a temperature source from another Homebridge accessory can offer **Prepare Nest for group** in **Execution status**. The action is available only after the rule is saved and enabled, while the thermostat is connected and its native sensor controls are recognized.
 
@@ -458,4 +477,3 @@ In **Homebridge plugin Settings**, rule edits, time windows, temperature units, 
 Account and web-server settings also use Homebridge’s bottom Save button. **Save web login** writes the separate private login credentials immediately; it does not save or enable the web server. Discarding connection edits does not undo a saved web login.
 
 In the **standalone dashboard**, use **Save changes**. If the saved settings require a restart, the dashboard offers **Restart child bridge** when available. Click it to request the restart; editing is temporarily disabled while the dashboard checks for reconnection. Sign in again if prompted. Changing a setting by itself never restarts the bridge.
-

@@ -1,9 +1,9 @@
 import { windowDays, windowError, windowSummary, ruleWindow } from '/shared/rule-window.js';
-import { nextSetpoint, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
+import { scheduleOverview, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
 import { mountTimeZonePicker, timeZoneChoices } from '/shared/time-zone-picker.js';
 import { mountConnectionPage } from '/shared/connection-page.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
-import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed } from '/shared/fan-speed.js';
+import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed, fanMappingsError, mappedSpeed } from '/shared/fan-speed.js';
 
 const $ = (id) => document.getElementById(id);
 const host = window.climateHost;
@@ -25,6 +25,7 @@ const iconPaths = {
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.1"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4 2c-1 .7-1.5 1-1.5 2m0 3v.1"/>',
   shield: '<path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6Z"/><path d="m8 12 3 3 5-6"/>',
   draft: '<path d="m14 4 6 6-10 10H4v-6ZM12 6l6 6M4 14l6 6"/>',
   droplet: '<path d="M12 3S5 11 5 15a7 7 0 0 0 14 0c0-4-7-12-7-12Z"/>',
@@ -261,8 +262,11 @@ function sources() {
     !(source.kind === 'fan' && (nativeSerials.has(String(source.serial).toUpperCase()) || /nest|google/i.test(source.manufacturer || ''))));
   const homeAway = presenceSources(current, state.external);
   const now = Date.now();
-  return [...temperature, ...homeAway, ...external].map((source) => ({
+  const missing = (state.config?.fanMappings || []).filter((mapping) => !external.some((source) => source.id === mapping.sourceId))
+    .map((mapping) => ({ id: mapping.sourceId, name: 'Saved fan mapping', bridgeName: mapping.sourceId, kind: 'fan', provider: 'homebridge', available: false }));
+  return [...temperature, ...homeAway, ...external, ...missing].map((source) => ({
     ...source,
+    speedMapping: source.kind === 'fan' ? state.config?.fanMappings?.find((mapping) => mapping.sourceId === source.id)?.ranges : undefined,
     available: Boolean(source.available && Number.isFinite(source.lastReadAt) && now - source.lastReadAt <= 90000 && source.lastReadAt <= now + 1000),
   }));
 }
@@ -276,8 +280,10 @@ async function stageNativeClimate() {
   clearTimeout(nativeDraftTimer); host.invalidateDraft('climate');
   $('save').disabled = true;
   try {
-    const invalid = [...document.querySelectorAll('#page-settings input, #rule-editor input')].find((input) => !input.checkValidity());
+    const invalid = [...document.querySelectorAll('#page-settings input, #rule-editor input, .fan-mapping input')].find((input) => !input.checkValidity());
     if (invalid) throw new Error('Review the highlighted fields before saving.');
+    const mappingError = fanMappingsError(state.config.fanMappings || []);
+    if (mappingError) throw new Error(mappingError);
     const result = await host.stageClimate({ revision: state.envelope.revision, config: structuredClone(state.config) });
     if (!result || generation !== nativeDraftGeneration) return;
     nativeRestartRequired = result.restartRequired;
@@ -820,6 +826,7 @@ function fanEvidence(host, runtime, fan) {
   } else if (speed.mode === 'fixed') evidenceNote(host, 'Fixed speed: ' + speed.fixed + '%. Supported fan setting: ' +
     (Number.isFinite(fan.supportedSpeed) ? fan.supportedSpeed + '%' : 'not currently requested or unavailable') + '.');
   else evidenceNote(host, 'Use the fan’s last speed setting. This rule controls power without choosing a new speed.');
+  if (fan.mappedRange) evidenceNote(host, 'Mapped setting: ' + fan.proposedSetting + ' (' + fan.mappedRange.min + '–' + fan.mappedRange.max + '%). Percentages in this range represent the same physical speed; the fan may report a different percentage after settling.');
   if (fan.pending) {
     const requested = typeof fan.requested === 'boolean' ? (fan.requested ? 'on' : 'off') :
       (fan.requested?.running ? 'on' : 'off') + (Number.isFinite(fan.requested?.speed) ? ' · speed setting ' + fan.requested.speed + '%' : '');
@@ -848,7 +855,7 @@ function renderAutomationOverview() {
       const top = el('div', undefined, 'card-top'); top.append(el('h3', entry.name));
       const current = evidenceCurrent(runtime);
       const known = current && entry.available;
-      const label = kind === 'fan' ? !known ? 'Unavailable' : entry.running ? 'On' + (Number.isFinite(entry.speed) ? ' · ' + entry.speed + '%' : '') : 'Off' :
+      const label = kind === 'fan' ? !known ? 'Unavailable' : entry.running ? 'On' + (entry.setting ? ' · ' + entry.setting : '') + (Number.isFinite(entry.speed) ? ' · ' + entry.speed + '%' : '') : 'Off' :
         !entry.enabled ? 'Disabled' : !current ? 'Unknown / last known' : typeof entry.home === 'boolean' ? entry.home ? 'Home · occupied' : 'Away · unoccupied' : 'Unknown';
       top.append(pill(label, kind === 'fan' ? known && entry.running ? 'good' : 'neutral' : current && entry.home && !entry.fault ? 'good' : 'neutral'));
       card.append(top);
@@ -963,15 +970,45 @@ function renderRuntime() {
   renderSchedule(device);
 }
 $('runtime-device').addEventListener('change', renderRuntime);
+const scheduleHelp = fieldHelpLabel('Coming up', () =>
+  'This card and the runtime chart follow the selected thermostat above. Times use that thermostat’s Nest schedule time zone. Heat mode shows heating targets, Cool mode shows cooling targets, and Heat / Cool shows both.\n\n' +
+  'Built-in sensor only, without a climate temperature rule: Nest uses the scheduled target with its own temperature reading. If a Nest room sensor is selected, Nest uses that sensor instead.\n\n' +
+  'Active climate temperature rule: a confirmed Nest schedule target becomes the rule’s desired room temperature. The plugin then adjusts the actual Nest target using the selected sensor readings, adjustment limit and minimum update interval. For an equal-average rule, the desired temperature applies to the selected sensors’ average.\n\n' +
+  'The rule must still be controlling heating when the change occurs. Rule time windows can change which group is active. Eco, Off and holds can affect whether a scheduled target takes effect. A planned time does not confirm when a temporary adjustment ends.');
+scheduleHelp.querySelector('button').setAttribute('aria-label', 'Help for Nest temperature schedule');
+scheduleHelp.firstElementChild.replaceWith(el('h3', 'Coming up'));
+scheduleHelp.querySelector('button').replaceChildren(icon('help'));
+scheduleHelp.querySelector('.field-help-popup').classList.add('schedule-help');
+$('schedule-heading').append(scheduleHelp);
 function renderSchedule(device) {
-  const entries = []; for (const [day, points] of Object.entries(device?.data?.schedules || {})) for (const point of Object.values(points || {})) entries.push({ day: Number(day), ...point });
-  entries.sort((a, b) => a.day - b.day || a.time - b.time);
-  const zone = scheduleTimeZone(deviceOptions(device?.serial), device?.data); const next = nextSetpoint(entries, zone); const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const view = scheduleOverview(device, state.status, deviceOptions(device?.serial), Boolean(device && usable(device)));
+  const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const time = (point) => String(Math.floor(point.time / 3600)).padStart(2, '0') + ':' + String(Math.floor(point.time % 3600 / 60)).padStart(2, '0');
-  $('schedule-next').textContent = next ? 'Next planned change · ' + days[next.day] + ' ' + time(next) + ' (' + zone + ')' : entries.length ? 'Choose this thermostat’s Nest schedule time zone in Settings to calculate the next change.' : 'No schedule has been reported for this thermostat’s current mode.';
+  $('schedule-thermostat').textContent = view.name;
+  $('schedule-mode').replaceChildren(pill(view.modeLabel), ...(view.eco ? [pill('Eco on', 'warn')] : []),
+    ...(!view.live && device ? [pill('Last reported · offline', 'warn')] : []));
+  $('schedule-next').textContent = view.points.length ? 'Next planned changes · ' + view.zone : view.empty;
   $('schedule-preview').replaceChildren();
-  const chosen = next ? [next, ...entries.filter((entry) => entry.day !== next.day || entry.time !== next.time)].slice(0, 3) : entries.slice(0, 3);
-  for (const point of chosen) { const row = el('div', undefined, 'schedule-row'); row.append(el('span', days[point.day] + ' · ' + time(point)), el('strong', formatTemp(point['temp-min']) + ' / ' + formatTemp(point['temp-max']))); $('schedule-preview').append(row); }
+  for (const [index, point] of view.points.entries()) {
+    const row = el('div', undefined, 'schedule-row');
+    const date = el('span', days[point.day] + ' · ' + time(point));
+    if (index === 0) date.append(el('small', 'Next change'));
+    const targets = el('div', undefined, 'schedule-targets');
+    for (const target of point.targets) targets.append(el('strong', target.label + ' ' + formatTemp(target.value)));
+    row.append(date, targets); $('schedule-preview').append(row);
+  }
+  const control = view.control; const heading = el('div', undefined, 'schedule-control-heading');
+  heading.append(el('strong', control.title), pill(control.label, control.tone));
+  const content = [heading, el('p', control.detail, 'small-note')];
+  if (Number.isFinite(control.runtime?.desiredTemperature)) content.push(el('p',
+    'Current room target: ' + formatTemp(control.runtime.desiredTemperature) +
+    (Number.isFinite(control.runtime.roomTemperature) ? ' · Selected rooms: ' + formatTemp(control.runtime.roomTemperature) : ''), 'small-note'));
+  if (control.rules.length && !control.runtime) {
+    const list = el('ul', undefined, 'schedule-rule-status');
+    for (const rule of control.rules) list.append(el('li', rule.name + ' · ' + rule.label));
+    content.push(list);
+  }
+  $('schedule-control').replaceChildren(...content);
 }
 async function discoverSources(explicit = true) {
   if (state.discovering || !state.session?.authenticated || (host && !host.initialConfigured)) return;
@@ -989,20 +1026,85 @@ document.querySelectorAll('[data-filter]').forEach((button) => button.addEventLi
 function reading(source) {
   if (!source.available) return 'Unavailable';
   if (source.kind === 'temperature') return formatTemp(source.temperature);
-  if (source.kind === 'fan') return source.running ? 'Running' + (source.speedAvailable ? ' · ' + source.speed + '%' : '') : 'Off';
+  if (source.kind === 'fan') return source.running ? 'Running' + (source.speedAvailable ? ' · ' + fanSpeedLabel(source, source.speed) : '') : 'Off';
   return source.detected ? 'Detected' : 'Clear';
+}
+function fanSpeedLabel(source, speed) {
+  const setting = mappedSpeed(source.speedMapping, speed);
+  return (setting ? setting.label + ' · ' : '') + speed + '%';
+}
+const fanMappingEditors = new Map();
+let fanMappingConfig;
+function fanMappingEditor(source) {
+  if (fanMappingConfig !== state.config) { fanMappingEditors.clear(); fanMappingConfig = state.config; }
+  if (fanMappingEditors.has(source.id)) return fanMappingEditors.get(source.id);
+  const details = el('details', undefined, 'fan-mapping'); details.dataset.fan = source.id;
+  details.append(el('summary', 'Speed mapping · optional'));
+  details.append(el('p', 'Add a label and the inclusive percentage range for each physical speed. Use whole numbers from 1–100; 0 is Off. Rules use saved mappings for speed selection and feedback. Percentages without a mapping keep normal behavior.', 'small-note'));
+  const rows = el('div', undefined, 'fan-mapping-rows');
+  const status = el('p', undefined, 'small-note'); status.setAttribute('role', 'status');
+  const add = el('button', 'Add speed range', 'button secondary'); add.type = 'button';
+  const mapping = () => state.config.fanMappings?.find((entry) => entry.sourceId === source.id);
+  const validate = () => {
+    for (const input of rows.querySelectorAll('input')) input.setCustomValidity('');
+    const error = fanMappingsError(mapping() ? [mapping()] : []);
+    status.textContent = error || (mapping()?.ranges.length ? 'Save changes to apply these ranges to all rules using this fan.' : 'No mapping. Rules use the fan’s reported percentages.');
+    status.classList.toggle('unavailable', Boolean(error));
+    rows.querySelector('input')?.setCustomValidity(error || '');
+  };
+  const render = () => {
+    rows.replaceChildren();
+    for (const [index, range] of (mapping()?.ranges || []).entries()) {
+      const row = el('div', undefined, 'fan-mapping-row');
+      for (const [key, title] of [['label', 'Speed label'], ['min', 'From %'], ['max', 'To %']]) {
+        const field = el('label', title); const input = el('input');
+        input.type = key === 'label' ? 'text' : 'number'; input.required = true;
+        if (key === 'label') input.maxLength = 40;
+        else { input.min = 1; input.max = 100; input.step = 1; }
+        input.value = range[key] ?? ''; input.setAttribute('aria-label', title + ' ' + (index + 1));
+        input.addEventListener('input', () => {
+          range[key] = key === 'label' ? input.value : input.value === '' ? null : Number(input.value);
+          validate(); markDirty(); renderRulePreview();
+        });
+        field.append(input); row.append(field);
+      }
+      const remove = el('button', 'Remove', 'button secondary'); remove.type = 'button'; remove.setAttribute('aria-label', 'Remove speed range ' + (index + 1));
+      remove.addEventListener('click', () => {
+        mapping().ranges.splice(index, 1);
+        if (!mapping().ranges.length) state.config.fanMappings = state.config.fanMappings.filter((entry) => entry.sourceId !== source.id);
+        render(); markDirty(); renderRulePreview(); add.focus();
+      });
+      row.append(remove); rows.append(row);
+    }
+    add.disabled = (mapping()?.ranges.length || 0) >= 64;
+    validate();
+  };
+  add.addEventListener('click', () => {
+    if (!mapping()) (state.config.fanMappings ??= []).push({ sourceId: source.id, ranges: [] });
+    const ranges = mapping().ranges;
+    const min = Math.min(100, Math.max(0, ...ranges.map((range) => range.max || 0)) + 1);
+    ranges.push({ label: 'Speed ' + (ranges.length + 1), min, max: min });
+    render(); markDirty(); renderRulePreview(); rows.lastElementChild.querySelector('input').focus();
+  });
+  details.append(rows, add, status); render(); fanMappingEditors.set(source.id, details); return details;
 }
 function renderSources() {
   const all = sources(); const query = $('source-search').value.trim().toLowerCase();
   const filtered = all.filter((source) => (state.sourceFilter === 'all' || state.sourceFilter === source.kind || state.sourceFilter === 'presence' && ['occupancy', 'motion'].includes(source.kind)) && (!query || ((source.name || '') + ' ' + (source.bridgeName || '')).toLowerCase().includes(query)));
   $('source-summary').textContent = state.external.error || all.length + ' sources · ' + all.filter((source) => source.available).length + ' available. Readings refresh every 30 seconds while this dashboard is visible.';
-  const host = $('source-list'); host.replaceChildren();
+  const host = $('source-list');
+  const focused = host.contains(document.activeElement) ? document.activeElement : null;
+  const selection = focused?.type === 'text' ? [focused.selectionStart, focused.selectionEnd] : null;
+  host.replaceChildren();
   if (!filtered.length) empty(host, query ? 'No matching sources.' : 'Connect more of your home.', query ? 'Try another name or source type.' : 'Use Discover sources to find accessible Homebridge room sensors and fans.', 'sensors');
   for (const source of filtered) {
     const card = el('article', undefined, 'panel source-card'); const top = el('div', undefined, 'card-top'); const mark = el('span', undefined, 'device-symbol'); mark.append(icon(source.kind === 'temperature' ? 'thermometer' : source.kind === 'fan' ? 'fan' : 'motion'));
     top.append(mark, pill(source.provider === 'nest' ? 'Nest' : 'Homebridge', 'neutral')); card.append(top, el('h3', source.name || 'Source'), el('span', (source.bridgeName || 'Unknown bridge') + ' · ' + (source.kind === 'occupancy' ? 'Occupancy' : source.kind), 'source-origin'), el('div', reading(source), 'source-reading' + (source.available ? '' : ' unavailable')));
-    card.append(el('span', source.available ? 'Read ' + when(source.lastReadAt) + (source.kind === 'fan' ? source.canSetSpeed ? ' · Speed control' : source.canControl ? ' · On/off capable' : ' · Read only' : '') : 'Check the source bridge and connection.', 'subtle')); host.append(card);
+    card.append(el('span', source.available ? 'Read ' + when(source.lastReadAt) + (source.kind === 'fan' ? source.canSetSpeed ? ' · Speed control' : source.canControl ? ' · On/off capable' : ' · Read only' : '') : 'Check the source bridge and connection.', 'subtle'));
+    if (source.kind === 'fan' && state.config) card.append(fanMappingEditor(source));
+    host.append(card);
   }
+  if (focused?.isConnected) { focused.focus({ preventScroll: true }); if (selection) focused.setSelectionRange(...selection); }
   $('bridge-list').replaceChildren();
   for (const bridge of state.external.bridges || []) { const row = el('div', undefined, 'bridge-row'); const title = el('div'); title.append(el('strong', bridge.name || 'Homebridge'), el('small', bridge.available ? bridge.kind + ' bridge' : bridge.error || 'Unavailable')); row.append(title, pill(bridge.available ? 'Available' : 'Unavailable', bridge.available ? 'good' : 'warn')); $('bridge-list').append(row); }
   if (!(state.external.bridges || []).length) $('bridge-list').append(el('p', 'No Homebridge sources have been discovered yet.', 'small-note'));
@@ -1340,7 +1442,7 @@ function ruleFieldHelp(title, rule) {
       const boundary = rule.thresholdInclusive && rule.hysteresis === 0 ? 'below ' + temperature : 'at ' + temperature + ' or below';
       return 'Keeps the rule active as the room cools, to avoid switching near the start threshold. With this draft, it stops calling for the fans ' + boundary + '. This is a temperature difference, not a time delay.';
     }
-    case 'Fan speed': return 'Use last setting sends on/off commands only; the fan plugin chooses its startup speed. Fixed speed requests one speed. Temperature-based speed increases airflow as the selected temperature average rises. All three use the run condition above.';
+    case 'Fan speed': return 'Use last setting sends on/off commands only; the fan plugin chooses its startup speed. Fixed speed requests one speed. Temperature-based speed increases airflow as the selected temperature average rises. All three use the run condition above. Optional speed mappings in Sensors & fans identify each physical setting and are used by every rule for that fan.';
     case 'Fixed fan speed (%)': return 'The requested speed while this rule is active. Each fan uses the nearest supported speed at or below this setting. The preview shows the resulting speed for each selected fan.';
     case 'Comfort target': return 'The reference temperature for the fan speed curve. It does not change the thermostat target or decide whether the fan runs. The two temperature differences below set where speed starts increasing and reaches the maximum.';
     case 'Increase speed above target by': return 'How far above the comfort target the room must get before speed rises above the minimum. With this draft, the increase begins above ' + formatTemp(rule.desiredTemperature + rule.startGap) + '. Speed then rises gradually toward the maximum.';
@@ -1631,7 +1733,7 @@ function renderRuleRuntime(rule) {
 function renderFanCurve(rule) {
   const host = $('fan-curve'); if (!host || rule.speedMode === 'last') return;
   host.replaceChildren(el('h4', rule.speedMode === 'fixed' ? 'Supported fixed speeds' : 'Your speed curve'));
-  const error = fanSpeedError(rule);
+  const error = fanSpeedError(rule) || fanMappingsError(state.config?.fanMappings || []);
   if (error) { host.append(el('p', error)); return; }
   const targets = (rule.targetIds || []).map((id) => sources().find((source) => source.id === id));
   const limits = fanSpeedLimits(rule);
@@ -1649,7 +1751,7 @@ function renderFanCurve(rule) {
     const row = el('tr'); row.append(el('td', (temperature === null ? '' : formatTemp(temperature) + ' · ') + label), el('td', requested + '%'));
     for (const source of targets) {
       const value = supportedSpeed(source, requested, limits.minimum, limits.maximum);
-      row.append(el('td', value === null ? 'Unsupported' : value + '%'));
+      row.append(el('td', value === null ? 'Unsupported' : fanSpeedLabel(source, value)));
     }
     body.append(row);
   }
@@ -1699,7 +1801,7 @@ function renderRulePreview() {
       else {
         headline = plan.demand ? 'Run condition met now' : 'Run condition not met';
         detail = (rule.action === 'temperature' ? 'Selected rooms average ' + formatTemp(average) + '; threshold ' + formatTemp(rule.threshold) : (thermostat.data.description || 'Thermostat') + ' reports ' + thermostat.data.hvac_state) + '. ';
-        detail += !plan.demand ? 'This rule would release control; another matching rule may take over.' : rule.speedMode === 'last' ? 'Send on/off only, using the fan’s startup speed.' : targets.map((source) => (source.name || 'Fan') + ': ' + supportedSpeed(source, plan.speed, limits.minimum, limits.maximum) + '%').join(' · ');
+        detail += !plan.demand ? 'This rule would release control; another matching rule may take over.' : rule.speedMode === 'last' ? 'Send on/off only, using the fan’s startup speed.' : targets.map((source) => (source.name || 'Fan') + ': ' + fanSpeedLabel(source, supportedSpeed(source, plan.speed, limits.minimum, limits.maximum))).join(' · ');
         detail += ' Position ' + (orderedFanRules().findIndex((entry) => entry.id === rule.id) + 1) + ' in the fan-rule list. See Execution status for the controlling rule and live hysteresis state.';
       }
     }
@@ -1708,8 +1810,10 @@ function renderRulePreview() {
 }
 async function save() {
   if (!state.dirty || state.saving || !state.config || !state.envelope) return;
-  const invalid = [...document.querySelectorAll('#page-settings input, #rule-editor input')].find((input) => !input.checkValidity());
+  const invalid = [...document.querySelectorAll('#page-settings input, #rule-editor input, .fan-mapping input')].find((input) => !input.checkValidity());
   if (invalid) { invalid.reportValidity(); return; }
+  const mappingError = fanMappingsError(state.config.fanMappings || []);
+  if (mappingError) { notice(mappingError, 'danger'); return; }
   const curveError = (state.config.rules.fans || []).filter((rule) => rule.enabled).map((rule) => fanSpeedError(normalizeFanRule(rule))).find(Boolean);
   if (curveError) { notice(curveError, 'danger'); return; }
   if (host && await stageNativeClimate() !== false) return;
@@ -1816,4 +1920,3 @@ if (host) {
   await connectionPage.load();
 }
 checkSession();
-

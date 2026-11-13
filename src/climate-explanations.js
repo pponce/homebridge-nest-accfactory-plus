@@ -1,4 +1,4 @@
-import { supportedSpeed } from '../homebridge-ui/public/fan-speed.js';
+import { supportedSpeed, mappedSpeed } from '../homebridge-ui/public/fan-speed.js';
 
 const MINUTE = 60000;
 const finite = (value) => Number.isFinite(value) ? value : null;
@@ -67,7 +67,11 @@ export function explainRule(engine, state, heatingTarget) {
         ownerId: lease?.owner ?? null, pending: lease?.pending === true, restoring: lease?.restoring === true,
         requested: lease?.pending ? lease.expected : null,
         supportedSpeed: speed, nextEligibleAt,
-        holdingSpeed: available && rule.speedMode === 'curve' && lease?.owner === rule.id && !lease.pending &&
+        setting: mappedSpeed(source?.speedMapping, source?.speed)?.label ?? null,
+        proposedSetting: mappedSpeed(source?.speedMapping, speed)?.label ?? null,
+        mappedRange: mappedSpeed(source?.speedMapping, speed),
+        holdingSpeed: !(mappedSpeed(source?.speedMapping, source?.speed) && mappedSpeed(source?.speedMapping, speed)) &&
+          available && rule.speedMode === 'curve' && lease?.owner === rule.id && !lease.pending &&
           !lease.restoring && !nextEligibleAt && source.running && source.speedAvailable && speed !== null && !atEnd &&
           source.speed <= limits.maximum && Math.abs(source.speed - speed) >= 0.001 && Math.abs(source.speed - speed) < 5,
         override: engine.fanOverrides.get(id) ?? null };

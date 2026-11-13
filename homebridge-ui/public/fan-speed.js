@@ -97,7 +97,59 @@ export function supportedSpeed(source, requested, minimum, maximum) {
       ![requested, minimum, maximum].every(Number.isFinite) || minimum <= 0 || maximum > 100 || minimum > maximum) return null;
   const values = source.speedCapabilities.values.filter((value) => Number.isFinite(value) && value >= minimum && value <= maximum);
   if (!values.length) return null;
-  return values.reduce((best, value) => Math.abs(value - requested) < Math.abs(best - requested) - 1e-8 ? value : best);
+  const nearest = (candidates, target) => candidates.reduce((best, value) => Math.abs(value - target) < Math.abs(best - target) - 1e-8 ? value : best);
+  const selected = nearest(values, requested);
+  const range = mappedSpeed(source.speedMapping, selected);
+  // Keep the native capability grid and rule limits authoritative. Within a physical
+  // setting, use one stable command near its midpoint instead of moving its slider.
+  return range ? nearest(values.filter((value) => mappedSpeed(source.speedMapping, value) === range), (range.min + range.max) / 2) : selected;
+}
+
+export function fanMappingsError(mappings) {
+  if (!Array.isArray(mappings) || mappings.length > 128) return 'Configure at most 128 fan mappings.';
+  const ids = new Set();
+  for (const mapping of mappings) {
+    if (!mapping || Object.keys(mapping).some((key) => !['sourceId', 'ranges'].includes(key)) ||
+        typeof mapping.sourceId !== 'string' || !mapping.sourceId.length || mapping.sourceId.length > 256 ||
+        /[\u0000-\u001f]/.test(mapping.sourceId) || ids.has(mapping.sourceId) ||
+        !Array.isArray(mapping.ranges) || mapping.ranges.length > 64) return 'Choose each fan once, with at most 64 speed ranges.';
+    ids.add(mapping.sourceId);
+    const covered = new Set(); const labels = new Set();
+    for (const range of mapping.ranges) {
+      if (!range || Object.keys(range).some((key) => !['label', 'min', 'max'].includes(key)) ||
+          typeof range.label !== 'string' || !range.label.trim() || range.label.length > 40 || /[\u0000-\u001f]/.test(range.label) ||
+          !Number.isInteger(range.min) || !Number.isInteger(range.max) || range.min < 1 || range.max > 100 || range.min > range.max) {
+        return 'Give each speed a label and a whole-number range from 1% to 100%, with From no greater than To. Zero means Off.';
+      }
+      const label = range.label.trim().toLowerCase();
+      if (labels.has(label)) return 'Use a different label for each physical speed on a fan.';
+      labels.add(label);
+      for (let value = range.min; value <= range.max; value++) {
+        if (covered.has(value)) return 'Speed ranges on the same fan must not overlap. Both endpoints are included.';
+        covered.add(value);
+      }
+    }
+  }
+  return null;
+}
+
+export function mappedSpeed(ranges, value) {
+  // Ranges describe whole-number HomeKit percentages. Fractional feedback stays
+  // exact unless it equals an integer; do not guess another plugin's rounding.
+  return Number.isInteger(value) && value > 0 && Array.isArray(ranges) ?
+    ranges.find((range) => value >= range.min && value <= range.max) ?? null : null;
+}
+
+export function sameFanSpeed(a, b, ranges) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  if (Math.abs(a - b) < 0.001) return true;
+  const setting = mappedSpeed(ranges, a);
+  return setting !== null && setting === mappedSpeed(ranges, b);
+}
+
+export function speedWithinLimits(source, value, minimum, maximum) {
+  const allowed = supportedSpeed(source, value, minimum, maximum);
+  return allowed !== null && sameFanSpeed(value, allowed, source.speedMapping);
 }
 
 export function validFanState(value) {
@@ -108,6 +160,7 @@ export function fanState(source) {
   return { running: source.running, speed: source.speed };
 }
 
-export function sameFanState(a, b) {
-  return validFanState(a) && validFanState(b) && a.running === b.running && Math.abs(a.speed - b.speed) < 0.001;
+export function sameFanState(a, b, ranges) {
+  return validFanState(a) && validFanState(b) && a.running === b.running && sameFanSpeed(a.speed, b.speed, ranges);
 }
+

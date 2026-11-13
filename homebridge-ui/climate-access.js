@@ -3,7 +3,7 @@
 import { readFile } from 'node:fs/promises';
 import { isIP } from 'node:net';
 import { BridgeDiscovery } from './bridge-discovery.js';
-import { speedCapabilities, supportedSpeed, validFanState, sameFanState, fanState } from './public/fan-speed.js';
+import { speedCapabilities, supportedSpeed, validFanState, sameFanState, fanState, speedWithinLimits } from './public/fan-speed.js';
 
 const uuid = (value) => {
   const text = String(value ?? '').toUpperCase();
@@ -263,12 +263,13 @@ export class ClimateAccess {
     }
     // Resolve the service and permissions again before each write; the browser never supplies endpoints or IIDs.
     await this.refresh();
-    const source = this.sources.find((entry) => entry.id === id);
+    const discovered = this.sources.find((entry) => entry.id === id);
+    const source = discovered && { ...discovered, speedMapping: options.speedMapping };
     const control = this.fanControls.get(id);
     const instance = control && this.instances.get(control.bridge);
     if (!source?.available || !source.canControl || !instance ||
-        (speedMode ? !source.speedAvailable || !sameFanState(fanState(source), expected) : source.running !== expected) ||
-        (speedMode && running && supportedSpeed(source, source.speed, options.minimum, options.maximum) !== source.speed)) {
+        (speedMode ? !source.speedAvailable || !sameFanState(fanState(source), expected, source.speedMapping) : source.running !== expected) ||
+        (speedMode && running && !speedWithinLimits(source, source.speed, options.minimum, options.maximum))) {
       const error = new Error('Room fan changed or is unavailable.');
       error.code = 'CLIMATE_CONFLICT';
       throw error;
@@ -284,11 +285,12 @@ export class ClimateAccess {
   async setFanSpeed(id, speed, expected, options = {}) {
     if (this.closed || !Number.isFinite(speed) || !validFanState(expected)) throw new Error('Invalid room-fan speed command.');
     await this.refresh();
-    const source = this.sources.find((entry) => entry.id === id);
+    const discovered = this.sources.find((entry) => entry.id === id);
+    const source = discovered && { ...discovered, speedMapping: options.speedMapping };
     const control = this.fanControls.get(id);
     const instance = control && this.instances.get(control.bridge);
     if (!source?.available || !source.speedAvailable || !instance || !Number.isInteger(control.speedIid) ||
-        !sameFanState(fanState(source), expected) || supportedSpeed(source, speed, options.minimum, options.maximum) !== speed) {
+        !sameFanState(fanState(source), expected, source.speedMapping) || supportedSpeed(source, speed, options.minimum, options.maximum) !== speed) {
       const error = new Error('Room fan changed or its speed is outside the supported limits.');
       error.code = 'CLIMATE_CONFLICT';
       throw error;
@@ -331,3 +333,4 @@ export class ClimateAccess {
     this.sources = [];
   }
 }
+

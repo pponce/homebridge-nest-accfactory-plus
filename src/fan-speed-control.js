@@ -1,4 +1,4 @@
-import { fanRulePlan, fanSpeedLimits, fanState, sameFanState, supportedSpeed, validFanState } from '../homebridge-ui/public/fan-speed.js';
+import { fanRulePlan, fanSpeedLimits, fanState, mappedSpeed, sameFanSpeed, sameFanState, supportedSpeed, speedWithinLimits, validFanState } from '../homebridge-ui/public/fan-speed.js';
 
 const MINUTE = 60000;
 const ready = (source, now) =>
@@ -39,7 +39,7 @@ export function prepareFanRules(engine) {
       state.windowStatus?.active !== false && state.rule.targetIds.includes(id));
     if (watched && !engine.leases.has('fan:' + id) && before &&
         (before.running !== current.running || (Number.isFinite(before.speed) && Number.isFinite(current.speed) &&
-          Math.abs(before.speed - current.speed) >= 0.001))) {
+          !sameFanSpeed(before.speed, current.speed, source.speedMapping)))) {
       engine.manualFan(id, 'The fan changed outside automatic control. Resume this fan when ready.');
     }
     if (watched) {
@@ -130,7 +130,7 @@ export function validSpeedLease(lease) {
 
 function observe(engine, key, lease, source, state) {
   const current = fanState(source);
-  const speedMatches = Math.abs(current.speed - lease.expected.speed) < 0.001;
+  const speedMatches = sameFanSpeed(current.speed, lease.expected.speed, source.speedMapping);
   // A speed setter may also turn the fan on. Power is written separately only after speed feedback is confirmed.
   const confirmed =
     lease.pending && lease.step === 'speed'
@@ -141,7 +141,7 @@ function observe(engine, key, lease, source, state) {
     lease.pending = false;
     return true;
   }
-  if (lease.pending && sameFanState(current, lease.before) && engine.now() - lease.sentAt < 2 * MINUTE) {
+  if (lease.pending && sameFanState(current, lease.before, source.speedMapping) && engine.now() - lease.sentAt < 2 * MINUTE) {
     if (state) {
       state.phase = 'waiting';
       state.reason = 'Waiting for the fan to confirm its speed or power setting.';
@@ -156,7 +156,7 @@ function observe(engine, key, lease, source, state) {
 async function write(engine, key, lease, source, desired, state, restoring = false) {
   const previousLease = engine.leases.has(key) ? structuredClone(lease) : undefined;
   const previousWrite = state?.fanWrites?.[lease.targetId];
-  const speedStep = desired.running && Math.abs(source.speed - desired.speed) >= 0.001;
+  const speedStep = desired.running && !sameFanSpeed(source.speed, desired.speed, source.speedMapping);
   lease.before = fanState(source);
   lease.expected = { running: speedStep ? source.running : desired.running, speed: desired.speed };
   lease.step = speedStep ? 'speed' : 'power';
@@ -175,6 +175,7 @@ async function write(engine, key, lease, source, desired, state, restoring = fal
   const options = {
     minimum: 1,
     maximum: lease.maximum,
+    speedMapping: source.speedMapping,
     guard: () => restoring || engine.windowPermits(state, lease.targetId),
   };
   try {
@@ -230,7 +231,7 @@ export async function releaseFanSpeed(engine, key, lease) {
       }
     }
   }
-  if ((!desired.running && !source.running) || sameFanState(fanState(source), desired)) {
+  if ((!desired.running && !source.running) || sameFanState(fanState(source), desired, source.speedMapping)) {
     engine.leases.delete(key);
     if (state) {
       (state.fanSpeedObserved ??= {})[lease.targetId] = fanState(source);
@@ -287,7 +288,7 @@ export async function runFanSpeed(engine, state, targetIds) {
       }
       continue;
     }
-    if (!lease && state.fanSpeedObserved[id] && !sameFanState(fanState(source), state.fanSpeedObserved[id])) {
+    if (!lease && state.fanSpeedObserved[id] && !sameFanState(fanState(source), state.fanSpeedObserved[id], source.speedMapping)) {
       engine.manualFan(id, 'A selected fan speed or power setting changed outside this rule. Resume when ready for automatic control.');
       continue;
     }
@@ -298,12 +299,12 @@ export async function runFanSpeed(engine, state, targetIds) {
       }
       continue;
     }
-    if (source.running && Math.abs(source.speed - speed) < 0.001) {
+    if (source.running && sameFanSpeed(source.speed, speed, source.speedMapping)) {
       continue;
     }
     // Complete a staged start promptly; subsequent changes are limited to once a minute.
-    const stagedStart = lease?.step === 'speed' && !source.running && Math.abs(source.speed - speed) < 0.001;
-    const overCap = source.running && source.speed > limits.maximum;
+    const stagedStart = lease?.step === 'speed' && !source.running && sameFanSpeed(source.speed, speed, source.speedMapping);
+    const overCap = source.running && !speedWithinLimits(source, source.speed, 1, limits.maximum);
     if (!stagedStart && !overCap && Number.isFinite(state.fanWrites[id]) && engine.now() - state.fanWrites[id] < MINUTE) {
       state.phase = 'waiting';
       state.reason = 'Waiting for the one-minute fan-speed update interval.';
@@ -312,7 +313,8 @@ export async function runFanSpeed(engine, state, targetIds) {
     }
     const atEnd = speed === supportedSpeed(source, limits.minimum, limits.minimum, limits.maximum) ||
       speed === supportedSpeed(source, limits.maximum, limits.minimum, limits.maximum);
-    if (rule.speedMode === 'curve' && lease && source.running && !overCap && !atEnd && Math.abs(source.speed - speed) < 5) {
+    const mappedChange = mappedSpeed(source.speedMapping, source.speed) && mappedSpeed(source.speedMapping, speed);
+    if (!mappedChange && rule.speedMode === 'curve' && lease && source.running && !overCap && !atEnd && Math.abs(source.speed - speed) < 5) {
       continue;
     }
     if (!lease) {
@@ -323,3 +325,4 @@ export async function runFanSpeed(engine, state, targetIds) {
     await write(engine, key, lease, source, { running: true, speed }, state);
   }
 }
+

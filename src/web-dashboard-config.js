@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { HEATING_PROFILES } from './heating-response.js';
 import { parseDurationToSeconds } from './utils.js';
-import { fanCurveError, fanSpeedError, normalizeFanRule, speedAction } from '../homebridge-ui/public/fan-speed.js';
+import { fanCurveError, fanMappingsError, fanSpeedError, normalizeFanRule, speedAction } from '../homebridge-ui/public/fan-speed.js';
 
 const DEVICE_FIELDS = [
   'name',
@@ -66,6 +66,7 @@ function deviceRows(value) {
 function runtimeSignature(block) {
   const runtime = structuredClone(block);
   delete runtime.climateRuleDrafts;
+  delete runtime.climateFanMappings;
   delete runtime.dashboardTemperatureUnit;
   runtime.devices = deviceRows(runtime.devices);
   for (const device of runtime.devices) {
@@ -287,6 +288,9 @@ export class WebDashboardConfig {
       rules = { occupancy: [], temperature: [], fans: [] };
       rulesError = 'Climate rules are invalid. Review their configuration in Homebridge before running automation.';
     }
+    const fanMappings = block.climateFanMappings ?? [];
+    const mappingError = fanMappingsError(fanMappings);
+    if (mappingError) rulesError = 'Fan speed mappings need review: ' + mappingError;
     return {
       revision: state.revision,
       config: {
@@ -295,6 +299,7 @@ export class WebDashboardConfig {
         options: { eveHistory: block.options?.eveHistory !== false, pauseOnRestart: block.options?.pauseOnRestart === true },
         devices,
         rules,
+        fanMappings: mappingError ? [] : structuredClone(fanMappings),
       },
       accounts: (Array.isArray(block.accounts) ? block.accounts : []).map((account) => ({
         name: typeof account?.name === 'string' ? account.name : 'Nest account',
@@ -326,7 +331,7 @@ export class WebDashboardConfig {
   async prepare(payload) {
     this.beforeSave?.();
     keys(payload, ['revision', 'config']);
-    keys(payload.config, ['name', 'temperatureUnit', 'options', 'devices', 'rules']);
+    keys(payload.config, ['name', 'temperatureUnit', 'options', 'devices', 'rules', 'fanMappings']);
     const state = await this.read();
     if (payload.revision !== state.revision) {
       throw new DashboardConfigError('Settings changed elsewhere. Reload before saving your changes.', 409);
@@ -423,6 +428,11 @@ export class WebDashboardConfig {
         }
       }
     }
+    if (patch.fanMappings !== undefined) {
+      const error = fanMappingsError(patch.fanMappings);
+      assert(!error, error);
+      state.block.climateFanMappings = structuredClone(patch.fanMappings);
+    }
     if (patch.rules !== undefined) {
       state.block.climateRuleDrafts = validateRuleDrafts(patch.rules);
     }
@@ -463,3 +473,4 @@ export class WebDashboardConfig {
     return this.snapshot();
   }
 }
+

@@ -368,6 +368,7 @@ export class ClimateAutomation {
     this.error = null;
     this.rules = flatten(envelope.config.rules);
     this.deviceOptions = envelope.config.devices;
+    this.fanMappings = envelope.config.fanMappings ?? [];
     const currentIds = new Set(this.rules.map((rule) => rule.id));
     for (const rule of this.rules) {
       const old = this.states.get(rule.id);
@@ -744,7 +745,8 @@ export class ClimateAutomation {
   refreshSnapshot() {
     this.live = this.dashboard.snapshot();
     this.sources = new Map(
-      automationSources(this.live, this.external).flatMap((source) =>
+      automationSources(this.live, this.external).map((source) => source.kind === 'fan' ? { ...source,
+        speedMapping: this.fanMappings?.find((mapping) => mapping.sourceId === source.id)?.ranges } : source).flatMap((source) =>
         [source.id, ...(source.aliases ?? [])].map((id) => [id, source]),
       ),
     );

@@ -120,3 +120,48 @@ test('unusable speed characteristics cannot enable speed commands', () => {
   }
   assert.equal(speedCapabilities(undefined), null);
 });
+
+
+test('manual fan ranges select native commands within limits and compare physical settings', async () => {
+  const { mappedSpeed, sameFanSpeed, sameFanState, speedWithinLimits } = await import('../homebridge-ui/public/fan-speed.js');
+  const ranges = [[1, 21], [22, 35], [36, 49], [50, 64], [65, 78], [79, 92], [93, 100]]
+    .map(([min, max], index) => ({ label: 'Speed ' + (index + 1), min, max }));
+  const source = { canSetSpeed: true, speedCapabilities: speedCapabilities({ perms: ['pr', 'pw'] }), speedMapping: ranges };
+  for (const [index, range] of ranges.entries()) {
+    for (const value of [range.min, range.max]) {
+      assert.equal(mappedSpeed(ranges, value).label, 'Speed ' + (index + 1));
+      assert.equal(Math.max(1, Math.round(value / 100 * 7)), index + 1);
+    }
+  }
+  assert.equal(supportedSpeed(source, 75, 25, 75), 71);
+  assert.equal(supportedSpeed(source, 75, 75, 75), 75);
+  assert.equal(sameFanSpeed(75, 71, ranges), true);
+  assert.equal(sameFanSpeed(75, 79, ranges), false);
+  assert.equal(sameFanSpeed(75, 71), false);
+  assert.equal(sameFanSpeed(null, 0, ranges), false);
+  assert.equal(sameFanSpeed(0, 14, ranges), false);
+  assert.equal(sameFanState({ running: false, speed: 71 }, { running: true, speed: 75 }, ranges), false);
+  assert.equal(mappedSpeed(ranges, 21.5), null);
+  assert.equal(speedWithinLimits(source, 78, 25, 75), true, 'Same physical setting as an allowed command');
+  assert.equal(speedWithinLimits(source, 86, 25, 75), false);
+  const partial = { ...source, speedMapping: [ranges[4]] };
+  assert.equal(supportedSpeed(partial, 40, 25, 75), 40);
+  assert.equal(supportedSpeed({ ...source, speedCapabilities: { values: [0, 25, 50, 75, 100] } }, 72, 25, 75), 75);
+  assert.equal(supportedSpeed({ ...source, canSetSpeed: false }, 75, 25, 75), null);
+});
+
+test('manual fan mappings reject ambiguity, invalid bounds and malformed rows while allowing partial maps', async () => {
+  const { fanMappingsError } = await import('../homebridge-ui/public/fan-speed.js');
+  const row = { label: 'Speed 5', min: 65, max: 78 };
+  const map = { sourceId: 'fan', ranges: [row] };
+  assert.equal(fanMappingsError([]), null);
+  assert.equal(fanMappingsError([{ sourceId: 'fan', ranges: [] }]), null);
+  assert.equal(fanMappingsError([map]), null);
+  for (const bad of [null, {}, [null], [map, map], [{ ...map, endpoint: 'forbidden' }], [{ ...map, sourceId: '' }],
+    [{ ...map, ranges: [row, { label: 'Another', min: 78, max: 90 }] }],
+    [{ ...map, ranges: [row, { label: ' speed 5 ', min: 79, max: 92 }] }],
+    ...[{ min: 0 }, { max: 101 }, { min: 79 }, { min: 65.5 }, { min: null }, { label: '' }, { label: 'x'.repeat(41) }, { command: 71 }]
+      .map((change) => [{ ...map, ranges: [{ ...row, ...change }] }])]) {
+    assert.ok(fanMappingsError(bad), JSON.stringify(bad));
+  }
+});

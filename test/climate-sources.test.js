@@ -533,3 +533,22 @@ test('legacy Fan services also use RotationSpeed while preserving boolean power 
   assert.equal(JSON.parse(last.options.body).characteristics[0].value, false);
 });
 
+
+
+test('adapter accepts equivalent mapped feedback but still rejects changed levels, unsupported writes and caps', async (t) => {
+  const f = await fixture(t, { minStep: 1 });
+  const id = 'hap:' + bridge + '/2/20';
+  const speedMapping = [{ label: 'Speed 4', min: 50, max: 64 }, { label: 'Speed 5', min: 65, max: 78 }];
+  const options = { minimum: 1, maximum: 75, speedMapping };
+  f.speedValue(57);
+  await f.access.setFanSpeed(id, 71, { running: true, speed: 60 }, options);
+  f.speedValue(75);
+  await f.access.setFan(id, false, { running: true, speed: 71 }, options);
+  f.speedValue(78);
+  await f.access.setFan(id, true, { running: false, speed: 71 }, options);
+  f.speedValue(86);
+  await assert.rejects(f.access.setFanSpeed(id, 71, { running: true, speed: 75 }, options), { code: 'CLIMATE_CONFLICT' });
+  f.speedValue(71);
+  await assert.rejects(f.access.setFanSpeed(id, 78, { running: true, speed: 71 }, options), { code: 'CLIMATE_CONFLICT' });
+  await assert.rejects(f.access.setFanSpeed(id, 71, { running: true, speed: 75 }, { minimum: 1, maximum: 75 }), { code: 'CLIMATE_CONFLICT' });
+});

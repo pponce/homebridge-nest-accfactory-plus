@@ -251,9 +251,49 @@ try {
   assert.deepEqual(await names(), ['Cooling circulation', 'Living room comfort']);
   assert.match(await row('Cooling circulation').locator('.rule-rank').innerText(), /Highest priority/);
   assert.deepEqual((await saved()).map((entry) => entry.name), await names());
+  // Optional per-fan mappings persist through refresh, reload, validation and discard.
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await page.getByRole('link', { name: 'Sensors & fans', exact: true }).click();
+  const mappedFan = page.locator('.source-card').filter({ has: page.getByRole('heading', { name: 'Living room fan', exact: true }) });
+  await mappedFan.locator('summary').click();
+  await mappedFan.getByRole('button', { name: 'Add speed range', exact: true }).click();
+  await mappedFan.getByLabel('Speed label 1', { exact: true }).fill('Speed 5');
+  await mappedFan.getByLabel('From % 1', { exact: true }).fill('65');
+  await mappedFan.getByLabel('To % 1', { exact: true }).fill('78');
+  await mappedFan.getByRole('button', { name: 'Add speed range', exact: true }).click();
+  await mappedFan.getByLabel('From % 2', { exact: true }).fill('78');
+  await mappedFan.getByLabel('To % 2', { exact: true }).fill('92');
+  assert.match(await mappedFan.getByRole('status').innerText(), /must not overlap/);
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  assert.deepEqual((await server.config.snapshot()).config.fanMappings, []);
+  await mappedFan.getByRole('button', { name: 'Remove speed range 2', exact: true }).click();
+  await save();
+  assert.deepEqual((await server.config.snapshot()).config.fanMappings, [{ sourceId: 'fan', ranges: [{ label: 'Speed 5', min: 65, max: 78 }] }]);
+  assert.equal((await server.config.snapshot()).restartRequired, false);
+  await page.reload(); await mappedFan.locator('summary').click();
+  assert.equal(await mappedFan.getByLabel('From % 1', { exact: true }).inputValue(), '65');
+  await mappedFan.getByLabel('Speed label 1', { exact: true }).fill('My fifth speed');
+  await mappedFan.getByLabel('To % 1', { exact: true }).fill('');
+  await page.getByRole('button', { name: 'Discover sources', exact: true }).click();
+  await page.waitForFunction(() => !document.getElementById('refresh-sources').disabled);
+  assert.equal(await mappedFan.getByLabel('Speed label 1', { exact: true }).inputValue(), 'My fifth speed');
+  assert.equal(await mappedFan.getByLabel('To % 1', { exact: true }).inputValue(), '');
+  assert.equal(await mappedFan.locator('details').getAttribute('open'), '');
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  await mappedFan.locator('summary').click();
+  assert.equal(await mappedFan.getByLabel('Speed label 1', { exact: true }).inputValue(), 'Speed 5');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.screenshot({ path: path.join(output, 'fan-mapping-mobile.png'), fullPage: true });
+  await mappedFan.getByRole('button', { name: 'Remove speed range 1', exact: true }).click();
+  await save();
+  assert.deepEqual((await server.config.snapshot()).config.fanMappings, []);
   assert.deepEqual(errors, []);
   console.log('Fan browser checks passed: speed modes, caps, legacy priority order, mouse/touch/keyboard reordering, save/discard, shared-fan winner, manual override and mobile layout.');
 } finally {
   await browser?.close(); await engine?.stop(); await server.stop(); await fs.rm(storage, { recursive: true, force: true });
 }
+
 

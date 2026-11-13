@@ -1,9 +1,17 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
-## Unreleased
+## v0.6.4
 
 - Show each rule-assigned room fan on Overview with reported power and speed, the selected rule, individual temperature inputs, their average, run thresholds, speed calculations and pending feedback.
 - Explain combined presence with each source’s current contribution, last observed activity, motion holds, Away delay and manual overrides. Identify unavailable inputs and retain the distinction between current and last-known status.
 - Expand thermostat rule details with sensor readings, the room average, temperature compensation and adjustment limits, target origin and update timing.
+
+
+- Add optional manual speed-range mappings to individual fans in Sensors & fans. Add or remove labeled inclusive ranges, validate overlaps and bounds, and save without restarting the child bridge.
+- Use configured mappings in fixed-speed and temperature-based rules, speed previews, feedback confirmation, manual-change detection and restoration. Avoid redundant commands within a physical setting; preserve native fan capabilities and rule command limits. Fans and percentages without mappings retain their normal behavior.
+- Make the selected thermostat and mode prominent in Coming up. Show only relevant heating/cooling schedule targets in chronological order, explain the active climate rule’s effect, and provide accessible schedule help.
+- Move Nest sensor-selection diagnostics to Settings → Diagnostics & troubleshooting.
+
+This release also includes the v0.6.3 Nest feedback recovery and requested-versus-reported target diagnostics below. Existing accounts, rules and accessory identities are preserved. Fan mappings are optional and empty by default.
 
 ## v0.6.3
 
