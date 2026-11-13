@@ -186,7 +186,7 @@ svg { display: block; }
 .compact-label.insights-selector select { width: 100%; max-width: none; font-size: 14px; }
 .insights-selector > span { font-size: 11px; font-weight: 400; color: var(--muted); }
 .schedule-source { font-size: 11px; color: var(--muted); margin: 18px 0 5px; }
-.schedule-thermostat { font-size: 22px; line-height: 1.3; margin: 0 0 10px; overflow-wrap: anywhere; }
+.schedule-thermostat { font-size: 22px; font-weight: 600; line-height: 1.3; margin: 0 0 10px; overflow-wrap: anywhere; }
 .schedule-mode, .schedule-control-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 #schedule-heading .field-label-row { font: inherit; }
 .schedule-help { white-space: pre-line; }
