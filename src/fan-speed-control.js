@@ -306,7 +306,8 @@ export async function runFanSpeed(engine, state, targetIds) {
     }
     // Complete a staged start promptly; subsequent changes are limited to once a minute.
     const stagedStart = lease?.step === 'speed' && !source.running && sameFanSpeed(source.speed, speed, source.speedMapping);
-    const overCap = source.running && !speedWithinLimits(source, source.speed, 1, limits.maximum);
+    const overCap = source.running && source.speed > limits.maximum &&
+      !speedWithinLimits(source, source.speed, 1, limits.maximum);
     if (!stagedStart && !overCap && Number.isFinite(state.fanWrites[id]) && engine.now() - state.fanWrites[id] < MINUTE) {
       state.phase = 'waiting';
       state.reason = 'Waiting for the one-minute fan-speed update interval.';

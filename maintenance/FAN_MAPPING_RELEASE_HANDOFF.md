@@ -24,7 +24,7 @@ Release v0.6.4 combining PR28 Overview explanations, PR29 thermostat schedule co
 
 ## Validation checkpoint
 
-- 187 focused mapping/control/config/schedule/dashboard tests pass, including accepted settled feedback, manual changes, restoration, saved-state reload, missing mappings and config preservation/staging.
+- 188 focused mapping/control/config/schedule/dashboard tests pass, including accepted settled feedback, manual changes, restoration, saved-state reload, missing mappings and config preservation/staging.
 - Focused coverage: climate-explanations 100% lines / 95% branches / 100% functions; fan-speed-control 97.87% / 98.25% / 100% (above existing floors).
 - Syntax and dashboard asset build pass. Local Chromium is unavailable due to socket sandbox restrictions; browser checks are delegated to GitHub Actions infrastructure, not treated as hardware validation.
 - Combined browser suite passed in GitHub Actions run 43339456198 at candidate 725b6245f465d0474de28faba2112418c0726626; subsequent candidate corrects lint formatting, release-helper pins and final-adapter minimum propagation for narrow mapped ranges. Publisher/installer success and failure-path checks pass locally.

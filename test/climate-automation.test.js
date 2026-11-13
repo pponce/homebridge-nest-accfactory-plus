@@ -2323,3 +2323,16 @@ test('a mapped range narrowed by the rule minimum keeps the same limits at the f
   assert.equal(f.rule('fans').phase, 'active');
   assert.equal(f.engine.fanOverrides.size, 0);
 });
+
+
+test('unmapped fan capability changes retain the normal update interval below the cap', async (t) => {
+  const f = await fixture(t, { fans: [speedRule] });
+  await startSpeedFan(f, 74);
+  f.source('fan').speedCapabilities.values = [0, 50, 75, 100];
+  fahrenheitRoom(f, 76); f.advance(15000);
+  await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.length, 1);
+  assert.match(f.rule('fans').reason, /one-minute/);
+  f.advance(45000); await f.engine.tick();
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 50);
+});
