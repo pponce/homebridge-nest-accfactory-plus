@@ -381,9 +381,10 @@ export class ClimateAutomation {
     }
     const kind = state.scheduleTarget ? 'schedule' : state.manualTarget ? 'manual' : 'command';
     const since = pending.at ?? pending.sentAt;
+    const automatic = kind !== 'manual' && state.rule.enabled && !state.paused && state.windowStatus?.active !== false;
     return { kind, expected: pending.expected, since,
-      automaticRecovery: kind !== 'manual' && !state.paused,
-      recovering: kind !== 'manual' && !state.paused && this.now() - since >= ACK_TIMEOUT,
+      automaticRecovery: automatic,
+      recovering: automatic && this.now() - since >= ACK_TIMEOUT,
       refreshAttempts: pending.feedbackRefreshAttempts ?? 0,
       nextRefreshAt: pending.feedbackNextRefreshAt ?? since + FEEDBACK_REFRESH_DELAY };
   }
@@ -411,12 +412,18 @@ export class ClimateAutomation {
     const recovering = elapsed >= ACK_TIMEOUT;
     state.phase = recovering ? 'recovering' : 'waiting';
     state.temperatureControl = recovering ? 'recovering' : 'updating';
-    state.reason = kind === 'schedule' ?
-      (recovering ? 'Recovering scheduled heating feedback. Control will resume automatically when Nest confirms the current schedule target.' :
-        'Waiting for Nest to report its scheduled target before adjusting the room temperature.') :
-      (recovering ? 'Recovering delayed Nest feedback. Control will resume automatically when the accepted heating target is confirmed.' :
-        pending.feedbackRefreshed ? 'Refreshing Nest feedback to confirm the accepted heating target. The temperature command is not repeated.' :
-          'Waiting for the device to report the accepted command.');
+    if (kind === 'schedule') {
+      state.reason = recovering ? 'Recovering scheduled heating feedback. ' +
+        'Control will resume automatically when Nest confirms the current schedule target.' :
+        'Waiting for Nest to report its scheduled target before adjusting the room temperature.';
+    } else if (recovering) {
+      state.reason = 'Recovering delayed Nest feedback. ' +
+        'Control will resume automatically when the accepted heating target is confirmed.';
+    } else {
+      state.reason = pending.feedbackRefreshed ?
+        'Refreshing Nest feedback to confirm the accepted heating target. The temperature command is not repeated.' :
+        'Waiting for the device to report the accepted command.';
+    }
     if (kind === 'command' && recovering && state.lastAction) {
       state.lastAction = { ...state.lastAction, status: 'recovering',
         message: 'Heating command accepted; awaiting delayed Nest feedback. No repeat command is sent.' };

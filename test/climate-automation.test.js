@@ -596,7 +596,10 @@ test('schedule recovery refreshes observation with backoff and accepts only the 
     a: { time: 36060, 'temp-min': 19 }, b: { time: 36180, 'temp-min': 18 },
   } } }, 'A');
   let refreshes = 0;
-  f.dashboard.refresh = () => { refreshes += 1; return true; };
+  f.dashboard.refresh = () => {
+    refreshes += 1;
+    return true;
+  };
   f.rules({ temperature: [temperatureRule] });
   await f.engine.tick();
   await f.engine.tick();
@@ -639,6 +642,24 @@ test('a conflicting target during schedule recovery remains paused even if match
   f.dashboard.update('T', 'Thermostat', { target_temperature_low: 19 }, 'A');
   await f.engine.tick();
   assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.commands.length, 1);
+});
+
+test('disabled rules do not claim automatic recovery is running for their retained schedule wait', async (t) => {
+  const f = await fixture(t, {});
+  f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+  f.dashboard.update('T', 'Thermostat', { schedules: { 0: { a: { time: 36060, 'temp-min': 19 } } } }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  f.advance(minute);
+  await f.engine.tick();
+  f.advance(3 * minute);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').feedback.automaticRecovery, true);
+  f.rules({ temperature: [{ ...temperatureRule, enabled: false }] });
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').feedback.automaticRecovery, false);
+  assert.equal(f.rule('rooms').feedback.recovering, false);
   assert.equal(f.commands.length, 1);
 });
 
@@ -1840,9 +1861,15 @@ test('retained schedule-timeout pauses recover after restart without clearing in
     const state = f.engine.states.get('rooms');
     delete state.scheduleTarget.priorTargets;
     f.engine.pause(state, 'Nest did not confirm its scheduled heating target. Review it, then Resume automatic control.');
-    if (policy === 'manual') await f.engine.control({ id: 'rooms', action: 'pause' });
-    if (policy === 'restart') f.options.pauseOnRestart = true;
-    if (policy === 'orphan') state.controlStarted = false;
+    if (policy === 'manual') {
+      await f.engine.control({ id: 'rooms', action: 'pause' });
+    }
+    if (policy === 'restart') {
+      f.options.pauseOnRestart = true;
+    }
+    if (policy === 'orphan') {
+      state.controlStarted = false;
+    }
     await f.engine.persist();
     f.advance(3 * minute);
     const restarted = await restartFixture(f);
@@ -1885,7 +1912,10 @@ test('a user pause during command recovery prevents late matching feedback from 
 test('prolonged feedback recovery backs off reconnects without repeating accepted commands', async (t) => {
   const f = await fixture(t, {});
   const attempts = [];
-  f.dashboard.refresh = () => { attempts.push(f.now()); return true; };
+  f.dashboard.refresh = () => {
+    attempts.push(f.now());
+    return true;
+  };
   f.noAck();
   f.rules({ temperature: [temperatureRule] });
   await f.engine.tick();
@@ -1894,7 +1924,9 @@ test('prolonged feedback recovery backs off reconnects without repeating accepte
     await f.engine.tick();
   }
   assert.ok(attempts.length >= 4 && attempts.length <= 7);
-  for (let i = 1; i < attempts.length; i++) assert.ok(attempts[i] - attempts[i - 1] >= minute);
+  for (let i = 1; i < attempts.length; i++) {
+    assert.ok(attempts[i] - attempts[i - 1] >= minute);
+  }
   assert.equal(attempts.at(-1) - attempts.at(-2), 5 * minute);
   assert.equal(f.rule('rooms').temperatureControl, 'recovering');
   assert.equal(f.commands.length, 1);
@@ -1908,7 +1940,10 @@ test('thermostats sharing an account cannot repeatedly reconnect the same feedba
   const f = await fixture(t, {});
   f.dashboard.update('U', 'Thermostat', { ...f.dashboard.devices.get('T').data, nest_google_device_uuid: 'other' }, 'A');
   let refreshes = 0;
-  f.dashboard.refresh = () => { refreshes += 1; return true; };
+  f.dashboard.refresh = () => {
+    refreshes += 1;
+    return true;
+  };
   // No thermostat writes are needed to exercise two simultaneous saved schedule waits.
   f.rules({ temperature: [temperatureRule, { ...temperatureRule, id: 'other', thermostatId: 'U' }] });
   f.engine.rules = (await f.config.snapshot()).config.rules.temperature;
@@ -1917,7 +1952,9 @@ test('thermostats sharing an account cannot repeatedly reconnect the same feedba
   }
   f.engine.deviceOptions = [];
   f.engine.refreshSnapshot();
-  for (const state of f.engine.states.values()) f.engine.waitHeatingFeedback(state, state.scheduleTarget, 'schedule');
+  for (const state of f.engine.states.values()) {
+    f.engine.waitHeatingFeedback(state, state.scheduleTarget, 'schedule');
+  }
   assert.equal(refreshes, 1);
   assert.equal(f.commands.length, 0);
 });
@@ -1943,9 +1980,14 @@ test('refreshing one thermostat gives other account members time to receive thei
   f.dashboard.update('U', 'Thermostat', { ...f.dashboard.devices.get('T').data, nest_google_device_uuid: 'other' }, 'A');
   f.dashboard.command = async (id, values) => {
     f.commands.push({ id, ...values });
-    if (id === 'other') f.dashboard.update('U', 'Thermostat', { target_temperature_low: values.target_temperature_low }, 'A');
+    if (id === 'other') {
+      f.dashboard.update('U', 'Thermostat', { target_temperature_low: values.target_temperature_low }, 'A');
+    }
   };
-  f.dashboard.refresh = () => { f.dashboard.invalidate('A'); return true; };
+  f.dashboard.refresh = () => {
+    f.dashboard.invalidate('A');
+    return true;
+  };
   f.rules({ temperature: [temperatureRule, { ...temperatureRule, id: 'other', thermostatId: 'U' }] });
   await f.engine.tick();
   await f.engine.tick();
@@ -2086,7 +2128,9 @@ test('a graceful bridge stop retains unresolved heating feedback instead of retr
     await f.engine.tick();
     f.advance(3 * minute);
     await f.engine.tick();
-    if (disconnected) f.dashboard.invalidate('A');
+    if (disconnected) {
+      f.dashboard.invalidate('A');
+    }
     await f.engine.stop();
     const restarted = await restartFixture(f);
     t.after(() => restarted.stop());
