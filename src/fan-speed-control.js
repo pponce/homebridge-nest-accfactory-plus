@@ -86,8 +86,8 @@ export function prepareFanRules(engine) {
         delete state.fanSpeedObserved?.[id];
       }
       const selected = !engine.fanOverrides.has(id) && (winner === state ||
-        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false && state.occupancyStatus?.matches !== false &&
-          engine.leases.get('fan:' + id)?.owner === state.rule.id));
+        (!winner && !state.paused && state.rule.enabled && state.windowStatus?.active !== false &&
+          state.occupancyStatus?.matches !== false && engine.leases.get('fan:' + id)?.owner === state.rule.id));
       if (selected) {
         state.fanTargets.push(id);
         if (lastWrites.has(id)) {
@@ -180,7 +180,8 @@ function observe(engine, key, lease, source, state) {
   }
   engine.leases.delete(key);
   fanFeedbackAction(engine, lease, state, 'conflict', (source.name || 'Room fan') + ': reported a conflicting setting; review and Resume.');
-  engine.manualFan(lease.targetId, 'The fan reported a different speed or power setting from the expected command. Review it, then Resume.');
+  engine.manualFan(lease.targetId,
+    'The fan reported a different speed or power setting from the expected command. Review it, then Resume.');
   return false;
 }
 

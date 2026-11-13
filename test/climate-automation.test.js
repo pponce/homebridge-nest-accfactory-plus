@@ -2739,7 +2739,9 @@ test('occupancy and window must both match and the final write guard rechecks oc
     const persist = f.engine.persist.bind(f.engine);
     f.engine.persist = async () => {
       await persist();
-      if (f.engine.leases.size) f.engine.sources.get('occupancy').detected = false;
+      if (f.engine.leases.size) {
+        f.engine.sources.get('occupancy').detected = false;
+      }
     };
     await f.engine.tick();
     assert.equal(f.commands.length + f.fanCommands.length, 0);

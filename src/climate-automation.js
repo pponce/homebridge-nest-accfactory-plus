@@ -9,7 +9,9 @@ import { DashboardConfigError } from './web-dashboard-config.js';
 import { sensorSources, presenceSources } from '../homebridge-ui/public/sensor-preview.js';
 import { scheduleTimeZone, selectedNestSensor } from '../homebridge-ui/public/climate-utils.js';
 import { normalizeFanRule, sameFanSpeed } from '../homebridge-ui/public/fan-speed.js';
-import { runFanSpeed, releaseFanSpeed, validSpeedLease, prepareFanRules, handoffFanLease, waitFanFeedback, fanFeedbackAction } from './fan-speed-control.js';
+import {
+  runFanSpeed, releaseFanSpeed, validSpeedLease, prepareFanRules, handoffFanLease, waitFanFeedback, fanFeedbackAction,
+} from './fan-speed-control.js';
 import { TemperatureSensorSetup, nativeSensorAllowsHeating } from './temperature-sensor-setup.js';
 import { explainRule } from './climate-explanations.js';
 
@@ -384,7 +386,8 @@ export class ClimateAutomation {
     }
     const kind = state.scheduleTarget ? 'schedule' : state.manualTarget ? 'manual' : 'command';
     const since = pending.at ?? pending.sentAt;
-    const automatic = kind !== 'manual' && state.rule.enabled && !state.paused && state.windowStatus?.active !== false && this.occupancyCondition(state).matches === true;
+    const automatic = kind !== 'manual' && state.rule.enabled && !state.paused && state.windowStatus?.active !== false &&
+      this.occupancyCondition(state).matches === true;
     return { kind, expected: pending.expected, since,
       automaticRecovery: automatic,
       recovering: automatic && this.now() - since >= ACK_TIMEOUT,
@@ -529,7 +532,8 @@ export class ClimateAutomation {
                 (device) => device.serialNumber.toUpperCase() === rule.thermostatId?.toUpperCase() && device.heatingResponseEnabled,
               ))) &&
           [...rule.sourceIds, ...rule.targetIds,
-            ...(rule.occupancyCondition?.sourceType === 'sensor' ? [rule.occupancyCondition.sourceId] : [])].some((id) => !id.startsWith('nest:')),
+            ...(rule.occupancyCondition?.sourceType === 'sensor' ? [rule.occupancyCondition.sourceId] : [])]
+            .some((id) => !id.startsWith('nest:')),
       ) ||
       [...this.leases.values()].some((lease) => lease.kind === 'fan')
     ) {
@@ -700,7 +704,8 @@ export class ClimateAutomation {
         state.thermostatPause = suspended.thermostatPause;
         state.reason = suspended.thermostatPause;
       }
-      if (!state.rule.enabled || state.paused || !state.windowStatus.active || state.occupancyStatus?.matches === false || this.temperatureWinners.has(serial)) {
+      if (!state.rule.enabled || state.paused || !state.windowStatus.active || state.occupancyStatus?.matches === false ||
+          this.temperatureWinners.has(serial)) {
         continue;
       }
       this.temperatureWinners.set(serial, state.rule.id);
@@ -765,12 +770,14 @@ export class ClimateAutomation {
     if (state.rule.kind === 'fan') {
       return ![...this.states.values()].some((other) => other !== state && other.rule.kind === 'fan' &&
         other.rule.targetIds.includes(targetId) && other.rule.enabled && !other.paused &&
-        (other.rule.priority ?? 0) > (state.rule.priority ?? 0) && windowActive(other.rule.window, this.now()) && this.occupancyCondition(other).matches !== false &&
+        (other.rule.priority ?? 0) > (state.rule.priority ?? 0) && windowActive(other.rule.window, this.now()) &&
+        this.occupancyCondition(other).matches !== false &&
         (other.windowStatus?.active === false || other.fanPlan?.demand !== false));
     }
     return ![...this.states.values()].some((other) => other !== state && other.rule.kind === 'temperature' &&
       other.rule.thermostatId === state.rule.thermostatId && other.rule.enabled && !other.paused &&
-      (other.rule.priority ?? 0) > (state.rule.priority ?? 0) && windowActive(other.rule.window, this.now()) && this.occupancyCondition(other).matches !== false);
+      (other.rule.priority ?? 0) > (state.rule.priority ?? 0) && windowActive(other.rule.window, this.now()) &&
+      this.occupancyCondition(other).matches !== false);
   }
 
   undoPreparedCommand(key, lease, previous, state, lastWriteAt) {
@@ -1196,7 +1203,8 @@ export class ClimateAutomation {
     }
     this.leases.delete(key);
     if (lease.kind === 'fan') {
-      this.manualFan(lease.targetId, 'The fan reported a different power setting from the expected command. Review it, then Resume automatic control.');
+      this.manualFan(lease.targetId,
+        'The fan reported a different power setting from the expected command. Review it, then Resume automatic control.');
     } else {
       this.unconfirmedHeating(state, key, equal(value, lease.before) ?
         'Nest feedback did not confirm the heating target within two minutes. Check Nest, then Resume automatic control.' :
