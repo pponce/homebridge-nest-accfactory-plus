@@ -1,4 +1,12 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.6
+
+- Recover automatically from delayed automatic heating-command and Nest schedule feedback. Refresh observation after 30 seconds, back off further refreshes to a maximum five-minute interval, and show Recovering feedback after two minutes while awaiting confirmation. Never resend an accepted heating command as part of recovery.
+- Retain pending heating feedback across bridge restarts. Recover saved schedule-confirmation waits when current equipment and schedule checks permit; preserve user pauses, restart-pause preferences, failed commands and conflicting Nest settings.
+- Follow the current schedule event when another event becomes due during recovery. Ignore late confirmation of a superseded schedule target and retain the normal adjustment interval after confirmation.
+- Coordinate refreshes for thermostats sharing an account and allow staggered room-sensor readings to return before restoring targets.
+- Show the pending Nest target, confirmation-wait start, automatic-recovery status and next feedback refresh in thermostat details and rule execution status. Identify retained schedule targets while paused or waiting, and label heating requests superseded by a schedule change.
+
 ## v0.6.5
 
 - Show compact fan and presence cards with matching icons and the same desktop card width as thermostats. Cards use a single column on narrow phone screens, and expanded details do not stretch adjacent cards.

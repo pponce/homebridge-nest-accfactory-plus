@@ -43,6 +43,14 @@ export async function checkRuleExplanations(page, output, label) {
           heating: { desired: 22, physical: 27.5, rawOffset: 2, maximumOffset: 1.5, calculatedTarget: 23.5,
             targetSource: 'rule', minimumIntervalMinutes: 5, nextEligibleAt: now + 60000 } } },
     ] };
+    if (mode === 'recovering') {
+      Object.assign(snapshot.automation.rules.find((rule) => rule.kind === 'temperature'), {
+        temperatureControl: 'recovering', phase: 'recovering', targetSource: 'schedule',
+        reason: 'Recovering scheduled heating feedback. Control will resume automatically after confirmation.',
+        feedback: { kind: 'schedule', expected: 19, since: now - 180000, automaticRecovery: true,
+          recovering: true, nextRefreshAt: now + 60000 },
+      });
+    }
     if (mode === 'no-presence') snapshot.automation.rules = snapshot.automation.rules.filter((rule) => rule.kind !== 'presence');
     if (mode === 'no-engine' || mode === 'no-rules') snapshot.automation = { available: mode === 'no-rules', rules: [] };
     await route.fulfill({ response, json: snapshot });
@@ -121,6 +129,14 @@ export async function checkRuleExplanations(page, output, label) {
       assert.equal(await page.locator(selector + ' details').first().getAttribute('open') !== null, true,
         'Open explanations survive status refreshes');
     }
+    mode = 'recovering'; await refresh();
+    const recovering = page.locator('.temperature-controller').first();
+    assert.match(await recovering.textContent(), /Recovering feedback/);
+    assert.match(await recovering.textContent(), /Pending Nest schedule target:.*19\.0/s);
+    assert.match(await recovering.textContent(), /Automatic recovery is enabled/);
+    assert.match(await recovering.textContent(), /Confirmation wait started/);
+    assert.equal(await recovering.getAttribute('open') !== null, true);
+    await page.screenshot({ path: path.join(output, label + '-temperature-recovery.png'), fullPage: true });
     mode = 'missing-fan'; await refresh();
     assert.equal(await card('office-fan').locator('.status-pill').innerText(), 'Unavailable', 'A missing bridge retains a known fan as unavailable');
     mode = 'source-off';

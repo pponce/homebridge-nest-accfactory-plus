@@ -47,17 +47,20 @@ test('only paired or reported selected Nest sensors and this thermostat’s temp
 
 test('applied rules remain distinguishable from feedback waits, restoration and merely enabled rules', () => {
   const f = fixture();
-  for (const status of ['active', 'interval', 'updating', 'restoring', 'paused', 'disabled', 'waiting', 'unavailable']) {
+  for (const status of ['active', 'interval', 'updating', 'recovering', 'restoring', 'paused', 'disabled', 'waiting', 'unavailable']) {
     f.snapshot.automation.rules = [{ ...f.rule, temperatureControl: status }];
     const view = f.view();
     assert.equal(view.rules[0].status, status);
-    if (['active', 'interval', 'updating', 'restoring'].includes(status)) {
+    if (['active', 'interval', 'updating', 'recovering', 'restoring'].includes(status)) {
       assert.equal(view.title, 'Climate rule · Room average');
       assert.equal(view.tone === 'good', ['active', 'interval'].includes(status));
     } else {
       assert.equal(view.title, status === 'unavailable' ? 'Control status unavailable' : 'Thermostat sensor');
     }
   }
+  f.snapshot.automation.rules = [{ ...f.rule, temperatureControl: 'recovering' }];
+  assert.equal(f.view().label, 'Recovering feedback');
+  assert.match(f.view().detail, /resumes automatically after confirmation/);
   f.snapshot.automation.rules = [{ ...f.rule, temperatureControl: 'active', paused: true }];
   assert.equal(f.view().title, 'Thermostat sensor');
   assert.equal(f.view().rules[0].label, 'Paused');
@@ -83,3 +86,4 @@ test('missing selection, disconnection, engine failure and ambiguous controllers
   f.snapshot.automation.rules.push({ ...f.rule, id: 'conflict', temperatureControl: 'active' });
   assert.equal(f.view().title, 'Control status unavailable');
 });
+

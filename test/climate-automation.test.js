@@ -563,7 +563,7 @@ test('scheduled targets expire manual adjustments only after native feedback, wi
   assert.equal(f.rule('rooms').desiredTemperature, 19);
 });
 
-test('an unconfirmed or ambiguous scheduled heating target pauses instead of fighting Nest', async (t) => {
+test('an unconfirmed schedule recovers on late feedback while an ambiguous target pauses', async (t) => {
   for (const desired of [19, undefined]) {
     const f = await fixture(t, {});
     f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
@@ -574,10 +574,72 @@ test('an unconfirmed or ambiguous scheduled heating target pauses instead of fig
     await f.engine.tick();
     f.advance(2 * minute);
     await f.engine.tick();
-    assert.equal(f.rule('rooms').paused, true);
+    assert.equal(f.rule('rooms').paused, desired === undefined);
     assert.match(f.rule('rooms').reason, /schedule/);
     assert.equal(f.commands.length, 1);
+    if (desired !== undefined) {
+      assert.equal(f.rule('rooms').temperatureControl, 'recovering');
+      f.dashboard.update('T', 'Thermostat', { target_temperature_low: desired }, 'A');
+      await f.engine.tick();
+      assert.equal(f.rule('rooms').desiredTemperature, desired);
+      assert.equal(f.rule('rooms').targetSource, 'schedule');
+      assert.equal(f.rule('rooms').paused, false);
+      assert.equal(f.commands.length, 1, 'late schedule confirmation starts the normal adjustment interval');
+    }
   }
+});
+
+test('schedule recovery refreshes observation with backoff and accepts only the current scheduled target', async (t) => {
+  const f = await fixture(t, {});
+  f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+  f.dashboard.update('T', 'Thermostat', { schedules: { 0: {
+    a: { time: 36060, 'temp-min': 19 }, b: { time: 36180, 'temp-min': 18 },
+  } } }, 'A');
+  let refreshes = 0;
+  f.dashboard.refresh = () => { refreshes += 1; return true; };
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  await f.engine.tick();
+  f.advance(minute);
+  await f.engine.tick();
+  f.advance(30000);
+  await f.engine.tick();
+  assert.equal(refreshes, 1);
+  await f.engine.tick();
+  assert.equal(refreshes, 1, 'normal ticks cannot repeatedly reconnect the stream');
+  f.advance(90000);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').feedback.expected, 18);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 19 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, false, 'late feedback for the previous event is not a manual change');
+  assert.notEqual(f.rule('rooms').desiredTemperature, 19, 'obsolete schedule feedback cannot become the room target');
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 18 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').desiredTemperature, 18);
+  assert.equal(f.rule('rooms').feedback, null);
+  assert.equal(f.commands.length, 1);
+});
+
+test('a conflicting target during schedule recovery remains paused even if matching feedback arrives later', async (t) => {
+  const f = await fixture(t, {});
+  f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+  f.dashboard.update('T', 'Thermostat', { schedules: { 0: { a: { time: 36060, 'temp-min': 19 } } } }, 'A');
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  await f.engine.tick();
+  f.advance(minute);
+  await f.engine.tick();
+  f.advance(3 * minute);
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 20 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.match(f.rule('rooms').reason, /different.*scheduled/);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 19 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.equal(f.commands.length, 1);
 });
 
 test('future schedule edits preserve a manual room target until its current schedule event changes', async (t) => {
@@ -682,8 +744,9 @@ test('Eco, Off, native sensor changes and loss of observation never trigger comp
   f.advance(5 * minute);
   await f.engine.tick();
   assert.equal(f.commands.length, 1);
-  assert.match(f.rule('rooms').reason, /feedback was unavailable/);
-  assert.equal(f.rule('rooms').paused, true);
+  assert.match(f.rule('rooms').reason, /Recovering delayed Nest feedback/);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').temperatureControl, 'recovering');
 });
 
 test('schedule boundaries use the scheduled room target even when the numeric Nest target has not changed', async (t) => {
@@ -713,7 +776,7 @@ test('disabling a rule restores the original target; changed targets are not res
   assert.equal(f.engine.leases.size, 0);
 });
 
-test('failed or unacknowledged writes pause without repeated cloud commands', async (t) => {
+test('failed writes pause while accepted unacknowledged writes recover without repeated cloud commands', async (t) => {
   const f = await fixture(t, {});
   f.fail();
   f.rules({ temperature: [temperatureRule] });
@@ -730,7 +793,8 @@ test('failed or unacknowledged writes pause without repeated cloud commands', as
   assert.equal(g.commands.length, 1);
   g.advance(3 * minute);
   await g.engine.tick();
-  assert.equal(g.rule('rooms').paused, true);
+  assert.equal(g.rule('rooms').paused, false);
+  assert.equal(g.rule('rooms').temperatureControl, 'recovering');
   assert.equal(g.commands.length, 1);
 });
 
@@ -773,7 +837,7 @@ test('missing heating feedback refreshes observation once and confirms without r
   assert.equal(refreshes, 1);
 });
 
-test('feedback refresh cannot extend the heating timeout or resend a command while disconnected', async (t) => {
+test('delayed heating feedback recovers after disconnection without repeating a command', async (t) => {
   const f = await fixture(t, {});
   let refreshes = 0;
   f.dashboard.refresh = () => {
@@ -789,17 +853,22 @@ test('feedback refresh cannot extend the heating timeout or resend a command whi
   await f.engine.tick();
   f.advance(90000);
   await f.engine.tick();
-  assert.equal(f.rule('rooms').paused, true);
-  assert.match(f.rule('rooms').reason, /feedback.*two minutes/);
-  assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
-  assert.equal(f.engine.leases.size, 0);
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').temperatureControl, 'recovering');
+  assert.equal(f.rule('rooms').lastAction.status, 'recovering');
+  assert.equal(f.engine.leases.size, 1, 'retain expected feedback so late confirmation is recognizable');
+  assert.equal(f.commands.length, 1);
   f.accounts[0].observing = true;
   f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5, hvac_state: 'off' }, 'A');
   await f.engine.tick();
-  assert.equal(f.rule('rooms').paused, true, 'Late feedback must not silently resume a paused rule');
-  assert.equal(f.rule('rooms').nestTarget, 22.5, 'Paused rule reporting still shows current Nest feedback');
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').lastAction.status, 'confirmed');
+  assert.match(f.rule('rooms').reason, /selected temperature readings/);
+  f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 20 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'active');
   assert.equal(f.commands.length, 1);
-  assert.equal(refreshes, 1);
+  assert.equal(refreshes, 2);
 });
 
 test('a failed feedback refresh remains bounded and does not expose connection details', async (t) => {
@@ -820,8 +889,10 @@ test('a failed feedback refresh remains bounded and does not expose connection d
   assert.equal(refreshes, 1);
   f.advance(60000);
   await f.engine.tick();
-  assert.equal(f.rule('rooms').paused, true);
-  assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
+  assert.equal(f.rule('rooms').paused, false);
+  assert.equal(f.rule('rooms').temperatureControl, 'recovering');
+  assert.equal(f.rule('rooms').lastAction.status, 'recovering');
+  assert.equal(refreshes, 2);
   assert.equal(JSON.stringify(f.engine.snapshot()).includes('SENSITIVE-CONNECTION'), false);
   assert.equal(f.commands.length, 1);
 });
@@ -846,7 +917,7 @@ test('conflicting Nest feedback pauses immediately without a refresh or another 
   assert.equal(f.commands.length, 1);
 });
 
-test('missing room-sensor readings cannot hide a target conflict or extend confirmation after refresh', async (t) => {
+test('missing room-sensor readings preserve passive recovery but cannot hide a target conflict', async (t) => {
   for (const reported of [19, 20]) {
     const f = await fixture(t, {});
     f.dashboard.refresh = () => {
@@ -864,9 +935,9 @@ test('missing room-sensor readings cannot hide a target conflict or extend confi
       f.advance(90000);
     }
     await f.engine.tick();
-    assert.equal(f.rule('rooms').paused, true);
+    assert.equal(f.rule('rooms').paused, reported !== 19);
     assert.equal(f.commands.length, 1);
-    assert.equal(f.rule('rooms').lastAction.status, 'unconfirmed');
+    assert.equal(f.rule('rooms').lastAction.status, reported === 19 ? 'recovering' : 'unconfirmed');
   }
 });
 
@@ -1757,6 +1828,141 @@ async function restartFixture(f) {
   return engine;
 }
 
+test('retained schedule-timeout pauses recover after restart without clearing intentional pauses', async (t) => {
+  for (const policy of ['recover', 'manual', 'restart', 'orphan']) {
+    const f = await fixture(t, {});
+    f.devices.push({ serialNumber: 'T', scheduleTimeZone: 'UTC' });
+    f.dashboard.update('T', 'Thermostat', { schedules: { 0: { a: { time: 36060, 'temp-min': 19 } } } }, 'A');
+    f.rules({ temperature: [temperatureRule] });
+    await f.engine.tick();
+    f.advance(minute);
+    await f.engine.tick();
+    const state = f.engine.states.get('rooms');
+    delete state.scheduleTarget.priorTargets;
+    f.engine.pause(state, 'Nest did not confirm its scheduled heating target. Review it, then Resume automatic control.');
+    if (policy === 'manual') await f.engine.control({ id: 'rooms', action: 'pause' });
+    if (policy === 'restart') f.options.pauseOnRestart = true;
+    if (policy === 'orphan') state.controlStarted = false;
+    await f.engine.persist();
+    f.advance(3 * minute);
+    const restarted = await restartFixture(f);
+    t.after(() => restarted.stop());
+    let current = restarted.snapshot().rules[0];
+    assert.equal(current.paused, policy !== 'recover');
+    if (policy === 'recover') {
+      assert.equal(current.temperatureControl, 'recovering');
+      assert.equal(current.lastAction.status, 'superseded');
+    }
+    f.dashboard.update('T', 'Thermostat', { target_temperature_low: 19 }, 'A');
+    await restarted.tick();
+    current = restarted.snapshot().rules[0];
+    assert.equal(current.paused, policy !== 'recover');
+    if (policy === 'recover') {
+      assert.equal(current.desiredTemperature, 19);
+      assert.equal(current.targetSource, 'schedule');
+      assert.equal(current.feedback, null);
+    }
+    assert.equal(f.commands.length, 1);
+  }
+});
+
+test('a user pause during command recovery prevents late matching feedback from resuming control', async (t) => {
+  const f = await fixture(t, {});
+  f.noAck();
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  f.advance(3 * minute);
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'recovering');
+  await f.engine.control({ id: 'rooms', action: 'pause' });
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').paused, true);
+  assert.match(f.rule('rooms').reason, /Paused by you/);
+  assert.equal(f.commands.length, 1);
+});
+
+test('prolonged feedback recovery backs off reconnects without repeating accepted commands', async (t) => {
+  const f = await fixture(t, {});
+  const attempts = [];
+  f.dashboard.refresh = () => { attempts.push(f.now()); return true; };
+  f.noAck();
+  f.rules({ temperature: [temperatureRule] });
+  await f.engine.tick();
+  for (let i = 0; i < 80; i++) {
+    f.advance(15000);
+    await f.engine.tick();
+  }
+  assert.ok(attempts.length >= 4 && attempts.length <= 7);
+  for (let i = 1; i < attempts.length; i++) assert.ok(attempts[i] - attempts[i - 1] >= minute);
+  assert.equal(attempts.at(-1) - attempts.at(-2), 5 * minute);
+  assert.equal(f.rule('rooms').temperatureControl, 'recovering');
+  assert.equal(f.commands.length, 1);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('rooms').temperatureControl, 'active');
+  assert.equal(f.commands.length, 1);
+});
+
+test('thermostats sharing an account cannot repeatedly reconnect the same feedback stream in one tick', async (t) => {
+  const f = await fixture(t, {});
+  f.dashboard.update('U', 'Thermostat', { ...f.dashboard.devices.get('T').data, nest_google_device_uuid: 'other' }, 'A');
+  let refreshes = 0;
+  f.dashboard.refresh = () => { refreshes += 1; return true; };
+  // No thermostat writes are needed to exercise two simultaneous saved schedule waits.
+  f.rules({ temperature: [temperatureRule, { ...temperatureRule, id: 'other', thermostatId: 'U' }] });
+  f.engine.rules = (await f.config.snapshot()).config.rules.temperature;
+  for (const rule of f.engine.rules) {
+    f.engine.states.set(rule.id, { rule, paused: false, scheduleTarget: { at: f.now() - minute, expected: 20 } });
+  }
+  f.engine.deviceOptions = [];
+  f.engine.refreshSnapshot();
+  for (const state of f.engine.states.values()) f.engine.waitHeatingFeedback(state, state.scheduleTarget, 'schedule');
+  assert.equal(refreshes, 1);
+  assert.equal(f.commands.length, 0);
+});
+
+test('native mode changes during feedback recovery still pause before any new heating write', async (t) => {
+  for (const change of [{ eco_mode: true }, { hvac_mode: 'off' }, { temperature_lock: true }, { active_rcs_sensor: 'S' }]) {
+    const f = await fixture(t, {});
+    f.noAck();
+    f.rules({ temperature: [temperatureRule] });
+    await f.engine.tick();
+    f.advance(3 * minute);
+    await f.engine.tick();
+    assert.equal(f.rule('rooms').temperatureControl, 'recovering');
+    f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5, ...change }, 'A');
+    await f.engine.tick();
+    assert.equal(f.rule('rooms').paused, true);
+    assert.equal(f.commands.length, 1);
+  }
+});
+
+test('refreshing one thermostat gives other account members time to receive their room sensors', async (t) => {
+  const f = await fixture(t, {});
+  f.dashboard.update('U', 'Thermostat', { ...f.dashboard.devices.get('T').data, nest_google_device_uuid: 'other' }, 'A');
+  f.dashboard.command = async (id, values) => {
+    f.commands.push({ id, ...values });
+    if (id === 'other') f.dashboard.update('U', 'Thermostat', { target_temperature_low: values.target_temperature_low }, 'A');
+  };
+  f.dashboard.refresh = () => { f.dashboard.invalidate('A'); return true; };
+  f.rules({ temperature: [temperatureRule, { ...temperatureRule, id: 'other', thermostatId: 'U' }] });
+  await f.engine.tick();
+  await f.engine.tick();
+  assert.equal(f.commands.length, 2);
+  f.advance(30000);
+  await f.engine.tick();
+  f.dashboard.update('T', 'Thermostat', { hvac_state: 'off' }, 'A');
+  f.dashboard.update('U', 'Thermostat', { hvac_state: 'off' }, 'A');
+  await f.engine.tick();
+  assert.equal(f.commands.length, 2, 'A sibling thermostat must not restore its target during a partial account refresh');
+  assert.match(f.rule('other').reason, /selected temperature readings/);
+  f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 20 }, 'A');
+  await f.engine.tick();
+  assert.equal(f.rule('other').temperatureControl, 'active');
+  assert.equal(f.commands.length, 2);
+});
+
 test('restart keeps desired room target across shutdown restoration and respects update interval', async (t) => {
   const f = await fixture(t);
   await f.engine.tick();
@@ -1862,9 +2068,36 @@ test('unconfirmed commands across restart never trigger a blind retry', async (t
   const count = f.commands.length;
   f.advance(3 * minute);
   const restarted = await restartFixture(f);
-  assert.equal(restarted.snapshot().rules[0].paused, true);
+  assert.equal(restarted.snapshot().rules[0].paused, false);
+  assert.equal(restarted.snapshot().rules[0].temperatureControl, 'recovering');
+  assert.equal(f.commands.length, count);
+  f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5 }, 'A');
+  await restarted.tick();
+  assert.equal(restarted.snapshot().rules[0].temperatureControl, 'active');
   assert.equal(f.commands.length, count);
   await restarted.stop();
+});
+
+test('a graceful bridge stop retains unresolved heating feedback instead of retrying it on restart', async (t) => {
+  for (const disconnected of [false, true]) {
+    const f = await fixture(t, {});
+    f.noAck();
+    f.rules({ temperature: [temperatureRule] });
+    await f.engine.tick();
+    f.advance(3 * minute);
+    await f.engine.tick();
+    if (disconnected) f.dashboard.invalidate('A');
+    await f.engine.stop();
+    const restarted = await restartFixture(f);
+    t.after(() => restarted.stop());
+    assert.equal(f.commands.length, 1);
+    assert.equal(restarted.snapshot().rules[0].temperatureControl, 'recovering');
+    f.dashboard.update('T', 'Thermostat', { target_temperature_low: 22.5, hvac_state: 'off' }, 'A');
+    f.dashboard.update('S', 'TemperatureSensor', { current_temperature: 20 }, 'A');
+    await restarted.tick();
+    assert.equal(restarted.snapshot().rules[0].temperatureControl, 'active');
+    assert.equal(f.commands.length, 1);
+  }
 });
 
 test('changed native modes during downtime remain a reason to pause', async (t) => {

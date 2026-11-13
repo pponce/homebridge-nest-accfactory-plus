@@ -38,7 +38,7 @@ export function temperatureControlView(device, snapshot, live = true) {
     snapshot.devices.find((entry) => entry.type === 'TemperatureSensor' && entry.id === id)?.data?.description ||
       'Nest room sensor (name unavailable)';
   const labels = {
-    active: 'Active', interval: 'Active · between updates', updating: 'Confirming target', restoring: 'Restoring Nest control',
+    active: 'Active', interval: 'Active · between updates', updating: 'Confirming target', recovering: 'Recovering feedback', restoring: 'Restoring Nest control',
     scheduled: 'Scheduled', standby: 'Standby', waiting: 'Waiting', paused: 'Paused', disabled: 'Disabled', unavailable: 'Status unavailable',
   };
   const automation = snapshot.automation;
@@ -50,7 +50,7 @@ export function temperatureControlView(device, snapshot, live = true) {
       return { id: rule.id, name: rule.name, status, label: labels[status], reason: rule.reason,
         tone: ['active', 'interval'].includes(status) ? 'good' : ['paused', 'disabled'].includes(status) ? 'neutral' : 'warn' };
     });
-  const applied = rules.filter((rule) => ['active', 'interval', 'updating', 'restoring'].includes(rule.status));
+  const applied = rules.filter((rule) => ['active', 'interval', 'updating', 'recovering', 'restoring'].includes(rule.status));
   const uncertain = !live || !engineAvailable || applied.length > 1 || rules.some((rule) => rule.status === 'unavailable');
   const controller = applied.length === 1 && !uncertain ? applied[0] : null;
   const nativeIds = [...new Set(['', ...(Array.isArray(data.linked_rcs_sensors) ? data.linked_rcs_sensors : []),
@@ -71,6 +71,7 @@ export function temperatureControlView(device, snapshot, live = true) {
   } else if (controller) {
     title = 'Climate rule · ' + controller.name; label = controller.label; tone = controller.tone;
     detail = controller.status === 'restoring' ? 'The rule is returning its previous heating target to Nest.' :
+      controller.status === 'recovering' ? 'Adjustments are on hold while Nest feedback recovers. The rule resumes automatically after confirmation.' :
       controller.status === 'updating' ? 'Waiting for Nest to confirm the rule’s requested heating target.' :
         'This rule adjusts the heating target using its selected temperatures. Nest uses ' + name(selected) + '.';
   } else if (selected === null) {
@@ -193,7 +194,7 @@ export function scheduleOverview(device, snapshot, options = {}, live = true, no
           'No usable schedule times have been reported for this thermostat.';
   const view = device ? temperatureControlView(device, snapshot, live) : null;
   const unknown = !device || !snapshot.automation || view?.label === 'Unknown';
-  const controller = !unknown && view.rules.find((rule) => ['active', 'interval', 'updating', 'restoring'].includes(rule.status));
+  const controller = !unknown && view.rules.find((rule) => ['active', 'interval', 'updating', 'recovering', 'restoring'].includes(rule.status));
   const heating = mode === 'heat' && data.eco_mode === false;
   let title = 'Nest sensor control';
   let label = 'Native control';
@@ -210,7 +211,7 @@ export function scheduleOverview(device, snapshot, options = {}, live = true, no
     detail = controller.status === 'restoring' ? 'This rule is returning its previous heating target to Nest; it is not applying a new room target.' :
       'If this rule is still controlling heating at the scheduled change, the confirmed Nest heating target becomes its desired room temperature. ' +
       'It then adjusts Nest’s target using the selected sensor readings, adjustment limit and minimum update interval. Nest’s target may differ from the room target.';
-    if (controller.status === 'updating') detail = (runtime.reason || 'Waiting for Nest to confirm a target.') + ' ' + detail;
+    if (['updating', 'recovering'].includes(controller.status)) detail = (runtime.reason || 'Waiting for Nest to confirm a target.') + ' ' + detail;
   } else if (view.rules.length) {
     title = 'Climate rules inactive'; label = 'Not adjusting';
     detail = 'No climate temperature rule is adjusting this thermostat now. ' + detail;

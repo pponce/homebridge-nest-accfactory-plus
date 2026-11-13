@@ -95,6 +95,10 @@ test('confirmation waits, restoration, Eco and disconnected feedback keep their 
   f.rule.reason = 'Waiting for Nest to report its scheduled target.';
   assert.equal(f.view().control.label, 'Confirming target');
   assert.match(f.view().control.detail, /Waiting for Nest to report/);
+  f.rule.temperatureControl = 'recovering';
+  f.rule.reason = 'Recovering scheduled heating feedback.';
+  assert.equal(f.view().control.label, 'Recovering feedback');
+  assert.match(f.view().control.detail, /Recovering scheduled heating feedback/);
   f.rule.temperatureControl = 'restoring';
   assert.match(f.view().control.detail, /returning its previous heating target/);
   assert.doesNotMatch(f.view().control.detail, /becomes its desired/);

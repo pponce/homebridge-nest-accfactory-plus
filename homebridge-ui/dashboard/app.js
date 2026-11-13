@@ -943,6 +943,7 @@ function temperatureEvidence(host, runtime) {
   if (!report?.heating) return;
   const heat = report.heating;
   evidenceStamp(host, runtime); evidenceNote(host, runtime.reason || 'Waiting for evaluation.');
+  renderHeatingFeedback(host, runtime);
   evidenceSources(host, report);
   evidenceNote(host, 'Desired room temperature: ' + formatTemp(heat.desired) + ' · ' +
     ({ rule: 'saved rule target', schedule: 'Nest schedule target', manual: 'manual room target' }[heat.targetSource] || 'room target') + '.');
@@ -967,7 +968,7 @@ function renderTemperatureController(device, expanded) {
   heading.append(el('span', 'Temperature controlled by', 'control-caption'), el('strong', view.title, 'controller-name'));
   summary.append(heading, pill(view.label, view.tone), icon('down'));
   const body = el('div', undefined, 'controller-details'); body.append(el('p', view.detail, 'small-note'));
-  const applied = view.rules.find((rule) => ['active', 'interval', 'updating'].includes(rule.status));
+  const applied = view.rules.find((rule) => ['active', 'interval', 'updating', 'recovering'].includes(rule.status));
   const runtime = applied && state.status.automation?.rules?.find((rule) => rule.id === applied.id);
   if (Number.isFinite(runtime?.desiredTemperature)) {
     body.append(el('p', 'Desired room temperature: ' + formatTemp(runtime.desiredTemperature) +
@@ -1734,6 +1735,16 @@ function renderSensorSetup(host, id, setup) {
   if (actions.childElementCount && state.dirty) section.append(el('p', 'Save or discard edits before changing Nest sensor settings.', 'small-note'));
   host.append(section);
 }
+function renderHeatingFeedback(host, runtime) {
+  const feedback = runtime?.feedback;
+  if (!feedback || !Number.isFinite(feedback.expected)) return;
+  host.append(el('p', (feedback.kind === 'schedule' ? 'Pending Nest schedule target: ' : 'Awaiting Nest target: ') + formatTemp(feedback.expected)));
+  if (Number.isFinite(feedback.since)) host.append(el('p', 'Confirmation wait started: ' + new Date(feedback.since).toLocaleString()));
+  if (feedback.automaticRecovery) {
+    host.append(el('p', 'Automatic recovery is enabled. Control resumes after Nest confirms the target and the selected readings are available.'));
+    if (Number.isFinite(feedback.nextRefreshAt) && feedback.nextRefreshAt > Date.now()) host.append(el('p', 'Next feedback refresh: ' + new Date(feedback.nextRefreshAt).toLocaleTimeString()));
+  }
+}
 function renderRuleRuntime(rule) {
   const host = $('rule-runtime'); if (!host) return;
   const runtime = state.status.automation; const current = runtime?.rules?.find((entry) => entry.id === rule.id);
@@ -1745,9 +1756,12 @@ function renderRuleRuntime(rule) {
   if (Number.isFinite(current?.nestTarget)) host.append(el('p', 'Desired room temperature: ' + formatTemp(current.desiredTemperature) + ' · Reported Nest target: ' + formatTemp(current.nestTarget)));
   if (current?.kind === 'temperature' && Number.isFinite(current.lastAction?.value)) host.append(el('p', 'Last requested Nest target: ' + formatTemp(current.lastAction.value)));
   if (Number.isFinite(current?.nestUpdatedAt)) host.append(el('p', 'Last Nest device update: ' + new Date(current.nestUpdatedAt).toLocaleTimeString()));
+  renderHeatingFeedback(host, current);
   if (current?.kind === 'temperature' && current.targetSource === 'manual') host.append(el('p', current.hasSchedule ?
     'Manual room-temperature adjustment · until the next confirmed Nest schedule target.' : 'Manual room-temperature adjustment · until another target change or Resume.'));
-  if (current?.kind === 'temperature' && current.targetSource === 'schedule') host.append(el('p', 'Following Nest’s scheduled room temperature.'));
+  if (current?.kind === 'temperature' && current.targetSource === 'schedule') host.append(el('p', current.paused ?
+    'Retained schedule room target. Automatic control is paused.' : current.feedback ?
+      'Retained schedule room target while awaiting Nest feedback.' : 'Following Nest’s scheduled room temperature.'));
   if (current?.kind === 'temperature' && current.targetSource && current.targetSource !== 'rule') host.append(el('p', 'Saved rule target: ' + formatTemp(current.savedDesiredTemperature) + '. Use the saved target to end this adjustment.'));
   for (const fan of current?.fanSpeeds || []) host.append(el('p', fan.name + ': current ' + (Number.isFinite(fan.currentSpeed) ? fan.currentSpeed + '%' : 'unavailable') + ' · requested ' + (Number.isFinite(fan.proposedSpeed) ? fan.proposedSpeed + '%' : 'unsupported') + ' · cap ' + fan.maximumSpeed + '%'));
   for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Manual override · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
@@ -1755,7 +1769,7 @@ function renderRuleRuntime(rule) {
   if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
   if (current?.lastAction) {
     const message = current.kind === 'temperature' && current.phase === 'paused' &&
-      (!current.lastAction.status || current.lastAction.status === 'accepted') ?
+      (!current.lastAction.status || ['accepted', 'recovering'].includes(current.lastAction.status)) ?
       'Last heating command was accepted. Automatic control is paused; review Nest’s reported target.' : current.lastAction.message;
     host.append(el('p', message + ' ' + new Date(current.lastAction.confirmedAt || current.lastAction.at).toLocaleTimeString()));
   }
@@ -1767,7 +1781,7 @@ function renderRuleRuntime(rule) {
     }
     if (rule.kind === 'temperature' && !current.paused && ['manual', 'schedule'].includes(current.targetSource)) {
       const reset = button('Use saved room target', () => ruleCommand(rule.id, 'resetTarget'));
-      reset.disabled = state.dirty || current.temperatureControl === 'updating'; actions.append(reset);
+      reset.disabled = state.dirty || Boolean(current.feedback) || ['updating', 'recovering'].includes(current.temperatureControl); actions.append(reset);
     }
     if (current.fanOverrides?.length && !current.paused) { const resume = button('Resume overridden fans', () => ruleCommand(rule.id, 'resume')); resume.disabled = state.dirty; actions.append(resume); }
     host.append(actions); if (state.dirty) host.append(el('p', 'Save or discard your edits before using immediate rule controls.', 'small-note'));
