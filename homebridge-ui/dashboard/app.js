@@ -999,19 +999,45 @@ function renderTemperatureController(device, expanded) {
   body.append(el('p', 'Use Climate rules to manage temperature rules, including rules that use other Homebridge sensors.', 'small-note'));
   section.append(summary, body); return section;
 }
+let runtimeChartData = [];
+function drawRuntimeChart() {
+  const host = $('runtime-chart');
+  if (!runtimeChartData.length || !host.clientWidth || !host.clientHeight) return;
+  const chartWidth = host.clientWidth; const chartHeight = host.clientHeight; const baseline = chartHeight - 31;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + chartWidth + ' ' + chartHeight); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', 'Observed heating and cooling over the last seven UTC days. Exact values in the runtime table.');
+  const maximum = Math.max(60, ...runtimeChartData.flatMap((day) => [day.heating || 0, day.cooling || 0]));
+  const slot = (chartWidth - 20) / runtimeChartData.length; const barWidth = Math.min(18, slot * .22);
+  const add = (tag, attrs, text) => { const node = document.createElementNS(svg.namespaceURI, tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value))); if (text) node.textContent = text; svg.append(node); };
+  add('line', { x1: 8, y1: baseline, x2: chartWidth - 8, y2: baseline, class: 'chart-baseline' });
+  runtimeChartData.forEach((day, index) => {
+    const x = 10 + slot * (index + .5);
+    for (const [key, dx, color] of [['heating', -barWidth - 1, 'heat-fill'], ['cooling', 2, 'cool-fill']]) {
+      const height = Math.max(0, Math.min(1, (day[key] || 0) / maximum)) * (baseline - 20);
+      add('rect', { x: x + dx, y: baseline - height, width: barWidth, height, rx: 3, class: color });
+    }
+    add('text', { x, y: baseline + 22, 'text-anchor': 'middle', class: 'chart-label' }, new Date(day.date + 'T12:00:00Z').toLocaleDateString([], { weekday: 'short', timeZone: 'UTC' }));
+  });
+  if (runtimeChartData.every((day) => !day.heating && !day.cooling)) {
+    const observed = runtimeChartData.some((day) => day.observed > 0);
+    add('text', { x: chartWidth / 2, y: baseline / 2 - 5, 'text-anchor': 'middle', class: 'chart-empty-title' },
+      observed ? 'No heating or cooling recorded' : 'Waiting for runtime observations');
+    add('text', { x: chartWidth / 2, y: baseline / 2 + 15, 'text-anchor': 'middle', class: 'chart-label' },
+      'Offline time is not counted.');
+  }
+  host.replaceChildren(svg);
+}
+const runtimeChartObserver = new ResizeObserver(drawRuntimeChart);
+runtimeChartObserver.observe($('runtime-chart'));
+
 function renderRuntime() {
   const device = thermostats().find((entry) => entry.serial === $('runtime-device').value);
-  const runtime = device?.runtime || []; $('runtime-summary').replaceChildren(); $('runtime-chart').replaceChildren(); $('runtime-table').replaceChildren();
+  const runtime = device?.runtime || []; runtimeChartData = runtime; $('runtime-summary').replaceChildren(); $('runtime-chart').replaceChildren(); $('runtime-table').replaceChildren();
   if (!runtime.length) { empty($('runtime-chart'), 'A little time tells a story.', 'Runtime appears as the plugin observes heating and cooling. Time while offline is not counted.', 'clock'); }
   else {
     for (const [key, label] of [['heating', 'Heating'], ['cooling', 'Cooling'], ['observed', 'Observed coverage']]) { const total = runtime.reduce((sum, day) => sum + (day[key] || 0), 0); const metric = el('div'); metric.append(el('strong', duration(total)), el('span', label)); $('runtime-summary').append(metric); }
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', '0 0 480 150'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Observed heating and cooling over the last seven UTC days. Exact values in the runtime table.');
-    const maximum = Math.max(60, ...runtime.flatMap((day) => [day.heating || 0, day.cooling || 0]));
-    const width = 460 / runtime.length;
-    const add = (tag, attrs, text) => { const node = document.createElementNS(svg.namespaceURI, tag); Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, String(value))); if (text) node.textContent = text; svg.append(node); };
-    add('line', { x1: 8, y1: 119, x2: 475, y2: 119, class: 'chart-baseline' });
-    runtime.forEach((day, index) => { const x = 10 + width * (index + .5); for (const [key, dx, color] of [['heating', -13, 'heat-fill'], ['cooling', 2, 'cool-fill']]) { const height = Math.max(0, Math.min(100, (day[key] || 0) / maximum * 95)); add('rect', { x: x + dx, y: 119 - height, width: 11, height, rx: 3, class: color }); } add('text', { x, y: 141, 'text-anchor': 'middle', class: 'chart-label' }, new Date(day.date + 'T12:00:00Z').toLocaleDateString([], { weekday: 'short', timeZone: 'UTC' })); });
-    $('runtime-chart').append(svg);
+    drawRuntimeChart();
     const table = el('table'); const caption = el('caption', 'Recorded runtime; incomplete coverage is not zero usage.'); const head = el('tr'); ['Date (UTC)', 'Heating', 'Cooling', 'Observed'].forEach((title) => head.append(el('th', title))); table.append(caption, head);
     runtime.forEach((day) => { const row = el('tr'); [day.date, duration(day.heating), duration(day.cooling), duration(day.observed)].forEach((value) => row.append(el('td', value))); table.append(row); }); $('runtime-table').append(table);
   }

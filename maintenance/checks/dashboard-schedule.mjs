@@ -6,7 +6,7 @@ import { navigate } from './dashboard-navigation.mjs';
 export async function checkScheduleOverview(browser, base, output) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1100 } });
   const errors = []; const writes = [];
-  let mode = 'heat'; let control = 'interval'; let eco = false; let offline = false;
+  let mode = 'heat'; let control = 'interval'; let eco = false; let offline = false; let runtimeMode = 'recorded';
   const rule = () => ({ id: 'rooms', kind: 'temperature', name: 'Living room average', thermostatId: 'T1',
     enabled: true, temperatureControl: control, desiredTemperature: 21, roomTemperature: 20.5 });
   const responseFor = (endpoint) => {
@@ -17,7 +17,10 @@ export async function checkScheduleOverview(browser, base, output) {
     if (endpoint === '/heating-response') return { revision: '1', rules: [] };
     if (endpoint === '/status') return { generatedAt: Date.now(), accounts: [{ id: 'A', authorised: true, observing: true }],
       automation: { available: true, rules: [rule()] }, devices: ['T1', 'T2'].map((serial, index) => ({
-        serial, id: serial, type: 'Thermostat', account: 'A', lastUpdate: Date.now(), runtime: [], data: {
+        serial, id: serial, type: 'Thermostat', account: 'A', lastUpdate: Date.now(), runtime: runtimeMode === 'empty' ? [] : Array.from({ length: 7 }, (_, day) => ({
+          date: '2026-11-' + String(day + 6).padStart(2, '0'), heating: runtimeMode === 'zero' ? 0 : (day + 1) * 600,
+          cooling: runtimeMode === 'zero' ? 0 : day * 300, observed: 86400,
+        })), data: {
           description: index ? 'Upstairs' : 'Living room', online: true, hvac_mode: mode, hvac_state: 'off', eco_mode: eco,
           active_rcs_sensor: '', current_temperature: 21, physical_temperature: 21, target_temperature: 22,
           schedule_time_zone: 'America/Los_Angeles', schedules: {
@@ -51,6 +54,27 @@ export async function checkScheduleOverview(browser, base, output) {
     assert.match(await page.locator('#schedule-control').innerText(), /Living room average[\s\S]*Active · between updates/);
     assert.match(await page.locator('#schedule-control').innerText(), /confirmed Nest heating target becomes its desired room temperature/);
     await page.locator('.schedule-panel').screenshot({ path: path.join(output, 'schedule-active-desktop.png') });
+    const chartHeight = async () => (await page.locator('#runtime-chart').boundingBox()).height;
+    const before = await chartHeight();
+    await page.locator('.schedule-panel').evaluate((node) => { node.style.minHeight = (node.getBoundingClientRect().height + 180) + 'px'; });
+    await page.waitForFunction(() => {
+      const host = document.getElementById('runtime-chart');
+      return Math.abs(host.querySelector('svg').viewBox.baseVal.height - host.clientHeight) < 1;
+    });
+    assert.ok(await chartHeight() >= before + 170, 'Chart expands when the neighboring schedule grows');
+    const panel = await page.locator('.runtime-panel').boundingBox();
+    const details = await page.locator('.runtime-panel > details').boundingBox();
+    assert.ok(panel.y + panel.height - details.y - details.height < 30, 'Runtime details stay at the bottom without unused space');
+    await page.locator('.insight-grid').screenshot({ path: path.join(output, 'runtime-expanded-desktop.png') });
+    runtimeMode = 'zero'; await refresh();
+    await page.locator('#runtime-chart').getByText('No heating or cooling recorded', { exact: true }).waitFor();
+    assert.ok(await page.locator('#runtime-chart rect').evaluateAll((bars) => bars.every((bar) => Number(bar.getAttribute('height')) === 0)));
+    await page.locator('.insight-grid').screenshot({ path: path.join(output, 'runtime-zero-desktop.png') });
+    runtimeMode = 'empty'; await refresh();
+    await page.locator('#runtime-chart').getByText('A little time tells a story.', { exact: true }).waitFor();
+    runtimeMode = 'recorded'; await page.locator('.schedule-panel').evaluate((node) => { node.style.minHeight = ''; });
+    await refresh();
+
     await page.locator('#runtime-device').selectOption('T2');
     assert.equal(await page.locator('#schedule-thermostat').innerText(), 'Upstairs');
     assert.match(await page.locator('#schedule-control').innerText(), /built-in temperature sensor/);

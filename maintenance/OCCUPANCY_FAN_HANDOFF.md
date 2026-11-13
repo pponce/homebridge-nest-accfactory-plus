@@ -28,3 +28,9 @@ Add optional occupancy requirements to temperature/fan rules, stronger setup hea
 2. Publish candidate commit/PR based on verified main, run full CI including six runtime combinations and embedded/standalone browsers; address failures.
 3. Merge only green candidate, verify release workflow, tag and all assets.
 4. Provide GitHub release and full maintenance/publish-0.6.7.sh block. npm publication remains user-run.
+
+## Additional Overview request
+Runtime chart now fills the schedule card height using a flex chart region and a ResizeObserver that redraws SVG geometry without stretching labels. Zero-activity and no-data states are explicit. Added desktop growth/anchoring, zero/empty and mobile browser coverage in dashboard-schedule.mjs. Included in v0.6.7.
+
+## Candidate checks
+PR #33 opened. Initial lint warnings fixed; first browser run passed new occupancy/alignment scenarios and found the sensor-setup fixture's missing occupancy module. Fixture fixed. Current remote candidate before graph addition: c44b04d419b72cd0ae6e86af996c983f4def43c4, tree bead5ef9964fa15fbc57c4a75c62c66ceea1c514. Full CI and publication still pending.

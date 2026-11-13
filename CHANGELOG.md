@@ -7,6 +7,8 @@
 - Distinguish fan feedback recovery from conflicting settings. Update accepted commands when confirmed, keep conflicting device changes suspended for review, and show fan execution details without unrelated Nest room-target text.
 - Give rule setup sections larger, stronger headings. Align thermostat readings, humidity rows and controls across adjacent Overview cards, including cards with a desired room target and an additional reported Nest target.
 
+- Make the runtime graph expand with the neighboring schedule card, keep its legend and coverage details at the bottom, and resize chart geometry without stretching labels. Show an explicit message when observed days contain no heating or cooling.
+
 **Updating:** Existing rules keep their behavior until an occupancy requirement is selected. A fan already suspended by an earlier release still needs one explicit Resume after its reported power and speed have been reviewed; old suspended state does not contain enough command evidence to distinguish a timeout from an intentional change. Subsequent pending feedback can recover automatically. Existing user pauses remain in effect.
 
 ## v0.6.6

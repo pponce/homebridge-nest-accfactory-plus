@@ -172,8 +172,10 @@ svg { display: block; }
 .runtime-summary { display: flex; gap: 30px; }
 .runtime-summary > div > strong { display: block; font-size: 22px; font-weight: 570; letter-spacing: -.6px; }
 .runtime-summary > div > span { color: var(--muted); font-size: 10px; }
-.runtime-chart { margin: 10px -6px 0; }
-.runtime-chart > svg { width: 100%; height: 150px; overflow: visible; }
+.runtime-panel { display: flex; flex-direction: column; }
+.runtime-chart { position: relative; flex: 1; min-height: 180px; margin: 10px -6px 0; display: flex; align-items: center; justify-content: center; }
+.runtime-chart > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.chart-empty-title { fill: var(--text); font-size: 12px; font-family: inherit; }
 .heat-fill { fill: #d5a27a; }
 .cool-fill { fill: #93aec6; }
 .chart-baseline { stroke: var(--line); stroke-width: 1; }
