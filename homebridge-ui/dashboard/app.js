@@ -1738,8 +1738,8 @@ function renderFanManualHold(section, rule) {
   if (policy?.mode === 'duration') {
     inputField(section, 'Manual hold (minutes)', policy.minutes, (value) => { policy.minutes = value; },
       { type: 'number', min: 1, max: 10080, step: 1 });
-    const presets = el('div', undefined, 'timer-buttons');
-    for (const hours of [1, 2, 3]) presets.append(button(hours + (hours === 1 ? ' hour' : ' hours'), () => {
+    const presets = el('div', undefined, 'timer-buttons manual-hold-presets');
+    for (const hours of [1, 2, 3, 4, 5, 6, 7, 8]) presets.append(button(hours + (hours === 1 ? ' hour' : ' hours'), () => {
       policy.minutes = hours * 60; markDirty(); renderRuleEditor();
     }, 'button secondary'));
     section.append(presets);

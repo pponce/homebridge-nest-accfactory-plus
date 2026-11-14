@@ -1,4 +1,9 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.9
+
+- Extend manual fan-hold shortcuts to every whole hour from 1 through 8 hours under When to run. Selecting a shortcut fills the duration in minutes; Save changes applies it.
+- Wrap the shortcuts across rows on narrow screens. Custom durations, daily resume times and existing rule settings retain their behavior.
+
 ## v0.6.8
 
 - Add optional manual fan hold policies under When to run: Resume only, a duration from 1 minute to 7 days with 1/2/3-hour shortcuts, or the next daily time in a named time zone. All-day rules can respect an evening scene until a chosen morning time.

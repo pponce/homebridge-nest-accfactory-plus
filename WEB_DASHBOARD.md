@@ -279,7 +279,7 @@ A higher-priority rule with missing required temperature or HVAC readings reserv
 Manual power or speed changes hold **all rules for the affected fan**, so another rule cannot undo your adjustment. Other fans can continue. Under **When to run → After a manual fan change**, choose:
 
 - **Wait until I Resume** (default): keep the fan under manual control until **Resume automatic control** or **Resume overridden fans** is selected.
-- **Resume after a duration**: hold for 1–10080 minutes (up to 7 days). Buttons provide 1, 2 and 3 hours.
+- **Resume after a duration**: hold for 1–10080 minutes (up to 7 days). Buttons provide every whole hour from 1 through 8 hours.
 - **Resume at the next daily time**: hold until the next selected local time in the selected time zone. For example, an all-day rule can respect an evening scene turning the fan off until 8 AM.
 
 The rule controlling the fan when the change is detected supplies the policy. If no rule controls it, the highest eligible rule supplies it. The hold stays associated with that rule; disabling or removing it leaves the fan held until Resume. Another detected external power or speed change restarts the hold. Percentages belonging to the same saved physical speed setting do not restart it.
