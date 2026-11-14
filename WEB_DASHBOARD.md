@@ -131,7 +131,7 @@ Several enabled groups can share a thermostat. The highest-priority group inside
 
 ### Time windows and priority
 
-**When to run → Always** is the default: all day, every day, subject to the rule's other conditions. Existing rules keep this behavior. Choose **Scheduled window** to set start days, start/end times, and a named time zone. Switch back to **Always** to remove the time restriction.
+**When to run → Always** is the default: all day, every day, subject to the rule's other conditions. Existing rules keep this behavior. Choose **Scheduled window** to set start days and start/end times. All rule clock times use **Settings → Time zone**, beside Temperature units. **System time zone** is the default and uses the Homebridge host’s zone, not the browser’s. Choose a named zone to override it for every rule. Switch back to **Always** to remove the time restriction.
 
 Create separate rules when the sensors, desired temperature, or fan settings differ. For example:
 
@@ -140,7 +140,7 @@ Create separate rules when the sensors, desired temperature, or fan settings dif
 | Upstairs night | Every day, 10 PM–6 AM | Both kids' room sensors |
 | Upstairs day | Every day, 6 AM–10 PM | Both kids' room sensors, living-room fan sensor, upstairs thermostat |
 
-An end time before its start continues into the next day. A Friday 10 PM–6 AM window ends Saturday morning. The start is included and the end excluded. Select the home's local time zone; daylight-saving changes follow that zone. A skipped local time starts when the clock enters the remaining portion of the window, and repeated hours follow the displayed local time. Changes take effect on the next automation check, normally within 15 seconds.
+An end time before its start continues into the next day. A Friday 10 PM–6 AM window ends Saturday morning. The start is included and the end excluded. Choose the home’s local zone in Settings; daylight-saving changes follow that zone. A skipped local time starts when the clock enters the remaining portion of the window, and repeated hours follow the displayed local time. Changes take effect on the next automation check, normally within 15 seconds.
 
 Drag temperature or fan rules into priority order. The top enabled, unpaused rule inside its window wins for each thermostat. Fan rules must also meet their run condition. An eligible higher-priority rule with missing readings waits for those readings; a lower group does not silently substitute different sensors. **Scheduled** means outside its window, **Standby** means another rule has priority, and **Waiting** means equipment or sensor feedback is needed.
 
@@ -250,6 +250,8 @@ With **Thermostat is heating** or **Thermostat is cooling**, reported HVAC activ
 
 **Your speed curve** shows the temperatures and each selected fan's supported speeds. The nearest supported step within both limits is chosen; ties use the lower step. For a fan with 25%, 50%, 75% and 100% steps, a 70% cap permits at most 50%. If no running step fits, that fan waits for compatible settings rather than starting at an unspecified speed.
 
+The preview contains at most 10 rows per fan and omits settings outside the rule's minimum and maximum. When the selected range is fully covered by a fan's mapping, it lists each reachable physical setting, its temperature interval and requested percentage. More than 10 reachable mapped settings are sampled evenly. Without a complete mapping, the preview shows up to 10 evenly spaced example points; speeds between those points are also used. Displayed temperature boundaries are rounded, while automation uses unrounded values. The run condition, occupancy and time window still decide whether the fan can run.
+
 **Fixed speed** uses the nearest supported speed at or below the requested percentage. It requires temperature sources only when the run condition uses temperature. The preview shows each fan's supported fixed speed.
 
 Normal speed adjustments share a one-minute interval across rules. On a temperature curve, changes smaller than five percentage points are ignored except at the minimum or maximum. A lower cap can reduce speed immediately. Speed feedback is confirmed before a separate on command is sent; some fan plugins turn on as part of setting speed. Confirmation can take additional polling cycles. Unsupported or unconfirmed speed control does not fall back to on/off control.
@@ -280,7 +282,7 @@ Manual power or speed changes hold **all rules for the affected fan**, so anothe
 
 - **Wait until I Resume** (default): keep the fan under manual control until **Resume automatic control** or **Resume overridden fans** is selected.
 - **Resume after a duration**: hold for 1–10080 minutes (up to 7 days). Buttons provide every whole hour from 1 through 8 hours.
-- **Resume at the next daily time**: hold until the next selected local time in the selected time zone. For example, an all-day rule can respect an evening scene turning the fan off until 8 AM.
+- **Resume at the next daily time**: hold until the next selected local time in **Settings → Time zone**. For example, an all-day rule can respect an evening scene turning the fan off until 8 AM.
 
 The rule controlling the fan when the change is detected supplies the policy. If no rule controls it, the highest eligible rule supplies it. The hold stays associated with that rule; disabling or removing it leaves the fan held until Resume. Another detected external power or speed change restarts the hold. Percentages belonging to the same saved physical speed setting do not restart it.
 

@@ -105,6 +105,36 @@ export function supportedSpeed(source, requested, minimum, maximum) {
   return range ? nearest(values.filter((value) => mappedSpeed(source.speedMapping, value) === range), (range.min + range.max) / 2) : selected;
 }
 
+// Describe the exact nearest-supported-value boundaries, then merge percentages
+// belonging to the same physical setting. End stages include the clamped tails.
+export function fanCurveStages(rule, source) {
+  if (rule.speedMode !== 'curve' || fanSpeedError(rule) || !source?.speedMapping?.length) return null;
+  const minimum = rule.minimumSpeed; const maximum = rule.maximumSpeed;
+  const values = [...new Set(source.speedCapabilities?.values || [])]
+    .filter((value) => Number.isFinite(value) && value >= minimum && value <= maximum).sort((a, b) => a - b);
+  if (!source.canSetSpeed || !values.length) return null;
+  const groups = [];
+  for (const [index, value] of values.entries()) {
+    const mapping = mappedSpeed(source.speedMapping, value);
+    const low = index ? (values[index - 1] + value) / 2 : null;
+    const high = index < values.length - 1 ? (value + values[index + 1]) / 2 : null;
+    const previous = groups.at(-1);
+    if (previous && previous.mapping === mapping) {
+      previous.high = high;
+    } else {
+      const command = supportedSpeed(source, value, minimum, maximum);
+      groups.push({ mapping, low, high, commandMin: command, commandMax: command, sort: value });
+    }
+  }
+  if (groups.some((group) => !group.mapping)) return null;
+  const temperatureAt = (percent) => percent === null || minimum === maximum ? null :
+    rule.desiredTemperature + rule.startGap + (percent - minimum) / (maximum - minimum) * (rule.fullSpeedGap - rule.startGap);
+  const stages = groups.map((group) => ({ ...group, used: true,
+    from: temperatureAt(group.low), through: temperatureAt(group.high) }));
+
+  return stages.sort((a, b) => a.sort - b.sort);
+}
+
 export function fanMappingsError(mappings) {
   if (!Array.isArray(mappings) || mappings.length > 128) return 'Configure at most 128 fan mappings.';
   const ids = new Set();

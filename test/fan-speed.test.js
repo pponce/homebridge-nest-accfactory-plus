@@ -194,3 +194,34 @@ test('manual fan mappings reject ambiguity, invalid bounds and malformed rows wh
     assert.ok(fanMappingsError(bad), JSON.stringify(bad));
   }
 });
+
+test('mapped curve previews show all reachable physical speeds with exact transition boundaries', async () => {
+  const { fanCurveStages, mappedSpeed } = await import('../homebridge-ui/public/fan-speed.js');
+  const ranges = [[1, 21], [22, 35], [36, 49], [50, 64], [65, 78], [79, 92], [93, 100]]
+    .map(([min, max], index) => ({ label: 'Speed ' + (index + 1), min, max }));
+  const source = { canSetSpeed: true, speedCapabilities: speedCapabilities({ perms: ['pr', 'pw'] }), speedMapping: ranges };
+  const rule = { ...curve, action: 'heating', speedMode: 'curve', minimumSpeed: 14, maximumSpeed: 60 };
+  const stages = fanCurveStages(rule, source);
+  assert.deepEqual(stages.map((stage) => stage.mapping.label), ['Speed 1', 'Speed 2', 'Speed 3', 'Speed 4']);
+  assert.deepEqual(stages.map((stage) => stage.commandMin), [14, 28, 42, 57]);
+  assert.equal(stages[0].from, null);
+  assert.equal(stages.at(-1).through, null);
+  for (const [index, stage] of stages.entries()) {
+    if (stage.through !== null) {
+      for (const delta of [-0.00001, 0.00001]) {
+        const plan = fanRulePlan(rule, { temperature: stage.through + delta, hvacState: 'heating' });
+        const command = supportedSpeed(source, plan.speed, 14, 60);
+        assert.equal(mappedSpeed(ranges, command).label, stages[index + (delta > 0 ? 1 : 0)].mapping.label);
+      }
+    }
+  }
+  assert.equal(fanCurveStages({ ...rule, maximumSpeed: 100 }, source).length, 7);
+  assert.deepEqual(fanCurveStages({ ...rule, minimumSpeed: 36, maximumSpeed: 49 }, source).map((stage) => stage.mapping.label),
+    ['Speed 3']);
+  assert.equal(fanCurveStages({ ...rule, maximumSpeed: 14 }, source).length, 1);
+  assert.equal(fanCurveStages(rule, { ...source, speedMapping: [ranges[4]] }), null, 'Partial range uses sample preview');
+  assert.equal(fanCurveStages(rule, { ...source, canSetSpeed: false }), null);
+  assert.equal(fanCurveStages(rule, { ...source, speedCapabilities: { values: [0, 100] } }), null);
+  assert.deepEqual(fanCurveStages(rule, { ...source, speedCapabilities: { values: [0, 25, 50, 75, 100] } })
+    .map((stage) => stage.mapping.label), ['Speed 2', 'Speed 4']);
+});

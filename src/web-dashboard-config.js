@@ -1,5 +1,5 @@
 import { occupancyConditionError } from '../homebridge-ui/public/occupancy-condition.js';
-import { windowError } from '../homebridge-ui/public/rule-window.js';
+import { windowError, ruleTimeZone, rulesInTimeZone, systemTimeZone } from '../homebridge-ui/public/rule-window.js';
 import { fanManualHoldError } from '../homebridge-ui/public/fan-speed.js';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
@@ -70,6 +70,7 @@ function runtimeSignature(block) {
   delete runtime.climateRuleDrafts;
   delete runtime.climateFanMappings;
   delete runtime.dashboardTemperatureUnit;
+  delete runtime.automationTimeZone;
   runtime.devices = deviceRows(runtime.devices);
   for (const device of runtime.devices) {
     if (object(device)) {
@@ -289,7 +290,9 @@ export class WebDashboardConfig {
     let rules;
     let rulesError;
     try {
-      rules = validateRuleDrafts(block.climateRuleDrafts ?? {});
+      const zone = ruleTimeZone(block.automationTimeZone);
+      assert(zone, 'Choose System time zone or a valid named time zone in Settings.');
+      rules = validateRuleDrafts(rulesInTimeZone(block.climateRuleDrafts ?? {}, zone));
     } catch {
       rules = { occupancy: [], temperature: [], fans: [] };
       rulesError = 'Climate rules are invalid. Review their configuration in Homebridge before running automation.';
@@ -301,9 +304,11 @@ export class WebDashboardConfig {
     }
     return {
       revision: state.revision,
+      systemTimeZone: systemTimeZone(),
       config: {
         name: typeof block.name === 'string' ? block.name : 'Nest Climate Cntrl',
         temperatureUnit: block.dashboardTemperatureUnit === 'F' ? 'F' : 'C',
+        timeZone: block.automationTimeZone ?? 'system',
         options: { eveHistory: block.options?.eveHistory !== false, pauseOnRestart: block.options?.pauseOnRestart === true },
         devices,
         rules,
@@ -339,13 +344,17 @@ export class WebDashboardConfig {
   async prepare(payload) {
     this.beforeSave?.();
     keys(payload, ['revision', 'config']);
-    keys(payload.config, ['name', 'temperatureUnit', 'options', 'devices', 'rules', 'fanMappings']);
+    keys(payload.config, ['name', 'temperatureUnit', 'timeZone', 'options', 'devices', 'rules', 'fanMappings']);
     const state = await this.read();
     if (payload.revision !== state.revision) {
       throw new DashboardConfigError('Settings changed elsewhere. Reload before saving your changes.', 409);
     }
     const runtimeBefore = runtimeSignature(state.block);
     const patch = payload.config;
+    if (patch.timeZone !== undefined) {
+      assert(ruleTimeZone(patch.timeZone), 'Choose System time zone or a valid named time zone.');
+      state.block.automationTimeZone = patch.timeZone;
+    }
     if (patch.temperatureUnit !== undefined) {
       assert(['C', 'F'].includes(patch.temperatureUnit), 'Choose Celsius or Fahrenheit for dashboard temperatures.');
       state.block.dashboardTemperatureUnit = patch.temperatureUnit;
@@ -442,7 +451,9 @@ export class WebDashboardConfig {
       state.block.climateFanMappings = structuredClone(patch.fanMappings);
     }
     if (patch.rules !== undefined) {
-      state.block.climateRuleDrafts = validateRuleDrafts(patch.rules);
+      const zone = ruleTimeZone(state.block.automationTimeZone);
+      assert(zone, 'Choose System time zone or a valid named time zone.');
+      state.block.climateRuleDrafts = validateRuleDrafts(rulesInTimeZone(patch.rules, zone));
     }
     return { state, restartRequired: !isDeepStrictEqual(runtimeBefore, runtimeSignature(state.block)) };
   }

@@ -73,7 +73,7 @@ try {
   assert.equal(Number(await page.getByLabel('Turn-off gap (°F)', { exact: true }).inputValue()), 1.5);
   assert.equal(Number(await page.getByLabel('Reach maximum speed above target by (°F)', { exact: true }).inputValue()), 6);
   assert.match(await page.locator('#fan-curve').innerText(), /74.0°F.*Minimum/s);
-  assert.match(await page.locator('#fan-curve').innerText(), /76.0°F.*Halfway/s);
+  assert.equal(await page.locator('#fan-curve tbody tr').count(), 10);
   assert.match(await page.locator('#fan-curve').innerText(), /78.0°F.*Maximum/s);
   await page.getByRole('button', { name: 'Help for Increase speed above target by (°F)', exact: true }).click();
   assert.match(await page.getByRole('tooltip').innerText(), /above 74.0°F/);
@@ -290,8 +290,50 @@ try {
   await mappedFan.getByRole('button', { name: 'Remove speed range 1', exact: true }).click();
   await save();
   assert.deepEqual((await server.config.snapshot()).config.fanMappings, []);
+  // Mapped previews show only reachable physical settings, capped at ten rows.
+  fan.speedCapabilities = speedCapabilities({ perms: ['pr', 'pw'], minStep: 1 });
+  const mapped = await server.config.snapshot();
+  mapped.config.rules.fans = mapped.config.rules.fans.map((entry) => ({ ...entry, enabled: false,
+    ...(entry.name === 'Living room comfort' ? { minimumSpeed: 14, maximumSpeed: 60 } : {}) }));
+  mapped.config.fanMappings = [{ sourceId: 'fan', ranges: [[1, 21], [22, 35], [36, 49], [50, 64], [65, 78], [79, 92], [93, 100]]
+    .map(([min, max], index) => ({ min, max, label: 'Speed ' + (index + 1) })) }];
+  await server.config.save({ revision: mapped.revision, config: mapped.config });
+  await page.reload();
+  await page.getByRole('button', { name: 'Discover sources', exact: true }).click();
+  await page.waitForFunction(() => !document.getElementById('refresh-sources').disabled);
+  await page.getByRole('link', { name: 'Climate rules', exact: true }).click();
+  await page.getByRole('tab', { name: /Room fans/ }).click();
+  await row('Living room comfort').locator('.rule-item').click();
+  const curveLabels = () => page.locator('#fan-curve tbody tr td:first-child').allTextContents();
+  assert.deepEqual(await curveLabels(), ['Speed 1', 'Speed 2', 'Speed 3', 'Speed 4']);
+  assert.match(await page.locator('#fan-curve tbody tr').first().innerText(), /14–21%.*14%/s);
+  assert.match(await page.locator('#fan-curve tbody tr').last().innerText(), /50–60%.*57%/s);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await page.screenshot({ path: path.join(output, 'fan-mapped-curve-mobile.png'), fullPage: true });
+  await page.getByLabel('Maximum fan speed (%)', { exact: true }).fill('100');
+  assert.deepEqual(await curveLabels(), Array.from({ length: 7 }, (_, index) => 'Speed ' + (index + 1)));
+  await page.getByLabel('Minimum running speed (%)', { exact: true }).fill('36');
+  await page.getByLabel('Maximum fan speed (%)', { exact: true }).fill('49');
+  assert.deepEqual(await curveLabels(), ['Speed 3']);
+  await page.getByLabel('Minimum running speed (%)', { exact: true }).fill('14');
+  await page.getByLabel('Maximum fan speed (%)', { exact: true }).fill('60');
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await page.screenshot({ path: path.join(output, 'fan-mapped-curve-desktop.png'), fullPage: true });
+  await save();
+  const many = await server.config.snapshot();
+  many.config.fanMappings[0].ranges = Array.from({ length: 20 }, (_, index) => ({
+    min: 1 + index * 5, max: 5 + index * 5, label: 'Setting ' + (index + 1),
+  }));
+  const manyRule = many.config.rules.fans.find((entry) => entry.name === 'Living room comfort');
+  manyRule.minimumSpeed = 1; manyRule.maximumSpeed = 100;
+  await server.config.save({ revision: many.revision, config: many.config });
+  await page.reload(); await page.getByRole('tab', { name: /Room fans/ }).click();
+  await row('Living room comfort').locator('.rule-item').click();
+  assert.equal((await curveLabels()).length, 10);
+  assert.equal((await curveLabels())[0], 'Setting 1');
+  assert.equal((await curveLabels()).at(-1), 'Setting 20');
   assert.deepEqual(errors, []);
-  console.log('Fan browser checks passed: speed modes, caps, legacy priority order, mouse/touch/keyboard reordering, save/discard, shared-fan winner, manual override and mobile layout.');
+  console.log('Fan browser checks passed: speed modes, caps, mapped curve steps, legacy priority order, mouse/touch/keyboard reordering, save/discard, shared-fan winner, manual override and mobile layout.');
 } finally {
   await browser?.close(); await engine?.stop(); await server.stop(); await fs.rm(storage, { recursive: true, force: true });
 }

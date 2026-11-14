@@ -1,5 +1,5 @@
 import { occupancyConditionStatus } from '../homebridge-ui/public/occupancy-condition.js';
-import { ruleWindow, windowActive } from '../homebridge-ui/public/rule-window.js';
+import { ruleWindow, windowActive, ruleTimeZone, ruleInTimeZone } from '../homebridge-ui/public/rule-window.js';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -481,6 +481,13 @@ export class ClimateAutomation {
     }
     this.error = null;
     this.rules = flatten(envelope.config.rules);
+    if (envelope.config.timeZone !== undefined) {
+      const zone = ruleTimeZone(envelope.config.timeZone, envelope.systemTimeZone);
+      if (!zone) {
+        throw new Error('Invalid rule time zone');
+      }
+      this.rules = this.rules.map((rule) => ruleInTimeZone(rule, zone));
+    }
     this.deviceOptions = envelope.config.devices;
     this.fanMappings = envelope.config.fanMappings ?? [];
     const currentIds = new Set(this.rules.map((rule) => rule.id));

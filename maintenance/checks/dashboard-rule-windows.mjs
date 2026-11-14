@@ -4,6 +4,13 @@ import path from 'node:path';
 import { navigate } from './dashboard-navigation.mjs';
 
 export async function checkRuleWindows(page, output, prefix, getConfig) {
+  await navigate(page, 'Settings');
+  const zone = page.getByLabel('Time zone', { exact: true });
+  assert.equal(await zone.inputValue(), 'system');
+  await zone.selectOption('America/Los_Angeles');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  assert.equal(getConfig().timeZone, 'America/Los_Angeles');
   await navigate(page, 'Climate rules');
   for (const [kind, key] of [['temperature', 'temperature'], ['fan', 'fans']]) {
     await page.locator('[data-kind="' + kind + '"]').click();
@@ -12,7 +19,7 @@ export async function checkRuleWindows(page, output, prefix, getConfig) {
     await page.getByRole('button', { name: 'Weekdays', exact: true }).click();
     await page.getByLabel('Start time', { exact: true }).fill('22:00');
     await page.getByLabel('End time', { exact: true }).fill('06:00');
-    await page.getByLabel('Window time zone', { exact: true }).selectOption('America/Los_Angeles');
+    assert.equal(await page.getByLabel('Window time zone', { exact: true }).count(), 0);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await page.waitForFunction(() => document.getElementById('save-bar').hidden);
     assert.deepEqual(getConfig().rules[key][0].window, { days: [0, 1, 2, 3, 4], start: '22:00', end: '06:00', timeZone: 'America/Los_Angeles' });
@@ -66,9 +73,8 @@ export async function checkRuleWindows(page, output, prefix, getConfig) {
       assert.deepEqual(getConfig().rules[key][0].manualOverride, { mode: 'duration', minutes: 480 });
       await policy.selectOption('time');
       assert.equal(await settings.getByLabel('Daily resume time', { exact: true }).count(), 1);
-      assert.equal(await settings.getByLabel('Resume time zone', { exact: true }).count(), 1);
+      assert.equal(await page.getByLabel('Resume time zone', { exact: true }).count(), 0);
       await page.getByLabel('Daily resume time', { exact: true }).fill('08:00');
-      await page.getByLabel('Resume time zone', { exact: true }).selectOption('America/Los_Angeles');
       await page.getByRole('button', { name: 'Save changes', exact: true }).click();
       await page.waitForFunction(() => document.getElementById('save-bar').hidden);
       assert.deepEqual(getConfig().rules[key][0].manualOverride,
@@ -80,5 +86,10 @@ export async function checkRuleWindows(page, output, prefix, getConfig) {
     }
     await page.setViewportSize({ width: 1280, height: 1000 });
   }
+  await navigate(page, 'Settings');
+  await zone.selectOption('system');
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+  assert.equal(getConfig().timeZone, 'system');
 }
 

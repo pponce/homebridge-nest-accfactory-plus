@@ -395,8 +395,7 @@
                                     "required": [
                                         "days",
                                         "start",
-                                        "end",
-                                        "timeZone"
+                                        "end"
                                     ],
                                     "properties": {
                                         "days": {
@@ -424,7 +423,8 @@
                                         "timeZone": {
                                             "title": "Window time zone",
                                             "type": "string",
-                                            "description": "Named zone such as America/Los_Angeles."
+                                            "description": "Named zone such as America/Los_Angeles.",
+                                            "condition": "1=2"
                                         }
                                     }
                                 },
@@ -602,8 +602,7 @@
                                     "required": [
                                         "days",
                                         "start",
-                                        "end",
-                                        "timeZone"
+                                        "end"
                                     ],
                                     "properties": {
                                         "days": {
@@ -631,7 +630,8 @@
                                         "timeZone": {
                                             "title": "Window time zone",
                                             "type": "string",
-                                            "description": "Named zone such as America/Los_Angeles."
+                                            "description": "Named zone such as America/Los_Angeles.",
+                                            "condition": "1=2"
                                         }
                                     }
                                 },
@@ -702,7 +702,8 @@
                                         "timeZone": {
                                             "title": "Resume time zone",
                                             "type": "string",
-                                            "description": "Named zone such as America/Los_Angeles."
+                                            "description": "Named zone such as America/Los_Angeles.",
+                                            "condition": "1=2"
                                         }
                                     }
                                 }
@@ -887,6 +888,12 @@
                         }
                     }
                 }
+            },
+            "automationTimeZone": {
+                "type": "string",
+                "title": "Time zone",
+                "default": "system",
+                "description": "System uses the Homebridge host time zone. Or enter a named zone such as America/Los_Angeles. Applies to all rule windows and daily fan resume times."
             }
         }
     },
@@ -1137,6 +1144,11 @@
                         "C": "Celsius (\u00b0C)",
                         "F": "Fahrenheit (\u00b0F)"
                     }
+                },
+                {
+                    "key": "automationTimeZone",
+                    "title": "Time zone",
+                    "placeholder": "system or America/Los_Angeles"
                 },
                 {
                     "key": "webDashboard.enabled",

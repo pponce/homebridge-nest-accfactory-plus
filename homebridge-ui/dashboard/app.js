@@ -1,10 +1,10 @@
 import { occupancyConditionError, occupancyConditionStatus } from '/shared/occupancy-condition.js';
-import { windowDays, windowError, windowSummary, ruleWindow } from '/shared/rule-window.js';
+import { windowDays, windowError, windowSummary, ruleWindow, ruleTimeZone, rulesInTimeZone } from '/shared/rule-window.js';
 import { scheduleOverview, displayTemperature, celsiusTemperature, scheduleTimeZone, selectedNestSensor, temperatureControlView } from '/shared/climate-utils.js';
 import { mountTimeZonePicker, timeZoneChoices } from '/shared/time-zone-picker.js';
 import { mountConnectionPage } from '/shared/connection-page.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
-import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed, fanMappingsError, mappedSpeed } from '/shared/fan-speed.js';
+import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed, fanMappingsError, mappedSpeed, fanCurveStages } from '/shared/fan-speed.js';
 import { fanManualHoldError } from '/shared/fan-speed.js';
 
 const $ = (id) => document.getElementById(id);
@@ -225,6 +225,7 @@ function empty(host, title, description, symbol = 'sensors', action) {
   host.replaceChildren(content);
 }
 function temperatureUnit() { return state.config?.temperatureUnit === 'F' ? 'F' : 'C'; }
+function configuredRuleTimeZone() { return ruleTimeZone(state.config?.timeZone, state.envelope?.systemTimeZone || 'UTC') || 'UTC'; }
 function formatTemp(value, digits = 1) {
   return Number.isFinite(value) ? displayTemperature(value, temperatureUnit()).toFixed(digits) + '°' + temperatureUnit() : '—';
 }
@@ -1296,6 +1297,10 @@ async function applyHeatingRecommendation(entry, stage) {
 function renderSettings() {
   if (!state.config) return;
   $('temperature-unit').value = temperatureUnit();
+  const zone = $('rule-time-zone'); zone.replaceChildren(new Option('System time zone · ' + (state.envelope.systemTimeZone || 'UTC'), 'system'));
+  for (const [value, label] of timeZoneChoices(state.config.timeZone === 'system' ? '' : state.config.timeZone)) zone.add(new Option(label, value));
+  zone.value = state.config.timeZone || 'system';
+  $('rule-time-zone-detail').textContent = 'Rule times use ' + configuredRuleTimeZone() + '. Applies to scheduled windows and daily fan resumes. Save to apply; no restart needed.';
   $('pause-on-restart').checked = state.config.options?.pauseOnRestart === true;
   $('dashboard-name').value = state.config.name || 'Nest Climate Cntrl'; $('eve-history').checked = state.config.options?.eveHistory !== false;
   $('dashboard-url').textContent = state.envelope.web?.url || location.origin;
@@ -1322,6 +1327,12 @@ function renderSettings() {
   refreshHeating();
 }
 $('temperature-unit').addEventListener('change', () => { if (state.config) { state.config.temperatureUnit = $('temperature-unit').value; markDirty(); renderAll(); } });
+$('rule-time-zone').addEventListener('change', () => {
+  if (!state.config) return;
+  state.config.timeZone = $('rule-time-zone').value;
+  state.config.rules = rulesInTimeZone(state.config.rules, configuredRuleTimeZone());
+  markDirty(); renderAll();
+});
 $('dashboard-name').addEventListener('input', () => { if (state.config) { state.config.name = $('dashboard-name').value; markDirty(); } });
 $('pause-on-restart').addEventListener('change', () => { if (state.config) { (state.config.options ??= {}).pauseOnRestart = $('pause-on-restart').checked; markDirty(); } });
 $('eve-history').addEventListener('change', () => { if (state.config) { (state.config.options ??= {}).eveHistory = $('eve-history').checked; markDirty(); } });
@@ -1491,7 +1502,7 @@ function editorSection(host, number, title, description) {
 function ruleFieldHelp(title, rule) {
   if (title === 'After a manual fan change') return 'Choose how long a detected HomeKit, scene or other external power/speed change takes precedence over automation. The hold applies to this fan across all rules. Resume can end it early; explicit Pause and command errors do not expire.';
   if (title === 'Manual hold (minutes)') return 'Time from the latest detected manual change. Use 60, 120 or 180 minutes for one, two or three hours. A restart preserves the deadline. Saving a different policy starts a new hold.';
-  if (title === 'Daily resume time' || title === 'Resume time zone') return 'Use the next occurrence of this local time, even for an all-day rule. Expiry rechecks the rule conditions and needs current fan feedback; it does not necessarily turn the fan on.';
+  if (title === 'Daily resume time') return 'Use the next occurrence of this time in the time zone selected in Settings, even for an all-day rule. Expiry rechecks the rule conditions and needs current fan feedback; it does not necessarily turn the fan on.';
   switch (title.replace(/ \(°[CF]\)$/, '')) {
     case 'Rule name': return 'Choose a name that identifies this rule in the list and its execution status. For a Home/Away rule, this also names its combined occupancy sensor.';
     case 'Enable automatic execution': return rule.kind === 'presence'
@@ -1684,10 +1695,7 @@ function renderRuleWindow(host, rule) {
   inputField(section, 'When to run', rule.window ? 'scheduled' : 'always', (value) => {
     if (value === 'always') delete rule.window;
     else {
-      const device = thermostats().find((entry) => entry.serial === rule.thermostatId) || thermostats()[0];
-      const zone = device && scheduleTimeZone(deviceOptions(device.serial), device.data);
-      rule.window = { days: [0, 1, 2, 3, 4, 5, 6], start: '22:00', end: '06:00',
-        timeZone: zone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
+      rule.window = { days: [0, 1, 2, 3, 4, 5, 6], start: '22:00', end: '06:00', timeZone: configuredRuleTimeZone() };
     }
     renderRules();
   }, { choices: [['always', 'Always · all day, every day'], ['scheduled', 'Scheduled window']] });
@@ -1713,10 +1721,9 @@ function renderRuleWindow(host, rule) {
     for (const [title, key] of [['Start time', 'start'], ['End time', 'end']]) {
       inputField(fields, title, rule.window[key], (value) => { rule.window[key] = value; }, { type: 'time' }).required = true;
     }
-    inputField(fields, 'Window time zone', rule.window.timeZone, (value) => { rule.window.timeZone = value; },
-      { choices: timeZoneChoices(rule.window.timeZone) });
     section.append(fields, el('p', 'An end time earlier than the start continues into the following day. Friday 10 PM–6 AM ends Saturday morning. Start is included; end is excluded. Named time zones follow daylight-saving changes.', 'small-note'));
   }
+  section.append(el('p', 'Rule time zone: ' + configuredRuleTimeZone() + ' · change in Settings.', 'small-note'));
   renderOccupancyCondition(section, rule);
   if (rule.kind === 'fan') renderFanManualHold(section, rule);
   if (rule.kind === 'temperature') {
@@ -1730,8 +1737,7 @@ function renderFanManualHold(section, rule) {
   inputField(section, 'After a manual fan change', rule.manualOverride?.mode || 'manual', (mode) => {
     if (mode === 'manual') delete rule.manualOverride;
     else if (mode === 'duration') rule.manualOverride = { mode, minutes: 60 };
-    else rule.manualOverride = { mode, time: '08:00', timeZone: rule.window?.timeZone ||
-      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
+    else rule.manualOverride = { mode, time: '08:00', timeZone: configuredRuleTimeZone() };
     renderRules();
   }, { choices: [['manual', 'Wait until I Resume'], ['duration', 'Resume after a duration'], ['time', 'Resume at the next daily time']] });
   const policy = rule.manualOverride;
@@ -1748,9 +1754,7 @@ function renderFanManualHold(section, rule) {
     settings.append(presets);
   } else if (policy?.mode === 'time') {
     inputField(settings, 'Daily resume time', policy.time, (value) => { policy.time = value; }, { type: 'time' }).required = true;
-    inputField(settings, 'Resume time zone', policy.timeZone, (value) => { policy.timeZone = value; },
-      { choices: timeZoneChoices(policy.timeZone) });
-    settings.append(el('p', 'Uses the next occurrence in this time zone, including daylight-saving changes. A skipped clock time waits until its next occurrence; a repeated time uses the next occurrence.', 'small-note'));
+    settings.append(el('p', 'Uses the next occurrence in the time zone selected in Settings, including daylight-saving changes. A skipped clock time waits until its next occurrence; a repeated time uses the next occurrence.', 'small-note'));
   }
   settings.append(el('p', 'A detected power or speed change outside automation holds that fan for every rule. The controlling rule chooses the hold; without a controller, the highest eligible rule does. Another detected manual change restarts the hold. At expiry, current temperature, occupancy, schedule and priority decide whether the fan runs. Pause and command errors still require Resume. Saving a different hold setting starts a new hold for fans already held by this rule.', 'small-note'));
 }
@@ -1894,6 +1898,30 @@ function renderRuleRuntime(rule) {
     host.append(actions); if (state.dirty) host.append(el('p', 'Save or discard your edits before using immediate rule controls.', 'small-note'));
   }
 }
+function mappedFanCurveTable(host, source, stages, rule) {
+  const table = el('table'); table.append(el('caption', source.name + ' · mapped speed settings'));
+  const header = el('tr');
+  for (const title of ['Fan setting', 'Range within rule limits', 'Room temperature while eligible', 'Requested speed']) {
+    const cell = el('th', title); cell.scope = 'col'; header.append(cell);
+  }
+  const head = el('thead'); head.append(header); table.append(head);
+  const body = el('tbody');
+  const visible = stages.length <= 10 ? stages : Array.from({ length: 10 }, (_, index) => stages[Math.round(index * (stages.length - 1) / 9)]);
+  for (const stage of visible) {
+    const row = el('tr');
+    const range = stage.mapping;
+    const temperatures = stage.from === null && stage.through === null ? 'Any temperature while the run condition is met' :
+        stage.from === null ? 'Up to ≈ ' + formatTemp(stage.through, 2) :
+          stage.through === null ? 'Above ≈ ' + formatTemp(stage.from, 2) :
+            'Above ≈ ' + formatTemp(stage.from, 2) + ' to ≈ ' + formatTemp(stage.through, 2);
+    const command = stage.commandMin === stage.commandMax ? stage.commandMin + '%' :
+      stage.commandMin + '–' + stage.commandMax + '%';
+    row.append(el('td', range.label),
+      el('td', Math.max(range.min, rule.minimumSpeed) + '–' + Math.min(range.max, rule.maximumSpeed) + '%'), el('td', temperatures), el('td', command));
+    body.append(row);
+  }
+  table.append(body); const scroll = el('div', undefined, 'table-scroll'); scroll.append(table); host.append(scroll);
+}
 function renderFanCurve(rule) {
   const host = $('fan-curve'); if (!host || rule.speedMode === 'last') return;
   host.replaceChildren(el('h4', rule.speedMode === 'fixed' ? 'Supported fixed speeds' : 'Your speed curve'));
@@ -1901,25 +1929,39 @@ function renderFanCurve(rule) {
   if (error) { host.append(el('p', error)); return; }
   const targets = (rule.targetIds || []).map((id) => sources().find((source) => source.id === id));
   const limits = fanSpeedLimits(rule);
-  const table = el('table'); table.append(el('caption', 'Airflow while the run condition is met'));
-  const header = el('tr');
-  for (const title of ['Room temperature', 'Requested speed', ...targets.map((source) => source?.name || 'Unavailable fan')]) { const cell = el('th', title); cell.scope = 'col'; header.append(cell); }
-  const head = el('thead'); head.append(header); table.append(head);
-  const body = el('tbody');
-  const rows = rule.speedMode === 'fixed' ? [['While running', null, rule.fixedSpeed]] : [
-    ['Minimum', rule.desiredTemperature + rule.startGap, rule.minimumSpeed],
-    ['Halfway', rule.desiredTemperature + (rule.startGap + rule.fullSpeedGap) / 2, (rule.minimumSpeed + rule.maximumSpeed) / 2],
-    ['Maximum', rule.desiredTemperature + rule.fullSpeedGap, rule.maximumSpeed],
-  ];
-  for (const [label, temperature, requested] of rows) {
-    const row = el('tr'); row.append(el('td', (temperature === null ? '' : formatTemp(temperature) + ' · ') + label), el('td', requested + '%'));
-    for (const source of targets) {
-      const value = supportedSpeed(source, requested, limits.minimum, limits.maximum);
-      row.append(el('td', value === null ? 'Unsupported' : fanSpeedLabel(source, value)));
-    }
-    body.append(row);
+  const examples = [];
+  let mapped = false;
+  for (const source of targets) {
+    const stages = fanCurveStages(rule, source);
+    if (stages) { mappedFanCurveTable(host, source, stages, rule); mapped = true; }
+    else examples.push(source);
   }
-  table.append(body); const scroll = el('div', undefined, 'table-scroll'); scroll.append(table); host.append(scroll);
+  if (examples.length || !targets.length) {
+    const table = el('table'); table.append(el('caption', rule.speedMode === 'curve' ?
+      'Example points · speeds between these points are also used' : 'Airflow while the run condition is met'));
+    const header = el('tr');
+    for (const title of ['Room temperature', 'Requested speed', ...examples.map((source) => source?.name || 'Unavailable fan')]) {
+      const cell = el('th', title); cell.scope = 'col'; header.append(cell);
+    }
+    const head = el('thead'); head.append(header); table.append(head);
+    const body = el('tbody');
+    const rows = rule.speedMode === 'fixed' ? [['While running', null, rule.fixedSpeed]] :
+      rule.minimumSpeed === rule.maximumSpeed ? [['While running', null, rule.minimumSpeed]] :
+        Array.from({ length: 10 }, (_, index) => [index === 0 ? 'Minimum' : index === 9 ? 'Maximum' : 'Point ' + (index + 1),
+          rule.desiredTemperature + rule.startGap + index / 9 * (rule.fullSpeedGap - rule.startGap),
+          rule.minimumSpeed + index / 9 * (rule.maximumSpeed - rule.minimumSpeed)]);
+    for (const [label, temperature, requested] of rows) {
+      const row = el('tr'); row.append(el('td', (temperature === null ? '' : formatTemp(temperature) + ' · ') + label),
+        el('td', Number(requested.toFixed(1)) + '%'));
+      for (const source of examples) {
+        const value = supportedSpeed(source, requested, limits.minimum, limits.maximum);
+        row.append(el('td', value === null ? 'Unsupported' : fanSpeedLabel(source, value)));
+      }
+      body.append(row);
+    }
+    table.append(body); const scroll = el('div', undefined, 'table-scroll'); scroll.append(table); host.append(scroll);
+  }
+  if (mapped) host.append(el('p', 'Only settings within the rule’s minimum and maximum are shown, with at most 10 rows per fan. Up to 10 reachable mapped settings are all listed; larger sets are sampled evenly. Temperature boundaries are approximate display values calculated from the fan’s supported percentages; automation uses unrounded values. The run condition, occupancy and schedule must also allow the fan. Updates normally wait at least one minute, so rapid temperature changes can skip intermediate settings.', 'small-note'));
   if (rule.action === 'temperature') host.append(el('p', (rule.thresholdInclusive ? 'Run at or above ' : 'Run above ') + formatTemp(rule.threshold) + '; release at ' + formatTemp(rule.threshold - rule.hysteresis) + ' or below. The preview does not run hysteresis timers.', 'small-note'));
 }
 function renderRulePreview() {

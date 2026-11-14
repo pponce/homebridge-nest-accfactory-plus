@@ -3002,3 +3002,26 @@ test('invalid persisted manual fan deadlines require review instead of releasing
   f.advance(120 * minute); await restarted.tick();
   assert.equal(f.fanCommands.length, 1);
 });
+
+test('shared time zone controls live windows and recomputes daily holds using host System selection', async (t) => {
+  const f = await fixture(t, {});
+  const snapshot = f.config.snapshot;
+  let zone = 'America/Los_Angeles';
+  f.config.snapshot = async () => {
+    const data = await snapshot();
+    return { ...data, systemTimeZone: 'America/New_York', config: { ...data.config, timeZone: zone } };
+  };
+  const rule = { ...fanRule, window: { days: [0], start: '09:00', end: '11:00', timeZone: 'UTC' } };
+  f.rules({ fans: [rule] }); f.source('room').temperature = 27; await f.engine.tick();
+  assert.equal(f.fanCommands.length, 0, '02:00 Pacific is outside the window');
+  zone = 'UTC'; await f.engine.tick(); await f.engine.tick();
+  assert.equal(f.fanCommands.length, 1, '10:00 UTC is inside the window');
+  delete rule.window;
+  rule.manualOverride = { mode: 'time', time: '08:00', timeZone: 'UTC' };
+  zone = 'America/Los_Angeles'; f.rules({ fans: [rule] });
+  f.source('fan').running = false; await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').until, Date.parse('2026-11-02T16:00:00Z'));
+  zone = 'system'; await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').until, Date.parse('2026-11-02T13:00:00Z'));
+  assert.equal(f.fanCommands.length, 1);
+});

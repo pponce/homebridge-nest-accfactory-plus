@@ -1,4 +1,23 @@
 // Wall-clock windows use the selected start day, including the following morning.
+import { validTimeZone } from './climate-utils.js';
+
+export const systemTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+export function ruleTimeZone(selection, system = systemTimeZone()) {
+  return validTimeZone(selection === undefined || selection === 'system' ? system : selection);
+}
+export function ruleInTimeZone(rule, zone) {
+  if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return rule;
+  return { ...rule,
+    ...(rule.window && typeof rule.window === 'object' && !Array.isArray(rule.window) ?
+      { window: { ...rule.window, timeZone: zone } } : {}),
+    ...(rule.manualOverride?.mode === 'time' ? { manualOverride: { ...rule.manualOverride, timeZone: zone } } : {}) };
+}
+export function rulesInTimeZone(groups, zone) {
+  if (!groups || typeof groups !== 'object' || Array.isArray(groups)) return groups;
+  return Object.fromEntries(Object.entries(groups).map(([kind, rules]) =>
+    [kind, Array.isArray(rules) ? rules.map((rule) => ruleInTimeZone(rule, zone)) : rules]));
+}
+
 export const windowDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const time = (value) => typeof value === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const minutes = (value) => Number(value.slice(0, 2)) * 60 + Number(value.slice(3));
@@ -71,3 +90,4 @@ export function windowSummary(window) {
   return (window.days.length === 7 ? 'Every day' : window.days.map((day) => windowDays[day]).join(', ')) +
     ' · ' + window.start + '–' + window.end + (window.start > window.end ? ' next day' : '') + ' · ' + window.timeZone;
 }
+

@@ -1118,3 +1118,37 @@ test('fan mappings save and stage without a restart, preserve config and reject 
   view = await store.save({ revision: view.revision, config: { fanMappings: [] } });
   assert.equal(view.rulesError, undefined);
 });
+
+test('shared rule time zone defaults to host and applies to windows and fan resumes without restart', async (t) => {
+  const state = await fixture(t);
+  const rule = { id: 'f', name: 'Fan', kind: 'fan', window: { days: [0], start: '08:00', end: '20:00', timeZone: 'UTC' },
+    manualOverride: { mode: 'time', time: '07:30', timeZone: 'UTC' } };
+  state.block.climateRuleDrafts = { fans: [rule] };
+  await fs.writeFile(state.configPath, JSON.stringify(state.root));
+  const store = new WebDashboardConfig(state.configPath, state.block);
+  let view = await store.snapshot();
+  assert.equal(view.config.timeZone, 'system');
+  assert.equal(view.systemTimeZone, Intl.DateTimeFormat().resolvedOptions().timeZone);
+  assert.equal(view.config.rules.fans[0].window.timeZone, view.systemTimeZone);
+  for (const zone of ['America/Los_Angeles', 'Asia/Tokyo', 'system']) {
+    view = await store.save({ revision: view.revision, config: { timeZone: zone } });
+    const expected = zone === 'system' ? view.systemTimeZone : zone;
+    assert.equal(view.restartRequired, false);
+    assert.equal(view.config.rules.fans[0].window.timeZone, expected);
+    assert.equal(view.config.rules.fans[0].manualOverride.timeZone, expected);
+    assert.equal(view.config.rules.fans[0].manualOverride.time, '07:30');
+    assert.equal(view.config.rules.fans[0].window.start, '08:00');
+    const reloaded = await new WebDashboardConfig(state.configPath, state.block).snapshot();
+    assert.equal(reloaded.config.timeZone, zone);
+  }
+  for (const zone of ['', 'no/zone', null, 42, {}]) {
+    await assert.rejects(store.save({ revision: view.revision, config: { timeZone: zone } }), /time zone/);
+  }
+  delete rule.window.timeZone; delete rule.manualOverride.timeZone;
+  view = await store.save({ revision: view.revision, config: { timeZone: 'America/New_York', rules: { fans: [rule] } } });
+  assert.equal(view.config.rules.fans[0].window.timeZone, 'America/New_York');
+  assert.equal(view.config.rules.fans[0].manualOverride.timeZone, 'America/New_York');
+  const saved = JSON.parse(await fs.readFile(state.configPath, 'utf8'));
+  assert.deepEqual(saved.platforms[1].accounts, state.block.accounts);
+  assert.deepEqual(saved.platforms[0], state.root.platforms[0]);
+});

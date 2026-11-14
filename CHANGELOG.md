@@ -2,7 +2,13 @@
 ## v0.6.9
 
 - Extend manual fan-hold shortcuts to every whole hour from 1 through 8 hours under When to run. Selecting a shortcut fills the duration in minutes; Save changes applies it.
-- Indent duration, shortcuts, daily time, time zone and related help beneath After a manual fan change, with a subtle vertical guide. Wrap shortcuts across rows on narrow screens. Custom durations, daily resume times and existing rule settings retain their behavior.
+- Indent duration, shortcuts, daily time and related help beneath After a manual fan change, with a subtle vertical guide. Wrap shortcuts across rows on narrow screens.
+- Add one Time zone setting beside Temperature units, defaulting to the Homebridge host’s system zone. Scheduled rule windows and daily fan resume times use it; per-rule time-zone selectors are removed. Changes apply without a restart.
+- Show up to 10 speed-curve rows per fan. When the selected range is fully mapped and has at most 10 reachable settings, show each physical setting with its temperature interval and requested percentage. Omit speeds outside the rule’s minimum and maximum. Larger sets and unmapped curves use evenly spaced samples.
+
+- Add an optional read-only Big Ass Fans layout audit in the repository maintenance tools. It separates configured bridge caches from backups, identifies duplicated or orphaned light services, and can inspect the live local bridge without changing accessories or access settings.
+
+**Updating:** Existing rule clock times use Settings → Time zone. Check the displayed system zone or select the zone in which those times should apply. Imported Nest schedules retain their thermostat/home time-zone interpretation.
 
 ## v0.6.8
 
