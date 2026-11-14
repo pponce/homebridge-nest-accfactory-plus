@@ -2,10 +2,39 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   fanCurve, fanCurveError, fanRulePlan, fanSpeedError, normalizeFanRule, speedCapabilities, supportedSpeed,
+  fanManualHoldUntil, fanManualHoldError,
 } from '../homebridge-ui/public/fan-speed.js';
 import { validateRuleDrafts } from '../src/web-dashboard-config.js';
 
 const celsius = (value) => (value - 32) / 1.8;
+
+test('manual fan holds validate optional policy without changing existing rules', () => {
+  assert.equal(fanManualHoldUntil(undefined, 1), null);
+  assert.equal(fanManualHoldUntil({ mode: 'manual' }, 1), null);
+  assert.equal(fanManualHoldUntil({ mode: 'duration', minutes: 120 }, 1), 7200001);
+  for (const policy of [null, {}, { mode: 'never' }, { mode: 'duration', minutes: 0 },
+    { mode: 'duration', minutes: 1.5 }, { mode: 'duration', minutes: 10081 },
+    { mode: 'manual', time: '08:00' }, { mode: 'time', time: '24:00', timeZone: 'UTC' },
+    { mode: 'time', time: '08:00', timeZone: 'bad/zone' }]) {
+    assert.ok(fanManualHoldError(policy));
+  }
+  assert.ok(fanManualHoldError({ mode: 'manual' }, 'temperature'));
+  const rule = { id: 'fan', name: 'Fan', kind: 'fan', manualOverride: { mode: 'duration', minutes: 60 } };
+  assert.deepEqual(validateRuleDrafts({ fans: [rule] }).fans[0].manualOverride, rule.manualOverride);
+  assert.throws(() => validateRuleDrafts({ temperature: [{ ...rule, kind: 'temperature' }] }), /fan rules/);
+  assert.throws(() => validateRuleDrafts({ fans: [{ ...rule, manualOverride: { mode: 'duration', minutes: -1 } }] }), /manual hold/);
+});
+
+test('daily fan holds select the next actual local time through midnight and DST', () => {
+  const next = (time, after) => new Date(fanManualHoldUntil({ mode: 'time', time, timeZone: 'America/Los_Angeles' },
+    Date.parse(after))).toISOString();
+  assert.equal(next('08:00', '2026-11-14T05:00:00Z'), '2026-11-14T16:00:00.000Z');
+  assert.equal(next('08:00', '2026-11-14T16:00:00Z'), '2026-11-15T16:00:00.000Z');
+  assert.equal(next('02:30', '2026-03-08T09:00:00Z'), '2026-03-09T09:30:00.000Z', 'Skip nonexistent spring time');
+  assert.equal(next('01:30', '2026-11-01T08:45:00Z'), '2026-11-01T09:30:00.000Z', 'Use second autumn occurrence');
+  assert.equal(fanManualHoldUntil({ mode: 'time', time: '00:00', timeZone: 'UTC' }, Date.parse('2026-11-14T23:59:10Z')),
+    Date.parse('2026-11-15T00:00:00Z'));
+});
 const curve = { desiredTemperature: celsius(72), startGap: 2 / 1.8, stopGap: 0.5 / 1.8, fullSpeedGap: 6 / 1.8,
   minimumSpeed: 25, maximumSpeed: 75 };
 

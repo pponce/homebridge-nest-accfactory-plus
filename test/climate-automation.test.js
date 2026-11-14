@@ -2814,3 +2814,161 @@ test('occupancy conditions validate optional configuration without allowing pres
   }
   assert.throws(() => validateRuleDrafts({ occupancy: [{ ...presenceRule, occupancyCondition: occupancyGate() }] }), /temperature and fan/);
 });
+
+const timedFan = (base = fanRule, minutes = 60) => ({ ...base, manualOverride: { mode: 'duration', minutes } });
+async function manuallyStopFan(f) {
+  f.source('room').temperature = 27;
+  await f.engine.tick();
+  await f.engine.tick();
+  f.source('fan').running = false;
+  await f.engine.tick();
+  assert.equal(f.rule('fans').paused, true);
+}
+
+test('manual fan power hold expires and rechecks demand instead of forcing on', async (t) => {
+  for (const demand of [true, false]) {
+    const f = await fixture(t, { fans: [timedFan()] });
+    await manuallyStopFan(f);
+    const deadline = f.now() + 60 * minute;
+    assert.equal(f.rule('fans').fanAssignments[0].manualHold.until, deadline);
+    assert.equal(f.rule('fans').explanation.fans[0].manualHold.until, deadline);
+    f.advance(59 * minute); await f.engine.tick();
+    assert.equal(f.fanCommands.length, 1);
+    f.source('room').temperature = demand ? 27 : 20;
+    f.advance(minute); await f.engine.tick();
+    assert.equal(f.engine.fanOverrides.size, 0);
+    assert.equal(f.fanCommands.length, demand ? 2 : 1);
+  }
+});
+
+test('manual fan speed changes restart a hold while mapped settlement does not', async (t) => {
+  const f = await fixture(t, { fans: [timedFan(speedRule)] });
+  useFanMapping(f);
+  await startSpeedFan(f, 78);
+  f.source('fan').speed = 43; await f.engine.tick();
+  const first = f.engine.fanManualHolds.get('fan').until;
+  f.advance(10 * minute); f.source('fan').speed = 42; await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').until, first);
+  f.source('fan').speed = 29; await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').until, first + 10 * minute);
+  f.advance(60 * minute); await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.size, 0);
+  assert.equal(f.fanSpeedCommands.at(-1).speed, 71);
+});
+
+test('shared fans honor the controlling rule hold and do not let lower rules bypass it', async (t) => {
+  const high = { ...timedFan(), priority: 10 };
+  const low = { ...timedFan(fanRule, 1), id: 'lower', priority: 0 };
+  const f = await fixture(t, { fans: [high, low] });
+  await manuallyStopFan(f);
+  assert.equal(f.engine.fanManualHolds.get('fan').owner, 'fans');
+  f.advance(2 * minute); await f.engine.tick();
+  assert.equal(f.fanCommands.length, 1);
+  f.advance(58 * minute); await f.engine.tick();
+  assert.equal(f.engine.fanWinners.get('fan'), 'fans');
+  assert.equal(f.fanCommands.length, 2);
+});
+
+test('manual hold expiration respects occupancy, scheduled windows and unavailable readings', async (t) => {
+  for (const gate of ['occupancy', 'window', 'offline']) {
+    const rule = timedFan();
+    if (gate === 'occupancy') {
+      rule.occupancyCondition = occupancyGate();
+    }
+    if (gate === 'window') {
+      rule.window = { days: [0], start: '09:00', end: '10:30', timeZone: 'UTC' };
+    }
+    const f = await fixture(t, { fans: [rule] });
+    f.source('occupancy').detected = true;
+    await manuallyStopFan(f);
+    if (gate === 'occupancy') {
+      f.source('occupancy').detected = false;
+    }
+    if (gate === 'offline') {
+      f.source('fan').stale = true;
+    }
+    f.advance(60 * minute); await f.engine.tick();
+    assert.equal(f.fanCommands.length, 1);
+    if (gate === 'offline') {
+      assert.equal(f.engine.fanOverrides.size, 1);
+      f.source('fan').stale = false; await f.engine.tick();
+      assert.equal(f.fanCommands.length, 2);
+    } else {
+      assert.equal(f.engine.fanOverrides.size, 0);
+    }
+  }
+});
+
+test('manual fan hold persists across restart without extending its deadline', async (t) => {
+  const f = await fixture(t, { fans: [timedFan()] });
+  await manuallyStopFan(f);
+  const deadline = f.engine.fanManualHolds.get('fan').until;
+  await f.engine.stop(); f.advance(30 * minute);
+  const restarted = await restartFixture(f); t.after(() => restarted.stop());
+  assert.equal(restarted.fanManualHolds.get('fan').until, deadline);
+  f.advance(30 * minute); await restarted.tick();
+  assert.equal(restarted.fanOverrides.size, 0);
+  assert.equal(f.fanCommands.length, 2);
+});
+
+test('explicit Pause and restart pause policy prevent timed fan resumption', async (t) => {
+  for (const kind of ['pause', 'restart']) {
+    const f = await fixture(t, { fans: [timedFan()] });
+    await manuallyStopFan(f);
+    if (kind === 'pause') {
+      await f.engine.control({ id: 'fans', action: 'pause' });
+    } else {
+      f.options.pauseOnRestart = true;
+    }
+    await f.engine.stop(); f.advance(61 * minute);
+    const restarted = await restartFixture(f); t.after(() => restarted.stop());
+    assert.equal(restarted.snapshot().rules[0].paused, true);
+    assert.equal(restarted.snapshot().rules[0].fanAssignments[0]?.manualHold?.until, null);
+    assert.equal(f.fanCommands.length, 1);
+    await restarted.control({ id: 'fans', action: 'resume' });
+    assert.equal(restarted.fanOverrides.size, 0);
+    assert.equal(f.fanCommands.length, 2);
+  }
+});
+
+test('ambiguous pending fan feedback and command failures never become timed manual holds', async (t) => {
+  const f = await fixture(t, { fans: [timedFan(speedRule)] });
+  f.noAck(); fahrenheitRoom(f, 78); await f.engine.tick();
+  f.source('fan').running = true; f.source('fan').speed = 43; await f.engine.tick();
+  assert.equal(f.engine.fanOverrides.size, 1);
+  assert.equal(f.engine.fanManualHolds.size, 0);
+  f.source('fan').speed = 29; f.advance(120 * minute); await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.size, 0);
+  assert.equal(f.engine.fanOverrides.size, 1);
+  const failed = await fixture(t, { fans: [timedFan()] });
+  failed.fail(); failed.source('room').temperature = 27; await failed.engine.tick();
+  failed.advance(120 * minute); await failed.engine.tick();
+  assert.equal(failed.fanCommands.length, 1);
+  assert.equal(failed.engine.fanManualHolds.size, 0);
+});
+
+test('changing hold policy arms an existing manual pause without rearming each evaluation', async (t) => {
+  const f = await fixture(t, { fans: [fanRule] });
+  await manuallyStopFan(f);
+  assert.equal(f.engine.fanManualHolds.get('fan').until, null);
+  f.advance(60 * minute); f.rules({ fans: [timedFan(fanRule, 120)] }); await f.engine.tick();
+  const deadline = f.now() + 120 * minute;
+  assert.equal(f.engine.fanManualHolds.get('fan').until, deadline);
+  f.advance(60 * minute); await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').until, deadline);
+  f.rules({ fans: [fanRule] }); await f.engine.tick();
+  f.advance(120 * minute); await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').until, null);
+  assert.equal(f.fanCommands.length, 1);
+});
+
+test('daily resume works for an all-day fan rule and legacy manual pauses get a new deadline', async (t) => {
+  const rule = { ...fanRule, manualOverride: { mode: 'time', time: '08:00', timeZone: 'America/Los_Angeles' } };
+  const f = await fixture(t, { fans: [rule] });
+  f.engine.fanOverrides.set('fan', 'The fan changed outside automatic control. Resume this fan when ready.');
+  f.source('room').temperature = 27; await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').until, Date.parse('2026-11-02T16:00:00Z'));
+  f.advance(6 * 60 * minute); await f.engine.tick();
+  assert.equal(f.fanCommands.length, 1);
+  assert.equal(f.engine.fanOverrides.size, 0);
+});

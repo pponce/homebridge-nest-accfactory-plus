@@ -252,7 +252,7 @@
                             "type": "boolean",
                             "title": "Observe heating response locally",
                             "default": false,
-                            "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat\u2019s response history."
+                            "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat’s response history."
                         },
                         "scheduleTimeZone": {
                             "type": "string",
@@ -400,7 +400,7 @@
                                     ],
                                     "properties": {
                                         "days": {
-                                            "title": "Start days (0 Monday\u20136 Sunday)",
+                                            "title": "Start days (0 Monday–6 Sunday)",
                                             "type": "array",
                                             "minItems": 1,
                                             "maxItems": 7,
@@ -607,7 +607,7 @@
                                     ],
                                     "properties": {
                                         "days": {
-                                            "title": "Start days (0 Monday\u20136 Sunday)",
+                                            "title": "Start days (0 Monday–6 Sunday)",
                                             "type": "array",
                                             "minItems": 1,
                                             "maxItems": 7,
@@ -669,6 +669,42 @@
                                         }
                                     },
                                     "description": "Require an individual occupancy sensor or the evaluated state of a combined presence rule, in addition to the time window and run condition. Configure sources in Climate rules."
+                                },
+                                "manualOverride": {
+                                    "title": "After a manual fan change (optional)",
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "mode"
+                                    ],
+                                    "properties": {
+                                        "mode": {
+                                            "title": "Resume policy",
+                                            "type": "string",
+                                            "enum": [
+                                                "manual",
+                                                "duration",
+                                                "time"
+                                            ],
+                                            "default": "manual"
+                                        },
+                                        "minutes": {
+                                            "title": "Manual hold (minutes)",
+                                            "type": "integer",
+                                            "minimum": 1,
+                                            "maximum": 10080
+                                        },
+                                        "time": {
+                                            "title": "Daily resume time",
+                                            "type": "string",
+                                            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$"
+                                        },
+                                        "timeZone": {
+                                            "title": "Resume time zone",
+                                            "type": "string",
+                                            "description": "Named zone such as America/Los_Angeles."
+                                        }
+                                    }
                                 }
                             },
                             "required": [
@@ -1098,8 +1134,8 @@
                     "title": "Dashboard temperature units",
                     "type": "select",
                     "titleMap": {
-                        "C": "Celsius (\u00b0C)",
-                        "F": "Fahrenheit (\u00b0F)"
+                        "C": "Celsius (°C)",
+                        "F": "Fahrenheit (°F)"
                     }
                 },
                 {
@@ -1110,8 +1146,8 @@
                     "key": "webDashboard.protocol",
                     "title": "Connection mode",
                     "titleMap": {
-                        "https": "HTTPS \u00b7 certificates in plugin",
-                        "http": "HTTP \u00b7 unencrypted",
+                        "https": "HTTPS · certificates in plugin",
+                        "http": "HTTP · unencrypted",
                         "proxy": "HTTPS through reverse proxy"
                     }
                 },
@@ -1272,6 +1308,9 @@
                         },
                         {
                             "key": "climateRuleDrafts.fans[].occupancyCondition"
+                        },
+                        {
+                            "key": "climateRuleDrafts.fans[].manualOverride"
                         }
                     ]
                 },

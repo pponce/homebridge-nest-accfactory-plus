@@ -1,5 +1,6 @@
 import { occupancyConditionError } from '../homebridge-ui/public/occupancy-condition.js';
 import { windowError } from '../homebridge-ui/public/rule-window.js';
+import { fanManualHoldError } from '../homebridge-ui/public/fan-speed.js';
 import fs from 'node:fs/promises';
 import crypto from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -123,6 +124,7 @@ export function validateRuleDrafts(value) {
         'priority',
         'window',
         'occupancyCondition',
+        'manualOverride',
         'thresholdInclusive',
       ]);
       assert(
@@ -133,6 +135,7 @@ export function validateRuleDrafts(value) {
       assert(kind !== 'presence' || rule.window === undefined, 'Time windows apply to temperature and fan rules.');
       assert(!windowError(rule.window), windowError(rule.window));
       assert(!occupancyConditionError(rule.occupancyCondition, kind), occupancyConditionError(rule.occupancyCondition, kind));
+      assert(!fanManualHoldError(rule.manualOverride, kind), fanManualHoldError(rule.manualOverride, kind));
       assert(text(rule.name, 80) && rule.kind === kind, 'Enter a rule name and supported rule type.');
       assert(rule.enabled === undefined || typeof rule.enabled === 'boolean', 'Choose whether this rule is enabled.');
       assert(

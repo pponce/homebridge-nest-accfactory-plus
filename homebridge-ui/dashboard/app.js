@@ -5,6 +5,7 @@ import { mountTimeZonePicker, timeZoneChoices } from '/shared/time-zone-picker.j
 import { mountConnectionPage } from '/shared/connection-page.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
 import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed, fanMappingsError, mappedSpeed } from '/shared/fan-speed.js';
+import { fanManualHoldError } from '/shared/fan-speed.js';
 
 const $ = (id) => document.getElementById(id);
 const host = window.climateHost;
@@ -905,7 +906,8 @@ function renderAutomationOverview() {
       card.append(top);
       if (kind === 'fan') {
         const controller = candidates.find((rule) => rule.id === entry.controllerId);
-        evidenceNote(card, !candidates.length ? 'No fan rule assigned.' : entry.override ? 'Automatic control paused: ' + entry.override : controller ?
+        evidenceNote(card, !candidates.length ? 'No fan rule assigned.' : entry.override ?
+          manualFanHoldText(entry.manualHold) || 'Automatic control paused: ' + entry.override : controller ?
           (current ? 'Selected rule: ' : 'Last selected rule: ') + controller.name + '. ' + controller.reason : entry.restoring ? 'Restoring the previous fan setting.' :
             current ? 'No rule currently requests this fan to run.' : 'Rule status is unavailable.');
       } else evidenceNote(card, entry.reason || 'Waiting for rule evaluation.');
@@ -1487,6 +1489,9 @@ function editorSection(host, number, title, description) {
   const section = el('section', undefined, 'editor-section'); const heading = el('h4'); heading.append(el('span', number, 'step-number'), document.createTextNode(title)); section.append(heading, el('p', description)); host.append(section); return section;
 }
 function ruleFieldHelp(title, rule) {
+  if (title === 'After a manual fan change') return 'Choose how long a detected HomeKit, scene or other external power/speed change takes precedence over automation. The hold applies to this fan across all rules. Resume can end it early; explicit Pause and command errors do not expire.';
+  if (title === 'Manual hold (minutes)') return 'Time from the latest detected manual change. Use 60, 120 or 180 minutes for one, two or three hours. A restart preserves the deadline. Saving a different policy starts a new hold.';
+  if (title === 'Daily resume time' || title === 'Resume time zone') return 'Use the next occurrence of this local time, even for an all-day rule. Expiry rechecks the rule conditions and needs current fan feedback; it does not necessarily turn the fan on.';
   switch (title.replace(/ \(°[CF]\)$/, '')) {
     case 'Rule name': return 'Choose a name that identifies this rule in the list and its execution status. For a Home/Away rule, this also names its combined occupancy sensor.';
     case 'Enable automatic execution': return rule.kind === 'presence'
@@ -1713,6 +1718,7 @@ function renderRuleWindow(host, rule) {
     section.append(fields, el('p', 'An end time earlier than the start continues into the following day. Friday 10 PM–6 AM ends Saturday morning. Start is included; end is excluded. Named time zones follow daylight-saving changes.', 'small-note'));
   }
   renderOccupancyCondition(section, rule);
+  if (rule.kind === 'fan') renderFanManualHold(section, rule);
   if (rule.kind === 'temperature') {
     section.append(el('p', 'Drag temperature groups to set priority. At a window change, the next group takes over without restoring an intermediate target. Manual room targets follow the thermostat across groups until the next confirmed Nest schedule target. Pausing temperature automation pauses all groups for this thermostat.', 'small-note'));
   } else {
@@ -1720,6 +1726,39 @@ function renderRuleWindow(host, rule) {
   }
 }
 
+function renderFanManualHold(section, rule) {
+  inputField(section, 'After a manual fan change', rule.manualOverride?.mode || 'manual', (mode) => {
+    if (mode === 'manual') delete rule.manualOverride;
+    else if (mode === 'duration') rule.manualOverride = { mode, minutes: 60 };
+    else rule.manualOverride = { mode, time: '08:00', timeZone: rule.window?.timeZone ||
+      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' };
+    renderRules();
+  }, { choices: [['manual', 'Wait until I Resume'], ['duration', 'Resume after a duration'], ['time', 'Resume at the next daily time']] });
+  const policy = rule.manualOverride;
+  if (policy?.mode === 'duration') {
+    inputField(section, 'Manual hold (minutes)', policy.minutes, (value) => { policy.minutes = value; },
+      { type: 'number', min: 1, max: 10080, step: 1 });
+    const presets = el('div', undefined, 'timer-buttons');
+    for (const hours of [1, 2, 3]) presets.append(button(hours + (hours === 1 ? ' hour' : ' hours'), () => {
+      policy.minutes = hours * 60; markDirty(); renderRuleEditor();
+    }, 'button secondary'));
+    section.append(presets);
+  } else if (policy?.mode === 'time') {
+    inputField(section, 'Daily resume time', policy.time, (value) => { policy.time = value; }, { type: 'time' }).required = true;
+    inputField(section, 'Resume time zone', policy.timeZone, (value) => { policy.timeZone = value; },
+      { choices: timeZoneChoices(policy.timeZone) });
+    section.append(el('p', 'Uses the next occurrence in this time zone, including daylight-saving changes. A skipped clock time waits until its next occurrence; a repeated time uses the next occurrence.', 'small-note'));
+  }
+  section.append(el('p', 'A detected power or speed change outside automation holds that fan for every rule. The controlling rule chooses the hold; without a controller, the highest eligible rule does. Another detected manual change restarts the hold. At expiry, current temperature, occupancy, schedule and priority decide whether the fan runs. Pause and command errors still require Resume. Saving a different hold setting starts a new hold for fans already held by this rule.', 'small-note'));
+}
+function manualFanHoldText(hold) {
+  if (!hold) return '';
+  if (!Number.isFinite(hold.until)) return 'Manual fan hold · Resume to continue automatic control.';
+  const time = new Intl.DateTimeFormat(undefined, { ...(hold.timeZone ? { timeZone: hold.timeZone } : {}),
+    weekday: 'short', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }).format(hold.until);
+  return (hold.until > Date.now() ? 'Manual fan hold until ' + time + '.' : 'Manual fan hold has expired; waiting for current fan feedback.') +
+    ' Rules are rechecked before control resumes.' + (hold.ruleName ? ' Hold set by ' + hold.ruleName + '.' : '');
+}
 function renderOccupancyCondition(section, rule) {
   inputField(section, 'Occupancy requirement', rule.occupancyCondition?.state || 'any', (value) => {
     if (value === 'any') delete rule.occupancyCondition;
@@ -1826,7 +1865,8 @@ function renderRuleRuntime(rule) {
       'Retained schedule room target while awaiting Nest feedback.' : 'Following Nest’s scheduled room temperature.'));
   if (current?.kind === 'temperature' && current.targetSource && current.targetSource !== 'rule') host.append(el('p', 'Saved rule target: ' + formatTemp(current.savedDesiredTemperature) + '. Use the saved target to end this adjustment.'));
   for (const fan of current?.fanSpeeds || []) host.append(el('p', fan.name + ': current ' + (Number.isFinite(fan.currentSpeed) ? fan.currentSpeed + '%' : 'unavailable') + ' · requested ' + (Number.isFinite(fan.proposedSpeed) ? fan.proposedSpeed + '%' : 'unsupported') + ' · cap ' + fan.maximumSpeed + '%'));
-  for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ? 'Suspended · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
+  for (const fan of current?.fanAssignments || []) host.append(el('p', fan.name + ': ' + (fan.override ?
+    manualFanHoldText(fan.manualHold) || 'Suspended · ' + fan.override : fan.controller ? 'Controlling rule: ' + fan.controller : 'No matching rule')));
   if (current?.kind === 'presence') host.append(el('p', 'Combined presence: ' + (typeof current.home === 'boolean' ? current.home ? 'Home' : 'Away' : 'Unknown') + (current.fault ? ' · source attention required' : '')));
   if (Number.isFinite(current?.nextChangeAt) && current.nextChangeAt > Date.now()) host.append(el('p', 'Next timer: ' + new Date(current.nextChangeAt).toLocaleTimeString()));
   if (current?.lastAction) {
@@ -1884,6 +1924,8 @@ function renderRulePreview() {
   renderRuleRuntime(rule);
   renderFanCurve(rule);
   host.replaceChildren(el('h4', 'Current signals · preview only'));
+  const holdError = fanManualHoldError(rule.manualOverride, rule.kind);
+  if (holdError) host.append(el('p', holdError, 'callout danger'));
   if (rule.kind !== 'presence') {
     const schedule = ruleWindow(rule.window);
     host.append(el('p', windowSummary(rule.window)));

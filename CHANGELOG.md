@@ -1,4 +1,14 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.8
+
+- Add optional manual fan hold policies under When to run: Resume only, a duration from 1 minute to 7 days with 1/2/3-hour shortcuts, or the next daily time in a named time zone. All-day rules can respect an evening scene until a chosen morning time.
+- Apply a manual hold to every rule sharing that fan. Use the controlling rule’s policy, or the highest eligible rule when no rule controls it. Further detected manual changes restart the hold; feedback within the same mapped physical speed does not.
+- Preserve hold deadlines across restarts and recheck fan availability, temperature, occupancy, time windows and priorities before automatic control resumes. Expiry does not force the fan on.
+- Show the hold deadline and originating rule in Overview and rule execution details. Changing a saved hold policy starts a new hold for fans already held by that rule; Resume can end it early.
+- Keep explicit user pauses, restart-pause preferences, failed commands and conflicting pending feedback separate from timed manual holds. Existing rules default to Resume only.
+
+**Updating:** Choose an automatic-resume policy separately for each fan rule. Recognized saved manual changes without a detection timestamp start their hold when the setting is applied. Ambiguous saved feedback errors require review and Resume. Daily times follow the selected zone: skipped clock times wait for their next occurrence; repeated times use the next occurrence.
+
 ## v0.6.7
 
 - Add optional Occupied/Home or Unoccupied/Away requirements to temperature and fan rules under When to run. Select an individual occupancy sensor or a combined presence rule; combined outputs include motion holds, Away delays and manual presence overrides.

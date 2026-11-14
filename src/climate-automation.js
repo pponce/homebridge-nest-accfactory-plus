@@ -14,6 +14,7 @@ import {
 } from './fan-speed-control.js';
 import { TemperatureSensorSetup, nativeSensorAllowsHeating } from './temperature-sensor-setup.js';
 import { explainRule } from './climate-explanations.js';
+import { recordFanManualHold, clearFanManualHold, validFanManualHolds, fanManualHoldStatus } from './fan-manual-hold.js';
 
 const MINUTE = 60000;
 const ACK_TIMEOUT = 2 * MINUTE;
@@ -122,6 +123,7 @@ export class ClimateAutomation {
     this.explanations = new Map();
     this.leases = new Map();
     this.fanOverrides = new Map();
+    this.fanManualHolds = new Map();
     this.fanObservations = new Map();
     this.fanWinners = new Map();
     this.feedbackRefreshes = new Map();
@@ -214,6 +216,12 @@ export class ClimateAutomation {
         }
         this.fanOverrides = new Map(data.fanOverrides);
       }
+      if (data.fanManualHolds !== undefined) {
+        if (!validFanManualHolds(data.fanManualHolds)) {
+          throw new Error('Invalid saved manual fan holds');
+        }
+        this.fanManualHolds = new Map(data.fanManualHolds);
+      }
       if (data.fanObservations !== undefined) {
         if (!Array.isArray(data.fanObservations) || data.fanObservations.length > 256 || data.fanObservations.some((entry) =>
           !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || entry[0].length > 256 ||
@@ -253,6 +261,7 @@ export class ClimateAutomation {
         this.states.clear();
         this.leases.clear();
         this.fanOverrides.clear();
+        this.fanManualHolds.clear();
         this.fanObservations.clear();
         this.sensorSetup.leases.clear();
         this.recoveryRequired = true;
@@ -278,7 +287,8 @@ export class ClimateAutomation {
 
   async persist() {
     const bytes = JSON.stringify({ version: 1, states: [...this.states], leases: [...this.leases],
-      fanOverrides: [...this.fanOverrides], fanObservations: [...this.fanObservations], sensorSetups: this.sensorSetup.entries() });
+      fanOverrides: [...this.fanOverrides], fanManualHolds: [...this.fanManualHolds],
+      fanObservations: [...this.fanObservations], sensorSetups: this.sensorSetup.entries() });
     const operation = this.saving.then(async () => {
       const temporary = path.join(this.directory, 'automation-' + crypto.randomUUID() + '.tmp');
       let file;
@@ -1055,13 +1065,21 @@ export class ClimateAutomation {
     state.targetEpoch = (state.targetEpoch ?? 0) + 1;
   }
 
-  manualFan(id, reason) {
+  manualFan(id, reason, manual = false, ownerId) {
     this.fanOverrides.set(id, reason);
+    if (manual) {
+      recordFanManualHold(this, id, ownerId);
+    } else {
+      this.fanManualHolds.delete(id);
+    }
     for (const state of this.states.values()) {
       if (state.rule.kind === 'fan' && state.rule.targetIds.includes(id)) {
+        state.fanAssignments = state.fanAssignments?.map((entry) => entry.id === id ?
+          { ...entry, selected: false, controller: null, override: reason, manualHold: fanManualHoldStatus(this, id) } : entry);
         if (state.lastAction && (!state.lastAction.targetId || state.lastAction.targetId === id)) {
           state.lastAction = { ...state.lastAction, status: 'conflict',
-            message: 'Automatic fan control is paused. Review the reported setting, then Resume.' };
+            message: manual ? 'Automatic fan control yielded to a reported manual change.' :
+              'Automatic fan control is paused. Review the reported setting, then Resume.' };
         }
         state.phase = 'paused';
         state.reason = reason;
@@ -1183,7 +1201,8 @@ export class ClimateAutomation {
       if (fan?.speedAvailable && !lease.pending && Number.isFinite(lease.speedExpected) &&
           !sameFanSpeed(fan.speed, lease.speedExpected, fan.speedMapping)) {
         this.leases.delete(key);
-        this.manualFan(lease.targetId, 'A fan speed changed manually. Resume this fan when ready for automatic control.');
+        this.manualFan(lease.targetId, 'A fan speed changed manually. Resume this fan when ready for automatic control.',
+          true, lease.owner);
         return false;
       }
       if (fan && lease.pending) {
@@ -1204,7 +1223,8 @@ export class ClimateAutomation {
     this.leases.delete(key);
     if (lease.kind === 'fan') {
       this.manualFan(lease.targetId,
-        'The fan reported a different power setting from the expected command. Review it, then Resume automatic control.');
+        'The fan reported a different power setting from the expected command. Review it, then Resume automatic control.',
+        !lease.pending, lease.owner);
     } else {
       this.unconfirmedHeating(state, key, equal(value, lease.before) ?
         'Nest feedback did not confirm the heating target within two minutes. Check Nest, then Resume automatic control.' :
@@ -1468,7 +1488,7 @@ export class ClimateAutomation {
         continue;
       }
       if (!lease && typeof state.fanObserved[id] === 'boolean' && state.fanObserved[id] !== source.running) {
-        this.manualFan(id, 'A selected fan changed outside this rule. Resume when ready for automatic fan control.');
+        this.manualFan(id, 'A selected fan changed outside this rule. Resume when ready for automatic fan control.', true, rule.id);
         continue;
       }
       state.fanObserved[id] = source.running;
@@ -1805,12 +1825,7 @@ export class ClimateAutomation {
           state.demand = false;
           if (state.rule.kind === 'fan') {
             for (const id of state.rule.targetIds) {
-              this.fanOverrides.delete(id);
-              this.fanObservations.delete(id);
-              for (const candidate of this.states.values()) {
-                delete candidate.fanObserved?.[id];
-                delete candidate.fanSpeedObserved?.[id];
-              }
+              clearFanManualHold(this, id);
             }
           }
         }

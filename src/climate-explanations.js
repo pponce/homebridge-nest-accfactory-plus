@@ -1,3 +1,4 @@
+import { fanManualHoldStatus } from './fan-manual-hold.js';
 import { supportedSpeed, mappedSpeed } from '../homebridge-ui/public/fan-speed.js';
 
 const MINUTE = 60000;
@@ -76,7 +77,7 @@ export function explainRule(engine, state, heatingTarget) {
           available && rule.speedMode === 'curve' && lease?.owner === rule.id && !lease.pending &&
           !lease.restoring && !nextEligibleAt && source.running && source.speedAvailable && speed !== null && !atEnd &&
           source.speed <= limits.maximum && Math.abs(source.speed - speed) >= 0.001 && Math.abs(source.speed - speed) < 5,
-        override: engine.fanOverrides.get(id) ?? null };
+        override: engine.fanOverrides.get(id) ?? null, manualHold: fanManualHoldStatus(engine, id) };
     });
   } else {
     const desired = state.roomTarget?.value ?? rule.desiredTemperature;

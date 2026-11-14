@@ -47,6 +47,26 @@ export async function checkRuleWindows(page, output, prefix, getConfig) {
     await page.waitForFunction(() => document.getElementById('save-bar').hidden);
     assert.equal(getConfig().rules[key][0].window, undefined);
     assert.equal(getConfig().rules[key][0].occupancyCondition, undefined);
+    if (kind === 'fan') {
+      const policy = page.getByLabel('After a manual fan change', { exact: true });
+      assert.equal(await policy.inputValue(), 'manual');
+      await policy.selectOption('duration');
+      await page.getByRole('button', { name: '2 hours', exact: true }).click();
+      await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+      await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+      assert.deepEqual(getConfig().rules[key][0].manualOverride, { mode: 'duration', minutes: 120 });
+      await policy.selectOption('time');
+      await page.getByLabel('Daily resume time', { exact: true }).fill('08:00');
+      await page.getByLabel('Resume time zone', { exact: true }).selectOption('America/Los_Angeles');
+      await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+      await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+      assert.deepEqual(getConfig().rules[key][0].manualOverride,
+        { mode: 'time', time: '08:00', timeZone: 'America/Los_Angeles' });
+      await policy.selectOption('manual');
+      await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+      await page.waitForFunction(() => document.getElementById('save-bar').hidden);
+      assert.equal(getConfig().rules[key][0].manualOverride, undefined);
+    }
     await page.setViewportSize({ width: 1280, height: 1000 });
   }
 }

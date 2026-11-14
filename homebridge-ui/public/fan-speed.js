@@ -164,3 +164,32 @@ export function sameFanState(a, b, ranges) {
   return validFanState(a) && validFanState(b) && a.running === b.running && sameFanSpeed(a.speed, b.speed, ranges);
 }
 
+// A manual hold is independent of the rule's run window. Missing configuration preserves Resume-only behaviour.
+export function fanManualHoldError(policy, kind = 'fan') {
+  if (policy === undefined) return null;
+  if (kind !== 'fan' || !policy || typeof policy !== 'object' || Array.isArray(policy)) return 'Manual fan holds apply to fan rules only.';
+  const fields = { manual: ['mode'], duration: ['mode', 'minutes'], time: ['mode', 'time', 'timeZone'] }[policy.mode];
+  if (!fields || Object.keys(policy).some((key) => !fields.includes(key))) return 'Choose a supported manual fan hold.';
+  if (policy.mode === 'duration' && (!Number.isInteger(policy.minutes) || policy.minutes < 1 || policy.minutes > 10080))
+    return 'Choose a manual hold from 1 to 10080 whole minutes (7 days).';
+  if (policy.mode === 'time') {
+    if (typeof policy.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(policy.time)) return 'Choose a daily resume time.';
+    if (typeof policy.timeZone !== 'string' || !policy.timeZone) return 'Choose a resume time zone.';
+    try { new Intl.DateTimeFormat('en-US', { timeZone: policy.timeZone }).format(0); }
+    catch { return 'Choose a valid resume time zone.'; }
+  }
+  return null;
+}
+
+export function fanManualHoldUntil(policy, now) {
+  if (fanManualHoldError(policy) || !Number.isFinite(now)) return null;
+  if (policy?.mode === 'duration') return now + policy.minutes * 60000;
+  if (policy?.mode !== 'time') return null;
+  const formatter = new Intl.DateTimeFormat('en-GB', { timeZone: policy.timeZone,
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  // Search actual instants: use the next occurrence in a repeated hour, skip a nonexistent local time.
+  for (let minute = Math.floor(now / 60000) + 1, end = minute + 3 * 1440; minute < end; minute++) {
+    if (formatter.format(minute * 60000) === policy.time) return minute * 60000;
+  }
+  return null;
+}

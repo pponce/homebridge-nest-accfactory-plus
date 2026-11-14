@@ -276,7 +276,17 @@ If the room is warm while the thermostat is cooling, the first rule controls the
 
 A higher-priority rule with missing required temperature or HVAC readings reserves its fans. Lower rules wait until that condition can be evaluated reliably. Owned settings are restored when possible. Pausing, disabling or deleting a rule makes the next matching enabled rule eligible.
 
-Manual power or speed changes suspend **all rules for the affected fan**, so another rule cannot undo your adjustment. Other fans can continue. Use **Resume automatic control** or **Resume overridden fans** in a rule containing that fan when ready. Resume clears manual overrides for that rule's selected fans; other explicitly paused rules remain paused.
+Manual power or speed changes hold **all rules for the affected fan**, so another rule cannot undo your adjustment. Other fans can continue. Under **When to run → After a manual fan change**, choose:
+
+- **Wait until I Resume** (default): keep the fan under manual control until **Resume automatic control** or **Resume overridden fans** is selected.
+- **Resume after a duration**: hold for 1–10080 minutes (up to 7 days). Buttons provide 1, 2 and 3 hours.
+- **Resume at the next daily time**: hold until the next selected local time in the selected time zone. For example, an all-day rule can respect an evening scene turning the fan off until 8 AM.
+
+The rule controlling the fan when the change is detected supplies the policy. If no rule controls it, the highest eligible rule supplies it. The hold stays associated with that rule; disabling or removing it leaves the fan held until Resume. Another detected external power or speed change restarts the hold. Percentages belonging to the same saved physical speed setting do not restart it.
+
+At expiry, automation requires current fan feedback and reevaluates temperature, occupancy, time windows and priorities. It only runs the fan if the conditions call for it. Explicit **Pause rule**, **Pause after bridge restart**, and conflicting or failed commands still require review and Resume. Unchanged feedback for a pending accepted command continues recovery without repeated writes.
+
+Deadlines survive restarts. Saving a different hold policy starts a new hold for an already-held fan. A recognized manual pause without a recorded detection time starts its hold when the setting is first applied. A daily time follows daylight saving: a nonexistent local time is skipped until its next occurrence, and a repeated time uses its next occurrence. Overview and Execution status show the hold deadline and originating rule. Resume ends the hold early for the selected fans; other explicitly paused rules remain paused.
 
 ### Home/Away example
 
@@ -296,9 +306,9 @@ Unavailable inputs cannot establish Away. The last confirmed state is retained w
 
 - **Pause rule** immediately requests a stop to automatic control. Settings still owned by that rule return to their previous values when the equipment is reachable. A newer manual setting is preserved.
 - Turning off **Enable automatic execution** or deleting a rule takes effect after **Save changes**. Disabling a presence rule removes its combined occupancy accessory.
-- Previously active temperature and room-fan rules continue after restart once current readings and equipment checks pass. Pending automatic heating feedback keeps its expected target and resumes checking without another temperature write. Explicit pauses, manual fan overrides and failed commands still require review. Enable **Pause after bridge restart** in Settings to require Resume after every restart. Presence rules reconcile saved holds/overrides with current readings automatically.
+- Previously active temperature and room-fan rules continue after restart once current readings and equipment checks pass. Pending automatic heating feedback keeps its expected target and resumes checking without another temperature write. Explicit pauses and failed commands still require review; manual fan holds follow their saved resume policy. Enable **Pause after bridge restart** in Settings to require Resume after every restart. Presence rules reconcile saved holds/overrides with current readings automatically.
 - If the Homebridge host stops abruptly, or Nest/the source bridge cannot be reached, it is impossible to send a fallback command. **The thermostat or room fan may retain its last commanded state.** A graceful shutdown attempts to restore owned settings. Restoring an owned setting after pause or invalid inputs can happen immediately; the minimum interval still applies before the next normal adjustment.
-- Failed or unconfirmed commands pause the rule. Check the actual equipment and its connection before resuming. A successful API response is not proof that the equipment reached the requested state.
+- Failed commands and conflicting feedback pause the rule. Pending commands with unchanged feedback are checked again without repeating the write. Check the actual equipment and its connection before resuming. A successful API response is not proof that the equipment reached the requested state.
 
 ## HTTP mode
 

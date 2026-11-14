@@ -1,6 +1,7 @@
 import {
   fanRulePlan, fanSpeedLimits, fanState, mappedSpeed, sameFanSpeed, sameFanState, supportedSpeed, speedWithinLimits, validFanState,
 } from '../homebridge-ui/public/fan-speed.js';
+import { refreshFanManualHolds, fanManualHoldStatus } from './fan-manual-hold.js';
 
 const MINUTE = 60000;
 const ready = (source, now) =>
@@ -23,7 +24,7 @@ export function prepareFanRules(engine) {
       }
     }
   }
-  for (const map of [engine.fanOverrides, engine.fanObservations]) {
+  for (const map of [engine.fanOverrides, engine.fanObservations, engine.fanManualHolds]) {
     for (const id of map.keys()) {
       if (!known.has(id)) {
         map.delete(id);
@@ -37,12 +38,18 @@ export function prepareFanRules(engine) {
     }
     const current = { running: source.running, speed: source.speedAvailable ? source.speed : undefined };
     const before = engine.fanObservations.get(id);
-    const watched = states.some((state) => state.rule.enabled && !state.paused &&
+    const holding = states.some((state) => state.rule.id === engine.fanManualHolds.get(id)?.owner &&
+      state.rule.enabled && !state.paused);
+    const watched = holding || states.some((state) => state.rule.enabled && !state.paused &&
       state.windowStatus?.active !== false && state.occupancyStatus?.matches !== false && state.rule.targetIds.includes(id));
     if (watched && !engine.leases.has('fan:' + id) && before &&
         (before.running !== current.running || (Number.isFinite(before.speed) && Number.isFinite(current.speed) &&
           !sameFanSpeed(before.speed, current.speed, source.speedMapping)))) {
-      engine.manualFan(id, 'The fan changed outside automatic control. Resume this fan when ready.');
+      // A new observed change extends an existing manual hold, but never clears a command-error pause.
+      if (!engine.fanOverrides.has(id) || engine.fanManualHolds.has(id)) {
+        engine.manualFan(id, 'The fan changed outside automatic control. Resume this fan when ready.', true,
+          engine.fanManualHolds.get(id)?.owner);
+      }
     }
     if (watched) {
       engine.fanObservations.set(id, current);
@@ -50,6 +57,8 @@ export function prepareFanRules(engine) {
       engine.fanObservations.delete(id);
     }
   }
+  refreshFanManualHolds(engine, (id, state) => powerReady(engine.sources.get(id), engine.now()) &&
+    (state.rule.speedMode === 'last' || ready(engine.sources.get(id), engine.now())));
   const winners = new Map();
   for (const state of states.sort((a, b) => b.rule.priority - a.rule.priority)) {
     state.fanTargets = [];
@@ -95,7 +104,8 @@ export function prepareFanRules(engine) {
         }
       }
       return { id, name: engine.sources.get(id)?.name || 'Room fan', controller: winner?.rule.name ?? null,
-        priority: winner?.rule.priority, selected, override: engine.fanOverrides.get(id) ?? null };
+        priority: winner?.rule.priority, selected, override: engine.fanOverrides.get(id) ?? null,
+        manualHold: fanManualHoldStatus(engine, id) };
     });
   }
   engine.fanWinners = new Map([...winners].map(([id, state]) => [id, state.rule.id]));
@@ -181,7 +191,8 @@ function observe(engine, key, lease, source, state) {
   engine.leases.delete(key);
   fanFeedbackAction(engine, lease, state, 'conflict', (source.name || 'Room fan') + ': reported a conflicting setting; review and Resume.');
   engine.manualFan(lease.targetId,
-    'The fan reported a different speed or power setting from the expected command. Review it, then Resume.');
+    'The fan reported a different speed or power setting from the expected command. Review it, then Resume.',
+    !lease.pending, lease.owner);
   return false;
 }
 
@@ -321,7 +332,8 @@ export async function runFanSpeed(engine, state, targetIds) {
       continue;
     }
     if (!lease && state.fanSpeedObserved[id] && !sameFanState(fanState(source), state.fanSpeedObserved[id], source.speedMapping)) {
-      engine.manualFan(id, 'A selected fan speed or power setting changed outside this rule. Resume when ready for automatic control.');
+      engine.manualFan(id, 'A selected fan speed or power setting changed outside this rule. Resume when ready for automatic control.',
+        true, rule.id);
       continue;
     }
     state.fanSpeedObserved[id] = fanState(source);
