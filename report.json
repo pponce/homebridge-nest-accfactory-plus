@@ -1,0 +1,19 @@
+{
+  "sourceCommit": "d205e57ac5e0630633f3b2e6b5d5516242c239ea",
+  "sourceBranch": "feature/fan-overview-curve",
+  "fixtureDataOnly": true,
+  "checks": [
+    "mapped steps and min/max limits",
+    "calculated and reported markers",
+    "paused/off/stale state",
+    "Celsius and Fahrenheit",
+    "responsive SVG geometry",
+    "no control commands"
+  ],
+  "screenshots": [
+    "embedded-fan-curve-mobile.png",
+    "standalone-fan-curve-mobile.png",
+    "standalone-fan-curve-fahrenheit.png",
+    "standalone-fan-curve-dark.png"
+  ]
+}
