@@ -16,6 +16,7 @@ test('overview curve follows physical settings inside limits and distinguishes r
   assert.equal(view.settingLabel, 'Speed 3');
   assert.equal(view.current, 42);
   assert.equal(view.reported, 57, 'A different reported percentage in one mapped setting shares its plotted level');
+  assert.equal(fanCurveView(rule, source, 25, 64).reported, 57, 'Settled feedback can exceed the command cap within the same setting');
   assert.ok(view.points.every(([, value]) => value >= 14 && value <= 60));
   for (let temperature = 20; temperature < 31; temperature += 0.037) {
     const point = fanCurveView(rule, source, temperature, null);

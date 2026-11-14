@@ -197,6 +197,9 @@ export async function checkRuleExplanations(page, output, label) {
     });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await card('living-fan').screenshot({ path: path.join(output, label + '-fan-curve-mobile.png') });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await card('living-fan').screenshot({ path: path.join(output, label + '-fan-curve-dark.png') });
+    await page.emulateMedia({ colorScheme: 'light' });
     await page.setViewportSize({ width: 1280, height: 1000 });
     for (const nextMode of ['mapped-paused', 'mapped-off', 'mapped-unknown', 'mapped-hot', 'mapped-fahrenheit']) {
       mode = nextMode; await page.reload(); await refresh(); await graph().waitFor();
