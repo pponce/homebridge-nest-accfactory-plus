@@ -340,6 +340,8 @@ try {
   assert.match(await page.locator('.fan-curve-step-summary').innerText(), /One reachable setting: Speed 3 throughout the curve/);
   await page.getByLabel('Minimum running speed (%)', { exact: true }).fill('49');
   assert.match(await page.locator('.fan-curve-percentage-summary').innerText(), /stays at 49% throughout the curve/);
+  await page.getByRole('button', { name: 'Help for Reach maximum percentage above target by (°F)', exact: true }).click();
+  assert.match(await page.getByRole('tooltip').innerText(), /already at the cap/);
   assert.equal(commands.length, commandsBeforeHelp, 'Editing curve explanations sends no device commands');
   await page.getByLabel('Minimum running speed (%)', { exact: true }).fill('14');
   await page.getByLabel('Maximum fan speed (%)', { exact: true }).fill('60');
