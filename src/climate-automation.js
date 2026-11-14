@@ -1082,7 +1082,7 @@ export class ClimateAutomation {
               'Automatic fan control is paused. Review the reported setting, then Resume.' };
         }
         state.phase = 'paused';
-        state.reason = reason;
+        state.reason = manual ? 'Respecting a manual fan change. See the fan hold details below.' : reason;
       }
     }
   }
@@ -1444,7 +1444,7 @@ export class ClimateAutomation {
     if (!targets.length) {
       state.phase = state.rule.targetIds.every((id) => this.fanOverrides.has(id)) ? 'paused' :
         state.fanPlan.demand === false ? 'active' : 'standby';
-      state.reason = state.phase === 'paused' ? 'Fan automation is suspended. Review the fan feedback below, then Resume when ready.' :
+      state.reason = state.phase === 'paused' ? 'Automatic fan control is paused. See each fan’s hold or feedback status below.' :
         state.phase === 'standby' ? 'A higher-priority rule controls the selected fans.' : 'Run condition is clear.';
       return;
     }
