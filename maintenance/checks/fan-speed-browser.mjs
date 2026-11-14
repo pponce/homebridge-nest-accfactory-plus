@@ -337,7 +337,7 @@ try {
   await page.getByLabel('Minimum running speed (%)', { exact: true }).fill('36');
   await page.getByLabel('Maximum fan speed (%)', { exact: true }).fill('49');
   assert.deepEqual(await curveLabels(), ['Speed 3']);
-  assert.match(await page.locator('.fan-curve-step-summary').innerText(), /One reachable setting: Speed 3 throughout the curve/);
+  assert.match(await page.locator('.fan-curve-step-summary').innerText(), /One reachable setting:\s+Speed 3 throughout the curve/);
   await page.getByLabel('Minimum running speed (%)', { exact: true }).fill('49');
   assert.match(await page.locator('.fan-curve-percentage-summary').innerText(), /stays at 49% throughout the curve/);
   await page.getByRole('button', { name: 'Help for Reach maximum percentage above target by (°F)', exact: true }).click();

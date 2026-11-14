@@ -372,6 +372,8 @@ input[type="checkbox"] { accent-color: var(--accent); width: 17px; height: 17px;
 .preview-box h4 { color: var(--accent); font-size: 10px; letter-spacing: .8px; text-transform: uppercase; margin-bottom: 10px; }
 .preview-box strong { display: block; font-size: 22px; font-weight: 550; margin-bottom: 4px; letter-spacing: -.5px; }
 .preview-box p { font-size: 11px; color: var(--muted); margin: 0; }
+.preview-box .fan-curve-percentage-summary, .preview-box .fan-curve-step-summary { margin-bottom: 14px; font-size: 12px; line-height: 1.6; }
+.preview-box .fan-curve-percentage-summary strong, .preview-box .fan-curve-step-summary strong { color: var(--text); font-size: 12px; font-weight: 650; letter-spacing: normal; }
 .preview-box .preview-label { font-size: 9px; color: var(--muted); margin-top: 11px; display: block; }
 .editor-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; gap: 16px; }
 .editor-footer .button { font-size: 10px; }
