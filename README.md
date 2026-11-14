@@ -1,6 +1,14 @@
 # Climate dashboard visual review
 
-Rendered with fixture data only. Source: [d205e57ac5e0](https://github.com/pponce/homebridge-nest-climate-cntrl/commit/d205e57ac5e0630633f3b2e6b5d5516242c239ea).
+Rendered with fixture data only. Source: [510b153b1b8f](https://github.com/pponce/homebridge-nest-climate-cntrl/commit/510b153b1b8f44502e8602189c36237eef025511).
+
+## fan curve help mobile
+
+![fan-curve-help-mobile.png](fan-curve-help-mobile.png)
+
+## fan curve help desktop
+
+![fan-curve-help-desktop.png](fan-curve-help-desktop.png)
 
 ## embedded fan curve mobile
 

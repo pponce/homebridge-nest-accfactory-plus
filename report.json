@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "d205e57ac5e0630633f3b2e6b5d5516242c239ea",
+  "sourceCommit": "510b153b1b8f44502e8602189c36237eef025511",
   "sourceBranch": "feature/fan-overview-curve",
   "fixtureDataOnly": true,
   "checks": [
@@ -11,6 +11,8 @@
     "no control commands"
   ],
   "screenshots": [
+    "fan-curve-help-mobile.png",
+    "fan-curve-help-desktop.png",
     "embedded-fan-curve-mobile.png",
     "standalone-fan-curve-mobile.png",
     "standalone-fan-curve-fahrenheit.png",
