@@ -11,11 +11,14 @@ for (const file of ['maintenance/checks/dashboard-browser.mjs', 'maintenance/che
   if (result.status !== 0) {
     const lines = output.split('\n').map((line) => line.trim());
     const failure = lines.find((line) => /AssertionError|Error:|Timeout/.test(line)) || result.error?.message || 'Browser fixture failed';
-    const location = lines.find((line) => line.includes(file + ':')) || '';
-    detail = file.split('/').at(-1) + ': ' + failure.replace(/[\r\n]/g, ' ').slice(0, 220) + ' ' + location.slice(-120);
+    const location = lines.find((line) => /maintenance\/checks\/.*\.mjs:\d/.test(line)) || '';
+    const waiting = lines.find((line) => /waiting for (getBy|locator)/.test(line)) || '';
+    detail = file.split('/').at(-1) + ': ' + failure.replace(/[\r\n]/g, ' ').slice(0, 160) + ' ' +
+      waiting.slice(0, 200) + ' ' + location.slice(-120);
     process.exitCode = 1;
     break;
   }
 }
 if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'detail=' + detail + '\n');
+
 
