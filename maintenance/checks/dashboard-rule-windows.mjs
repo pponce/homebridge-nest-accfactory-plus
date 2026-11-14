@@ -51,15 +51,22 @@ export async function checkRuleWindows(page, output, prefix, getConfig) {
       const policy = page.getByLabel('After a manual fan change', { exact: true });
       assert.equal(await policy.inputValue(), 'manual');
       await policy.selectOption('duration');
+      const settings = page.getByRole('group', { name: 'Manual fan change settings', exact: true });
+      assert.equal(await settings.getByLabel('Manual hold (minutes)', { exact: true }).count(), 1);
+      assert.ok((await settings.boundingBox()).x > (await policy.boundingBox()).x);
       for (let hours = 1; hours <= 8; hours++) {
         await page.getByRole('button', { name: hours + (hours === 1 ? ' hour' : ' hours'), exact: true }).click();
         assert.equal(await page.getByLabel('Manual hold (minutes)', { exact: true }).inputValue(), String(hours * 60));
       }
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+      await settings.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(output, prefix + '-manual-hold-mobile.png'), fullPage: true });
       await page.getByRole('button', { name: 'Save changes', exact: true }).click();
       await page.waitForFunction(() => document.getElementById('save-bar').hidden);
       assert.deepEqual(getConfig().rules[key][0].manualOverride, { mode: 'duration', minutes: 480 });
       await policy.selectOption('time');
+      assert.equal(await settings.getByLabel('Daily resume time', { exact: true }).count(), 1);
+      assert.equal(await settings.getByLabel('Resume time zone', { exact: true }).count(), 1);
       await page.getByLabel('Daily resume time', { exact: true }).fill('08:00');
       await page.getByLabel('Resume time zone', { exact: true }).selectOption('America/Los_Angeles');
       await page.getByRole('button', { name: 'Save changes', exact: true }).click();

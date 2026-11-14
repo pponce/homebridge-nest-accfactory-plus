@@ -1735,21 +1735,24 @@ function renderFanManualHold(section, rule) {
     renderRules();
   }, { choices: [['manual', 'Wait until I Resume'], ['duration', 'Resume after a duration'], ['time', 'Resume at the next daily time']] });
   const policy = rule.manualOverride;
+  const settings = el('div', undefined, 'manual-hold-settings');
+  settings.setAttribute('role', 'group'); settings.setAttribute('aria-label', 'Manual fan change settings');
+  section.append(settings);
   if (policy?.mode === 'duration') {
-    inputField(section, 'Manual hold (minutes)', policy.minutes, (value) => { policy.minutes = value; },
+    inputField(settings, 'Manual hold (minutes)', policy.minutes, (value) => { policy.minutes = value; },
       { type: 'number', min: 1, max: 10080, step: 1 });
     const presets = el('div', undefined, 'timer-buttons manual-hold-presets');
     for (const hours of [1, 2, 3, 4, 5, 6, 7, 8]) presets.append(button(hours + (hours === 1 ? ' hour' : ' hours'), () => {
       policy.minutes = hours * 60; markDirty(); renderRuleEditor();
     }, 'button secondary'));
-    section.append(presets);
+    settings.append(presets);
   } else if (policy?.mode === 'time') {
-    inputField(section, 'Daily resume time', policy.time, (value) => { policy.time = value; }, { type: 'time' }).required = true;
-    inputField(section, 'Resume time zone', policy.timeZone, (value) => { policy.timeZone = value; },
+    inputField(settings, 'Daily resume time', policy.time, (value) => { policy.time = value; }, { type: 'time' }).required = true;
+    inputField(settings, 'Resume time zone', policy.timeZone, (value) => { policy.timeZone = value; },
       { choices: timeZoneChoices(policy.timeZone) });
-    section.append(el('p', 'Uses the next occurrence in this time zone, including daylight-saving changes. A skipped clock time waits until its next occurrence; a repeated time uses the next occurrence.', 'small-note'));
+    settings.append(el('p', 'Uses the next occurrence in this time zone, including daylight-saving changes. A skipped clock time waits until its next occurrence; a repeated time uses the next occurrence.', 'small-note'));
   }
-  section.append(el('p', 'A detected power or speed change outside automation holds that fan for every rule. The controlling rule chooses the hold; without a controller, the highest eligible rule does. Another detected manual change restarts the hold. At expiry, current temperature, occupancy, schedule and priority decide whether the fan runs. Pause and command errors still require Resume. Saving a different hold setting starts a new hold for fans already held by this rule.', 'small-note'));
+  settings.append(el('p', 'A detected power or speed change outside automation holds that fan for every rule. The controlling rule chooses the hold; without a controller, the highest eligible rule does. Another detected manual change restarts the hold. At expiry, current temperature, occupancy, schedule and priority decide whether the fan runs. Pause and command errors still require Resume. Saving a different hold setting starts a new hold for fans already held by this rule.', 'small-note'));
 }
 function manualFanHoldText(hold) {
   if (!hold) return '';

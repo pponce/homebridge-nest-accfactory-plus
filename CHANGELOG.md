@@ -2,7 +2,7 @@
 ## v0.6.9
 
 - Extend manual fan-hold shortcuts to every whole hour from 1 through 8 hours under When to run. Selecting a shortcut fills the duration in minutes; Save changes applies it.
-- Wrap the shortcuts across rows on narrow screens. Custom durations, daily resume times and existing rule settings retain their behavior.
+- Indent duration, shortcuts, daily time, time zone and related help beneath After a manual fan change, with a subtle vertical guide. Wrap shortcuts across rows on narrow screens. Custom durations, daily resume times and existing rule settings retain their behavior.
 
 ## v0.6.8
 
