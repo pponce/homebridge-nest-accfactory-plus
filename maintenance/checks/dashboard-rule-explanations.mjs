@@ -55,6 +55,17 @@ export async function checkRuleExplanations(page, output, label) {
           heating: { desired: 22, physical: 27.5, rawOffset: 2, maximumOffset: 1.5, calculatedTarget: 23.5,
             targetSource: 'rule', minimumIntervalMinutes: 5, nextEligibleAt: now + 60000 } } },
     ] };
+    if (mode.startsWith('mapped')) {
+      const active = snapshot.automation.rules[0];
+      Object.assign(active.explanation.speed, { minimum: 14, maximum: 60, calculated: 42.75 });
+      fan.supportedSpeed = 42;
+      if (mode === 'mapped-paused') { active.paused = true; fan.override = 'Manual fan change'; }
+      if (mode === 'mapped-off') { fan.running = false; fan.controllerId = null; fan.ownerId = null; active.explanation.condition.demand = false; }
+      if (mode === 'mapped-unknown') { active.explanation.average = null; fan.available = false; }
+      if (mode === 'mapped-hot') active.explanation.average = 32;
+    }
+    if (mode === 'fixed-speed' || mode === 'last-speed') snapshot.automation.rules[0].explanation.speed.mode =
+      mode === 'fixed-speed' ? 'fixed' : 'last';
     if (mode === 'recovering') {
       Object.assign(snapshot.automation.rules.find((rule) => rule.kind === 'temperature'), {
         temperatureControl: 'recovering', phase: 'recovering', targetSource: 'schedule',
@@ -70,7 +81,10 @@ export async function checkRuleExplanations(page, output, label) {
   const sourceHandler = async (route) => {
     const response = await route.fetch(); const data = await response.json(); const now = Date.now();
     const living = data.sources.find((source) => source.id === 'living-fan');
-    Object.assign(living, { name: 'Living room fan', running: mode !== 'source-off', speed: 50, speedAvailable: true, lastReadAt: now });
+    Object.assign(living, { name: 'Living room fan', running: mode !== 'source-off' && mode !== 'mapped-off',
+      available: mode !== 'mapped-unknown', speed: 50, speedAvailable: true, canSetSpeed: true, lastReadAt: now,
+      speedCapabilities: { min: 0, max: 100, step: mode.startsWith('mapped') ? 1 : 25,
+        values: mode.startsWith('mapped') ? Array.from({ length: 101 }, (_, index) => index) : [0, 25, 50, 75, 100] } });
     data.sources.push(
       { id: 'guest-fan', kind: 'fan', name: 'Guest fan', running: false, available: true, lastReadAt: now },
       { id: 'office-fan', kind: 'fan', name: 'Office fan', running: true, speed: 71, speedAvailable: true, available: true, lastReadAt: now },
@@ -82,6 +96,10 @@ export async function checkRuleExplanations(page, output, label) {
   const configHandler = async (route) => {
     const response = await route.fetch(); const data = await response.json();
     data.config.fanMappings = [{ sourceId: 'office-fan', ranges: [{ label: 'Speed 5', min: 65, max: 78 }] }];
+    if (mode.startsWith('mapped')) data.config.fanMappings.push({ sourceId: 'living-fan',
+      ranges: [[1, 21], [22, 35], [36, 49], [50, 64], [65, 78], [79, 92], [93, 100]]
+        .map(([min, max], index) => ({ min, max, label: 'Speed ' + (index + 1) })) });
+    if (mode === 'mapped-fahrenheit') data.config.temperatureUnit = 'F';
     if (mode === 'no-presence' || mode === 'no-rules') data.config.rules.occupancy = [];
     if (mode === 'no-rules') data.config.rules.fans = [];
     await route.fulfill({ response, json: data });
@@ -114,6 +132,13 @@ export async function checkRuleExplanations(page, output, label) {
     assert.ok((await card('living-fan').boundingBox()).width <= thermostatWidth + 1);
     assert.ok((await page.locator('#overview-presence .automation-card').boundingBox()).width <= thermostatWidth + 1,
       'A single presence card keeps the thermostat card width');
+    const graph = () => card('living-fan').locator('.fan-curve-graph svg');
+    await graph().waitFor();
+    assert.equal(await card('guest-fan').locator('.fan-curve-figure').count(), 0);
+    assert.equal(await card('office-fan').locator('.fan-curve-figure').count(), 0);
+    assert.equal(await graph().locator('.fan-curve-current').getAttribute('data-speed'), '56.25');
+    assert.equal(await graph().locator('.fan-curve-reported').getAttribute('data-speed'), '50');
+    assert.match(await card('living-fan').locator('.fan-curve-key').innerText(), /56.3% → fan setting 50%/);
     await page.screenshot({ path: path.join(output, label + '-compact-overview.png'), fullPage: true });
     await card('living-fan').locator('summary').click();
     await page.locator('#overview-presence summary').click();
@@ -144,6 +169,9 @@ export async function checkRuleExplanations(page, output, label) {
       assert.match(await page.locator(selector).textContent(), pattern);
       assert.equal(await page.locator(selector + ' details').first().getAttribute('open') !== null, true,
         'Open explanations survive status refreshes');
+      if (mode === 'stale') assert.equal(await graph().locator('.fan-curve-current, .fan-curve-reported').count(), 0,
+        'Stale automation has no current-position marker');
+      if (mode === 'pending') assert.match(await card('living-fan').locator('.fan-curve-status').innerText(), /Awaiting fan feedback/);
     }
     mode = 'recovering'; await refresh();
     const recovering = page.locator('.temperature-controller').first();
@@ -153,6 +181,43 @@ export async function checkRuleExplanations(page, output, label) {
     assert.match(await recovering.textContent(), /Confirmation wait started/);
     assert.equal(await recovering.getAttribute('open') !== null, true);
     await page.screenshot({ path: path.join(output, label + '-temperature-recovery.png'), fullPage: true });
+    mode = 'mapped'; await page.reload(); await refresh(); await graph().waitFor();
+    const labels = await graph().locator('.fan-curve-axis').allTextContents();
+    for (const speed of [1, 2, 3, 4]) assert.ok(labels.some((value) => value.startsWith('Speed ' + speed)));
+    for (const speed of [5, 6, 7]) assert.ok(!labels.some((value) => value.startsWith('Speed ' + speed)));
+    assert.equal(await graph().locator('.fan-curve-current').getAttribute('data-speed'), '42');
+    assert.equal(await graph().locator('.fan-curve-reported').getAttribute('data-speed'), '57');
+    assert.match(await card('living-fan').locator('.fan-curve-key').innerText(), /Curve setting: Speed 3 · 42%/);
+    assert.match(await card('living-fan').locator('.fan-curve-key').innerText(), /Reported: Speed 4 · 50%/);
+    await page.screenshot({ path: path.join(output, label + '-fan-curve-mapped.png'), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForFunction(() => {
+      const chart = document.querySelector('#overview-fans .fan-curve-graph');
+      return chart && Math.abs(chart.clientWidth - chart.querySelector('svg').viewBox.baseVal.width) < 1;
+    });
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await card('living-fan').screenshot({ path: path.join(output, label + '-fan-curve-mobile.png') });
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    for (const nextMode of ['mapped-paused', 'mapped-off', 'mapped-unknown', 'mapped-hot', 'mapped-fahrenheit']) {
+      mode = nextMode; await page.reload(); await refresh(); await graph().waitFor();
+      const status = await card('living-fan').locator('.fan-curve-status').innerText();
+      if (mode === 'mapped-paused') assert.match(status, /Preview · automatic control paused/);
+      if (mode === 'mapped-off') {
+        assert.match(status, /Preview · rule is not requesting this fan/);
+        assert.equal(await graph().locator('.fan-curve-reported').count(), 0);
+        assert.match(await card('living-fan').locator('.fan-curve-key').innerText(), /Reported: Off/);
+      }
+      if (mode === 'mapped-unknown') assert.equal(await graph().locator('.fan-curve-current, .fan-curve-reported').count(), 0);
+      if (mode === 'mapped-hot') assert.equal(await graph().locator('.fan-curve-current').getAttribute('data-speed'), '57');
+      if (mode === 'mapped-fahrenheit') {
+        assert.match(await graph().getAttribute('aria-label'), /77.9°F/);
+        await card('living-fan').screenshot({ path: path.join(output, label + '-fan-curve-fahrenheit.png') });
+      }
+    }
+    for (const nextMode of ['fixed-speed', 'last-speed']) {
+      mode = nextMode; await page.reload(); await refresh();
+      assert.equal(await card('living-fan').locator('.fan-curve-figure').count(), 0);
+    }
     mode = 'missing-fan'; await refresh();
     assert.equal(await card('office-fan').locator('.status-pill').innerText(), 'Unavailable', 'A missing bridge retains a known fan as unavailable');
     mode = 'source-off';

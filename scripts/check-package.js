@@ -41,6 +41,8 @@ try {
     'homebridge-ui/public/time-zone-picker.js',
     'homebridge-ui/public/occupancy-condition.js',
     'homebridge-ui/public/climate/shared/occupancy-condition.js',
+    'homebridge-ui/public/fan-curve.js',
+    'homebridge-ui/public/climate/shared/fan-curve.js',
     'homebridge-ui/public/rule-window.js',
     'homebridge-ui/public/climate/shared/rule-window.js',
     'dist/schedule-time-zone.js',

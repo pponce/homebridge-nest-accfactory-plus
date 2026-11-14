@@ -215,6 +215,25 @@ svg { display: block; }
 .automation-evidence { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .automation-evidence summary { cursor: pointer; font-weight: 600; font-size: 0.85rem; }
 .automation-card .small-note, .controller-details .small-note { line-height: 1.6; }
+.fan-curve-figure { margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
+.fan-curve-figure figcaption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; }
+.fan-curve-figure figcaption > span { color: var(--muted); }
+.fan-curve-status, .fan-curve-footnote { margin: 6px 0 0; font-size: 11px; line-height: 1.5; color: var(--muted); }
+.fan-curve-graph { width: 100%; min-width: 0; min-height: 210px; margin-top: 8px; }
+.fan-curve-graph svg { width: 100%; height: auto; display: block; overflow: visible; }
+.fan-curve-axis { fill: var(--muted); font-size: 11px; font-family: inherit; }
+.fan-curve-grid { stroke: var(--line); stroke-width: 1; }
+.fan-curve-area { fill: var(--accent-wash); opacity: .65; }
+.fan-curve-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; }
+.fan-curve-preview .fan-curve-line { stroke-dasharray: 5 3; }
+.fan-curve-now { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 4; }
+.fan-curve-now-label { font-weight: 700; }
+.fan-curve-current { fill: var(--accent-deep); stroke: var(--surface); stroke-width: 1; }
+.fan-curve-reported { fill: var(--surface); stroke: var(--green); stroke-width: 2; }
+.fan-curve-key { display: grid; gap: 6px; margin-top: 8px; font-size: 12px; line-height: 1.4; }
+.fan-curve-key > div { display: flex; gap: 8px; align-items: baseline; }
+.fan-curve-dot { flex: 0 0 9px; height: 9px; border-radius: 50%; background: var(--accent-deep); }
+.fan-curve-dot.reported { background: var(--surface); border: 2px solid var(--green); }
 .evidence-sources { list-style: none; margin: 12px 0; padding: 0; }
 .evidence-sources li { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .evidence-sources strong, .evidence-sources span, .evidence-sources small { display: block; line-height: 1.6; }

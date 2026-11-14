@@ -1,4 +1,10 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.10
+
+- Add a temperature-based speed graph directly to Overview fan cards, with a current room-average guide, calculated curve point and separate reported-setting marker.
+- Draw reachable mapped settings as steps within the rule's minimum and maximum. Show the percentage curve and supported setting when a complete mapping is unavailable. Follow the selected Fahrenheit/Celsius units and resize the graph for compact cards.
+- Label pending feedback, update intervals and paused/inactive previews. Hide position markers when current room readings are unavailable, and keep off or out-of-range feedback explicit. Viewing the graph sends no device commands.
+
 ## v0.6.9
 
 - Extend manual fan-hold shortcuts to every whole hour from 1 through 8 hours under When to run. Selecting a shortcut fills the duration in minutes; Save changes applies it.

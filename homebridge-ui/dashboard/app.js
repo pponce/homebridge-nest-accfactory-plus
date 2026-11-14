@@ -6,6 +6,7 @@ import { mountConnectionPage } from '/shared/connection-page.js';
 import { sensorSources, previewGroup, presenceSources } from '/shared/sensor-preview.js';
 import { normalizeFanRule, fanSpeedError, fanRulePlan, fanSpeedLimits, supportedSpeed, fanMappingsError, mappedSpeed, fanCurveStages } from '/shared/fan-speed.js';
 import { fanManualHoldError } from '/shared/fan-speed.js';
+import { fanCurveView, drawFanCurve } from '/shared/fan-curve.js';
 
 const $ = (id) => document.getElementById(id);
 const host = window.climateHost;
@@ -842,6 +843,53 @@ function fanEvidence(host, runtime, fan) {
   if (fan.nextEligibleAt) evidenceNote(host, 'Next normal speed or power update eligible at ' + evidenceTimer(fan.nextEligibleAt) + '.');
 }
 const overviewFanSources = new Map();
+const overviewFanCurves = new Map();
+const fanCurveResize = new ResizeObserver((entries) => {
+  for (const { target } of entries) {
+    const view = overviewFanCurves.get(target);
+    if (view) drawFanCurve(target, view, formatTemp, temperatureUnit());
+  }
+});
+function overviewFanCurve(card, runtime, entry) {
+  if (!runtime) return;
+  const report = runtime.explanation; const speed = report?.speed;
+  const rule = speed ? { speedMode: speed.mode, desiredTemperature: speed.comfort, minimumSpeed: speed.minimum,
+    maximumSpeed: speed.maximum, startGap: speed.startsAt - speed.comfort, fullSpeedGap: speed.fullAt - speed.comfort } : normalizeFanRule(runtime);
+  const current = evidenceCurrent(runtime);
+  const source = overviewFanSources.get(entry.id);
+  const reportedSpeed = entry.feedbackCurrent && entry.running ? entry.speed : null;
+  const view = fanCurveView(rule, source, current ? report?.average : null, reportedSpeed);
+  if (!view) return;
+  const fan = report?.fans?.find((fan) => fan.id === entry.id);
+  const active = current && runtime.enabled && !runtime.paused && !entry.override && !entry.restoring &&
+    entry.feedbackCurrent && entry.controllerId === runtime.id && report?.condition?.demand === true;
+  const status = !runtime.enabled ? 'Preview · rule disabled' : runtime.paused || entry.override ? 'Preview · automatic control paused' :
+    !current || view.average === null ? 'Waiting for current room readings' : !entry.feedbackCurrent ? 'Preview · fan feedback unavailable' :
+      entry.restoring ? 'Preview · restoring previous setting' : !active ? 'Preview · rule is not requesting this fan' :
+        fan?.pending ? 'Awaiting fan feedback' : fan?.nextEligibleAt > Date.now() ? 'Waiting for the next speed update' :
+          fan?.holdingSpeed ? 'Holding the reported speed' : 'Automatic curve active';
+  const figure = el('figure', undefined, 'fan-curve-figure' + (active ? '' : ' fan-curve-preview'));
+  figure.dataset.ruleId = runtime.id;
+  const heading = el('figcaption'); heading.append(el('strong', 'Temperature-based speed'),
+    el('span', view.average === null ? 'Room average unavailable' : 'Room average ' + formatTemp(view.average)));
+  figure.append(heading, el('p', runtime.name + ' · ' + status, 'fan-curve-status'));
+  const graph = el('div', undefined, 'fan-curve-graph'); figure.append(graph);
+  overviewFanCurves.set(graph, view); fanCurveResize.observe(graph);
+  const legend = el('div', undefined, 'fan-curve-key');
+  const curve = el('div'); curve.append(el('i', undefined, 'fan-curve-dot'));
+  const number = (value) => Number(value.toFixed(1)) + '%';
+  curve.append(el('span', view.current === null ? 'Curve point unavailable' : view.mapped ?
+    'Curve setting: ' + view.settingLabel + ' · ' + number(view.setting) :
+    'Curve request: ' + number(view.requested) + (view.setting === null ? ' · supported setting unavailable' : ' → fan setting ' + number(view.setting))));
+  const feedback = el('div'); feedback.append(el('i', undefined, 'fan-curve-dot reported'));
+  feedback.append(el('span', 'Reported: ' + (!entry.feedbackCurrent ? 'unavailable' : !entry.running ? 'Off' :
+    (entry.setting ? entry.setting + ' · ' : '') + (Number.isFinite(entry.speed) ? number(entry.speed) : 'On · speed unavailable'))));
+  legend.append(curve, feedback); figure.append(legend);
+  figure.append(el('p', 'Rule range ' + view.minimum + '–' + view.maximum + '% · ' +
+    (view.mapped ? 'Steps show mapped fan settings.' : 'Line shows the percentage curve.') +
+    (view.reportedOutside ? ' The reported setting is outside this curve’s range.' : ''), 'fan-curve-footnote'));
+  card.append(figure);
+}
 function overviewFans(rules) {
   const fans = new Map();
   const fresh = (fan) => fan.available && typeof fan.running === 'boolean' && Number.isFinite(fan.lastReadAt) &&
@@ -870,6 +918,7 @@ function overviewFans(rules) {
   return [...fans.values()];
 }
 function renderAutomationOverview() {
+  fanCurveResize.disconnect(); overviewFanCurves.clear();
   const rules = state.status.automation?.rules || [];
   for (const [containerId, kind] of [['overview-fans', 'fan'], ['overview-presence', 'presence']]) {
     const host = $(containerId);
@@ -911,6 +960,7 @@ function renderAutomationOverview() {
           manualFanHoldText(entry.manualHold) || 'Automatic control paused: ' + entry.override : controller ?
           (current ? 'Selected rule: ' : 'Last selected rule: ') + controller.name + '. ' + controller.reason : entry.restoring ? 'Restoring the previous fan setting.' :
             current ? 'No rule currently requests this fan to run.' : 'Rule status is unavailable.');
+        overviewFanCurve(card, runtime, entry);
       } else evidenceNote(card, entry.reason || 'Waiting for rule evaluation.');
       const details = el('details', undefined, 'automation-evidence'); details.dataset.evidence = entry.id; details.open = expanded.has(entry.id);
       const summary = el('summary', kind === 'fan' ? candidates.length ? 'Why this fan and speed?' : 'Fan status details' : 'Why this presence status?'); details.append(summary);

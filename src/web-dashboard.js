@@ -31,6 +31,7 @@ const assets = new Map([
   ['/shared/sensor-preview.js', ['public/sensor-preview.js', 'text/javascript; charset=utf-8']],
   ['/shared/connection-page.js', ['public/connection-page.js', 'text/javascript; charset=utf-8']],
   ['/shared/connection-config.js', ['public/connection-config.js', 'text/javascript; charset=utf-8']],
+  ['/shared/fan-curve.js', ['public/fan-curve.js', 'text/javascript; charset=utf-8']],
   ['/shared/fan-speed.js', ['public/fan-speed.js', 'text/javascript; charset=utf-8']],
   ['/shared/occupancy-condition.js', ['public/occupancy-condition.js', 'text/javascript; charset=utf-8']],
   ['/shared/rule-window.js', ['public/rule-window.js', 'text/javascript; charset=utf-8']],
