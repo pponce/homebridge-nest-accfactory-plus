@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { WebDashboard } from '../../src/web-dashboard.js';
 import { ClimateAutomation } from '../../src/climate-automation.js';
 import { fanState, speedCapabilities } from '../../homebridge-ui/public/fan-speed.js';
+import { navigate } from './dashboard-navigation.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -301,7 +302,7 @@ try {
   await page.reload();
   await page.getByRole('button', { name: 'Discover sources', exact: true }).click();
   await page.waitForFunction(() => !document.getElementById('refresh-sources').disabled);
-  await page.getByRole('link', { name: 'Climate rules', exact: true }).click();
+  await navigate(page, 'Climate rules');
   await page.getByRole('tab', { name: /Room fans/ }).click();
   await row('Living room comfort').locator('.rule-item').click();
   const curveLabels = () => page.locator('#fan-curve tbody tr td:first-child').allTextContents();

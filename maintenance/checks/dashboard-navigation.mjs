@@ -3,6 +3,8 @@ import path from 'node:path';
 
 export async function navigate(page, name, exact = true) {
   await page.locator('#app').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => document.body.classList.contains('compact-navigation') ===
+    (Boolean(window.climateHost) || window.matchMedia('(max-width: 760px)').matches));
   const toggle = page.locator('#climate-menu-toggle');
   if (await toggle.isVisible() && await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
   const link = page.getByRole('link', { name, exact });
@@ -73,3 +75,4 @@ export async function checkCompactNavigation(page, output, label) {
   await page.locator('#page-overview').waitFor();
   assert.equal(await panel.isVisible(), false);
 }
+
