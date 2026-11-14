@@ -1584,9 +1584,11 @@ function ruleFieldHelp(title, rule) {
     }
     case 'Fan speed': return 'Use last setting sends on/off commands only; the fan plugin chooses its startup speed. Fixed speed requests one speed. Temperature-based speed increases airflow as the selected temperature average rises. All three use the run condition above. Optional speed mappings in Sensors & fans identify each physical setting and are used by every rule for that fan.';
     case 'Fixed fan speed (%)': return 'The requested speed while this rule is active. Each fan uses the nearest supported speed at or below this setting. The preview shows the resulting speed for each selected fan.';
-    case 'Comfort target': return 'The reference temperature for the fan speed curve. It does not change the thermostat target or decide whether the fan runs. The two temperature differences below set where speed starts increasing and reaches the maximum.';
-    case 'Increase speed above target by': return 'How far above the comfort target the room must get before speed rises above the minimum. With this draft, the increase begins above ' + formatTemp(rule.desiredTemperature + rule.startGap) + '. Speed then rises gradually toward the maximum.';
-    case 'Reach maximum speed above target by': return 'How far above the comfort target the room must get to reach your maximum fan speed. With this draft, the cap is reached at ' + formatTemp(rule.desiredTemperature + rule.fullSpeedGap) + '. This difference must be larger than the increase-start difference.';
+    case 'Comfort target': return 'The reference temperature for the fan speed curve. It does not change the thermostat target or decide whether the fan runs. The two temperature differences below set where the calculated percentage starts increasing and reaches the maximum. Mapped fan settings change at the temperatures shown in Your speed curve.';
+    case 'Start increasing percentage above target by': return rule.minimumSpeed === rule.maximumSpeed ?
+      'The minimum and maximum percentages are equal, so the calculated percentage stays constant. The run condition still decides whether the fan runs.' :
+      'How far above the comfort target the calculated percentage starts increasing. With this draft, it starts rising above ' + formatTemp(rule.desiredTemperature + rule.startGap) + '. A mapped fan stays at the same physical speed until the percentage reaches the next mapped range. Your speed curve shows the first fan-speed change separately.';
+    case 'Reach maximum percentage above target by': return 'How far above the comfort target the calculated percentage reaches your maximum. With this draft, it reaches the cap at ' + formatTemp(rule.desiredTemperature + rule.fullSpeedGap) + '. A mapped fan can enter its highest allowed physical setting before that temperature. This difference must be larger than the increase-start difference.';
     case 'Minimum running speed (%)': return 'The lowest requested speed while this rule calls for the fans, including when the room is at or below the curve’s starting temperature. It does not keep fans on when the run condition is inactive. Supported fan speeds may be discrete steps.';
     case 'Maximum fan speed (%)': return 'Caps this rule’s fan speed, even when the room gets hotter than the curve’s maximum-speed temperature. Each fan uses supported speeds within your minimum and maximum; check the preview for the actual values.';
     case 'Rule priority': return 'The top matching enabled rule controls each fan. Drag rules or use the move buttons to change their order, then Save changes. Disabled rules do not compete. A higher-priority rule waiting for missing readings reserves its fans.';
@@ -1710,13 +1712,13 @@ function renderRuleEditor() {
     } else {
       const fields = el('div', undefined, 'form-grid');
       for (const [title, key, min, max, difference] of [
-        ['Comfort target', 'desiredTemperature', 5, 35, false], ['Increase speed above target by', 'startGap', 0, 10, true],
-        ['Reach maximum speed above target by', 'fullSpeedGap', .1, 20, true],
+        ['Comfort target', 'desiredTemperature', 5, 35, false], ['Start increasing percentage above target by', 'startGap', 0, 10, true],
+        ['Reach maximum percentage above target by', 'fullSpeedGap', .1, 20, true],
       ]) temperatureField(fields, title, rule[key], (value) => { rule[key] = value; }, { min, max, difference });
       for (const [title, key] of [['Minimum running speed (%)', 'minimumSpeed'], ['Maximum fan speed (%)', 'maximumSpeed']]) {
         const input = ruleInputField(fields, title, rule[key], (value) => { rule[key] = value; }, { type: 'number', min: 1, max: 100, step: 1 }); input.required = true;
       }
-      behavior.append(fields, el('p', 'The curve chooses speed only; the run condition decides on/off. While heating or cooling is active, a cooler room uses minimum speed. Airflow increases as the room gets warmer, up to your cap. The comfort target does not change a thermostat.', 'small-note'));
+      behavior.append(fields, el('p', 'The curve calculates a speed percentage; the run condition decides on/off. Mapped fans change physical speed when that percentage reaches another mapped range. Your speed curve shows those changeover temperatures. The comfort target does not change a thermostat.', 'small-note'));
     }
     if (rule.action === 'temperature' || rule.speedMode === 'curve') {
       const inputs = editorSection(host, '04', 'Choose temperature sources', 'Selected readings are averaged equally. The same average drives the temperature run condition and speed curve when both are used.');
@@ -1949,9 +1951,16 @@ function renderRuleRuntime(rule) {
   }
 }
 function mappedFanCurveTable(host, source, stages, rule) {
+  const summary = el('p', undefined, 'fan-curve-step-summary');
+  const first = stages[0]; const next = stages[1];
+  summary.append(el('strong', source.name + ' · ' + (next ? 'First fan-speed change: ' : 'One reachable setting: ')),
+    document.createTextNode(next ? first.mapping.label + ' → ' + next.mapping.label + ' above approximately ' +
+      formatTemp(first.through, 2) + '. ' + first.mapping.label + ' stays selected until then, while the run condition is met.' :
+      first.mapping.label + ' throughout the curve. The rule’s minimum and maximum allow only this mapped setting.'));
+  host.append(summary);
   const table = el('table'); table.append(el('caption', source.name + ' · mapped speed settings'));
   const header = el('tr');
-  for (const title of ['Fan setting', 'Range within rule limits', 'Room temperature while eligible', 'Requested speed']) {
+  for (const title of ['Fan setting', 'Range within rule limits', 'Room average while eligible', 'Command sent to fan']) {
     const cell = el('th', title); cell.scope = 'col'; header.append(cell);
   }
   const head = el('thead'); head.append(header); table.append(head);
@@ -1977,6 +1986,14 @@ function renderFanCurve(rule) {
   host.replaceChildren(el('h4', rule.speedMode === 'fixed' ? 'Supported fixed speeds' : 'Your speed curve'));
   const error = fanSpeedError(rule) || fanMappingsError(state.config?.fanMappings || []);
   if (error) { host.append(el('p', error)); return; }
+  if (rule.speedMode === 'curve') {
+    const summary = el('p', undefined, 'fan-curve-percentage-summary');
+    summary.append(el('strong', 'Calculated percentage: '), document.createTextNode(rule.minimumSpeed === rule.maximumSpeed ?
+      'stays at ' + rule.minimumSpeed + '% throughout the curve.' :
+      'starts rising above ' + formatTemp(rule.desiredTemperature + rule.startGap) + ' and reaches ' + rule.maximumSpeed +
+      '% at ' + formatTemp(rule.desiredTemperature + rule.fullSpeedGap) + '. Supported fan steps determine when the physical speed changes.'));
+    host.append(summary);
+  }
   const targets = (rule.targetIds || []).map((id) => sources().find((source) => source.id === id));
   const limits = fanSpeedLimits(rule);
   const examples = [];
@@ -2011,7 +2028,7 @@ function renderFanCurve(rule) {
     }
     table.append(body); const scroll = el('div', undefined, 'table-scroll'); scroll.append(table); host.append(scroll);
   }
-  if (mapped) host.append(el('p', 'Only settings within the rule’s minimum and maximum are shown, with at most 10 rows per fan. Up to 10 reachable mapped settings are all listed; larger sets are sampled evenly. Temperature boundaries are approximate display values calculated from the fan’s supported percentages; automation uses unrounded values. The run condition, occupancy and schedule must also allow the fan. Updates normally wait at least one minute, so rapid temperature changes can skip intermediate settings.', 'small-note'));
+  if (mapped) host.append(el('p', 'Command sent to fan is a stable percentage within each mapped setting’s allowed range. Different calculated percentages in the same range use the same command. Only settings within the rule’s minimum and maximum are shown, with at most 10 rows per fan. Up to 10 reachable mapped settings are all listed; larger sets are sampled evenly. Temperature boundaries are approximate display values calculated from the fan’s supported percentages; automation uses unrounded values. The run condition, occupancy and schedule must also allow the fan. Updates normally wait at least one minute, so rapid temperature changes can skip intermediate settings.', 'small-note'));
   if (rule.action === 'temperature') host.append(el('p', (rule.thresholdInclusive ? 'Run at or above ' : 'Run above ') + formatTemp(rule.threshold) + '; release at ' + formatTemp(rule.threshold - rule.hysteresis) + ' or below. The preview does not run hysteresis timers.', 'small-note'));
 }
 function renderRulePreview() {

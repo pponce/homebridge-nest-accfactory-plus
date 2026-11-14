@@ -1,4 +1,10 @@
 <!-- Modified by pponce for Nest Climate Cntrl; derived from Nest Accfactory. See NOTICE. -->
+## v0.6.11
+
+- Clarify the temperature-based fan speed fields and help: the calculated percentage rises between the configured temperatures, while mapped fans change physical speed at their mapped boundaries.
+- Show the percentage curve's start and maximum temperatures beside each fan's first mapped speed-change temperature. Update these explanations with draft settings and selected units, and identify ranges that allow only one physical setting.
+- Label mapped table output as Command sent to fan and explain the stable percentage used within each setting. Fan control calculations and saved rule settings retain their behavior.
+
 ## v0.6.10
 
 - Add a temperature-based speed graph directly to Overview fan cards, with a current room-average guide, calculated curve point and separate reported-setting marker.

@@ -243,8 +243,8 @@ For a temperature trigger, configure both the on/off threshold and the speed cur
 | Turn-off gap | 1.5 °F |
 | Fan speed | Temperature-based speed |
 | Comfort target | 72 °F |
-| Increase speed above target by | 2 °F |
-| Reach maximum speed above target by | 6 °F |
+| Start increasing percentage above target by | 2 °F |
+| Reach maximum percentage above target by | 6 °F |
 | Minimum running speed | 25% |
 | Maximum fan speed | 75% |
 
@@ -254,7 +254,9 @@ With **Thermostat is heating** or **Thermostat is cooling**, reported HVAC activ
 
 **Your speed curve** shows the temperatures and each selected fan's supported speeds. The nearest supported step within both limits is chosen; ties use the lower step. For a fan with 25%, 50%, 75% and 100% steps, a 70% cap permits at most 50%. If no running step fits, that fan waits for compatible settings rather than starting at an unspecified speed.
 
-The preview contains at most 10 rows per fan and omits settings outside the rule's minimum and maximum. When the selected range is fully covered by a fan's mapping, it lists each reachable physical setting, its temperature interval and requested percentage. More than 10 reachable mapped settings are sampled evenly. Without a complete mapping, the preview shows up to 10 evenly spaced example points; speeds between those points are also used. Displayed temperature boundaries are rounded, while automation uses unrounded values. The run condition, occupancy and time window still decide whether the fan can run.
+The preview separates **Calculated percentage** from each mapped fan's **First fan-speed change**. Percentages within one mapped range produce the same physical setting. For example, with a 72 °F comfort target, a 2 °F increase-start gap, a 6 °F maximum gap, limits of 1–60%, and mappings of 1–21% = Speed 1 and 22–35% = Speed 2, the calculated percentage starts rising above 74 °F. With whole-percentage fan support, Speed 1 remains selected until approximately 75.39 °F; Speed 2 starts above that point. The command stays at 11% throughout Speed 1's range. The final mapped setting can likewise be reached before the percentage curve reaches its maximum.
+
+The preview contains at most 10 rows per fan and omits settings outside the rule's minimum and maximum. When the selected range is fully covered by a fan's mapping, it lists each reachable physical setting, its temperature interval and **Command sent to fan**. That command is a stable supported percentage within the setting's allowed range. If only one mapped setting is reachable, the preview states that temperature changes keep the same setting. More than 10 reachable mapped settings are sampled evenly. Without a complete mapping, the preview shows up to 10 evenly spaced example points; speeds between those points are also used. Displayed temperature boundaries are rounded, while automation uses unrounded values. The run condition, occupancy and time window still decide whether the fan can run.
 
 **Fixed speed** uses the nearest supported speed at or below the requested percentage. It requires temperature sources only when the run condition uses temperature. The preview shows each fan's supported fixed speed.
 
