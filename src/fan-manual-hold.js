@@ -11,7 +11,11 @@ const eligible = (state, id) => state?.rule.kind === 'fan' && state.rule.enabled
   state.rule.targetIds.includes(id);
 
 export function recordFanManualHold(engine, id, ownerId) {
-  const owner = engine.states.get(ownerId ?? engine.fanWinners.get(id));
+  const heldOwner = engine.fanManualHolds.get(id)?.owner;
+  const owner = engine.states.get(heldOwner ?? ownerId ?? engine.fanWinners.get(id));
+  if (heldOwner && !eligible(owner, id)) {
+    return;
+  }
   const state = eligible(owner, id) ? owner : [...engine.states.values()]
     .filter((entry) => eligible(entry, id) && entry.windowStatus?.active !== false && entry.occupancyStatus?.matches !== false)
     .sort((a, b) => b.rule.priority - a.rule.priority)[0];

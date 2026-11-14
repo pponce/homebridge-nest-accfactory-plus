@@ -2972,3 +2972,33 @@ test('daily resume works for an all-day fan rule and legacy manual pauses get a 
   assert.equal(f.fanCommands.length, 1);
   assert.equal(f.engine.fanOverrides.size, 0);
 });
+
+test('idle fans choose the highest eligible manual hold policy and retain it when its rule is disabled', async (t) => {
+  const high = { ...timedFan(), priority: 10 };
+  const low = { ...timedFan(fanRule, 1), id: 'lower', priority: 0 };
+  const f = await fixture(t, { fans: [low, high] });
+  f.source('fan').running = true; await f.engine.tick();
+  assert.equal(f.engine.fanManualHolds.get('fan').owner, 'fans');
+  f.rules({ fans: [low, { ...high, enabled: false }] });
+  f.source('room').temperature = 27; f.source('fan').running = false; await f.engine.tick();
+  f.advance(61 * minute); await f.engine.tick();
+  assert.equal(f.fanCommands.length, 0);
+  assert.equal(f.engine.fanOverrides.size, 1);
+  assert.equal(f.rule('lower').fanAssignments[0].manualHold.until, null);
+  await f.engine.control({ id: 'lower', action: 'resume' });
+  assert.equal(f.fanCommands.length, 1);
+});
+
+test('invalid persisted manual fan deadlines require review instead of releasing a hold', async (t) => {
+  const f = await fixture(t, { fans: [timedFan()] });
+  await manuallyStopFan(f); await f.engine.stop();
+  const file = path.join(f.directory, 'automation.json');
+  const data = JSON.parse(await fs.readFile(file, 'utf8'));
+  data.fanManualHolds[0][1].until = -1;
+  await fs.writeFile(file, JSON.stringify(data));
+  const restarted = await restartFixture(f); t.after(() => restarted.stop());
+  assert.equal(restarted.recoveryRequired, true);
+  assert.equal(restarted.snapshot().rules[0].paused, true);
+  f.advance(120 * minute); await restarted.tick();
+  assert.equal(f.fanCommands.length, 1);
+});

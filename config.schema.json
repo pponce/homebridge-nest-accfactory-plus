@@ -252,7 +252,7 @@
                             "type": "boolean",
                             "title": "Observe heating response locally",
                             "default": false,
-                            "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat’s response history."
+                            "description": "Record room temperatures, Nest targets and heating state for rule recommendations. Apply each suggestion explicitly in the web dashboard. Turning this off clears this thermostat\u2019s response history."
                         },
                         "scheduleTimeZone": {
                             "type": "string",
@@ -400,7 +400,7 @@
                                     ],
                                     "properties": {
                                         "days": {
-                                            "title": "Start days (0 Monday–6 Sunday)",
+                                            "title": "Start days (0 Monday\u20136 Sunday)",
                                             "type": "array",
                                             "minItems": 1,
                                             "maxItems": 7,
@@ -607,7 +607,7 @@
                                     ],
                                     "properties": {
                                         "days": {
-                                            "title": "Start days (0 Monday–6 Sunday)",
+                                            "title": "Start days (0 Monday\u20136 Sunday)",
                                             "type": "array",
                                             "minItems": 1,
                                             "maxItems": 7,
@@ -1134,8 +1134,8 @@
                     "title": "Dashboard temperature units",
                     "type": "select",
                     "titleMap": {
-                        "C": "Celsius (°C)",
-                        "F": "Fahrenheit (°F)"
+                        "C": "Celsius (\u00b0C)",
+                        "F": "Fahrenheit (\u00b0F)"
                     }
                 },
                 {
@@ -1146,8 +1146,8 @@
                     "key": "webDashboard.protocol",
                     "title": "Connection mode",
                     "titleMap": {
-                        "https": "HTTPS · certificates in plugin",
-                        "http": "HTTP · unencrypted",
+                        "https": "HTTPS \u00b7 certificates in plugin",
+                        "http": "HTTP \u00b7 unencrypted",
                         "proxy": "HTTPS through reverse proxy"
                     }
                 },

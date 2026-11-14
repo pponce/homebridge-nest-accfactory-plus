@@ -184,6 +184,10 @@
     "lines": 100,
     "branches": 90,
     "functions": 100
+  },
+  "src/fan-manual-hold.js": {
+    "lines": 95,
+    "branches": 90,
+    "functions": 90
   }
 }
-
